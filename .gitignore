@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Frontend build/cache
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Alembic / DB local artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs and runtime
+*.log
+logs/
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
