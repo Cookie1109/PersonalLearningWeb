@@ -31,4 +31,5 @@ class Lesson(Base):
 
     roadmap = relationship("Roadmap", back_populates="lessons")
     exp_entries = relationship("ExpLedger", back_populates="lesson")
+    quiz_items = relationship("QuizItem", back_populates="lesson", cascade="all, delete-orphan")
     quiz_attempts = relationship("QuizAttempt", back_populates="lesson")

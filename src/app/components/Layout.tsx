@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, Map, BookOpen, Brain, Trophy,
   Zap, Flame, ChevronRight, Menu, Sparkles, Target,
-  Settings, Bell, Star, BookMarked
+  Settings, Bell, Star, BookMarked, LogOut
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserStats, WeekModule } from '../lib/types';
+import { logout } from '../../api/auth';
+import { getAccessToken } from '../../api/client';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tổng Quan', end: true },
@@ -27,8 +30,37 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
   const app = useApp();
   const user = userData ?? app.user;
   const roadmap = roadmapData ?? app.roadmap;
+  const { resetSessionState } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!getAccessToken()) {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    setLogoutError(null);
+    setIsLoggingOut(true);
+    try {
+      await logout({ revoke_all_devices: false });
+      resetSessionState();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setLogoutError(error.response?.data?.message ?? 'Khong the dang xuat luc nay.');
+      } else if (error instanceof Error) {
+        setLogoutError(error.message);
+      } else {
+        setLogoutError('Khong the dang xuat luc nay.');
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const totalLessons = roadmap.flatMap(w => w.lessons).length;
   const completedCount = roadmap.flatMap(w => w.lessons).filter(l => l.completed).length;
@@ -188,8 +220,22 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
               <Zap size={14} />
               <span style={{ fontWeight: 700 }}>{user.exp} EXP</span>
             </div>
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm"
+            >
+              <LogOut size={14} />
+              {isLoggingOut ? 'Dang xuat...' : 'Dang xuat'}
+            </button>
           </div>
         </div>
+
+        {logoutError && (
+          <div className="mx-6 mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {logoutError}
+          </div>
+        )}
 
         {/* Page content */}
         <div className="flex-1 overflow-auto">

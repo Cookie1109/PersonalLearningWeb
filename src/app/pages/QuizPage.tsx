@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { Brain, CheckCircle2, XCircle, ChevronRight, RotateCcw, Trophy, CreditCard, ListChecks, Sparkles, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import FlashCardDeck from '../components/FlashCard';
 import { Flashcard } from '../lib/types';
-import { QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
+import { QuizResponseDTO, QuizSubmitRequestDTO, QuizSubmitResponseDTO } from '../../api/dto';
 import { fetchQuizByLesson, submitQuiz } from '../../api/quiz';
 
 type Mode = 'select' | 'quiz' | 'flashcard' | 'quiz-result';
@@ -18,7 +19,7 @@ interface QuizPageProps {
   quizData?: QuizResponseDTO | null;
   flashcardsData?: Flashcard[];
   onFetchQuizByLesson?: (lessonId: string) => Promise<QuizResponseDTO>;
-  onSubmitQuiz?: (payload: { quiz_id: string; lesson_id: string; user_answers: Record<string, string> }) => Promise<QuizSubmitResponseDTO>;
+  onSubmitQuiz?: (quizId: string, payload: QuizSubmitRequestDTO) => Promise<QuizSubmitResponseDTO>;
 }
 
 export default function QuizPage({
@@ -27,7 +28,7 @@ export default function QuizPage({
   onFetchQuizByLesson = fetchQuizByLesson,
   onSubmitQuiz = submitQuiz,
 }: QuizPageProps) {
-  const { roadmap, addExpAndStreak } = useApp();
+  const { roadmap, applyServerExp } = useApp();
   const [mode, setMode] = useState<Mode>('select');
   const [quizState, setQuizState] = useState<QuizState>({ currentIndex: 0, selectedAnswers: {} });
   const [loadedQuiz, setLoadedQuiz] = useState<QuizResponseDTO | null>(quizData ?? null);
@@ -35,6 +36,7 @@ export default function QuizPage({
   const [isLoadingQuiz, setIsLoadingQuiz] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const questions = loadedQuiz?.questions ?? [];
   const currentQuestion = questions[quizState.currentIndex];
@@ -96,16 +98,32 @@ export default function QuizPage({
     if (!loadedQuiz || isSubmitting) return;
 
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
-      const result = await onSubmitQuiz({
-        quiz_id: loadedQuiz.quiz_id,
-        lesson_id: loadedQuiz.lesson_id,
-        user_answers: quizState.selectedAnswers,
-      });
+      const answers = Object.entries(quizState.selectedAnswers).map(([question_id, selected_option]) => ({
+        question_id,
+        selected_option,
+      }));
+
+      const result = await onSubmitQuiz(loadedQuiz.quiz_id, { answers });
 
       setQuizResult(result);
-      if (result.score > 0) addExpAndStreak(Math.round((result.score / 100) * 100));
+      applyServerExp(result.exp_earned ?? 0);
       setMode('quiz-result');
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const retryAfter = error.response?.data?.detail?.retry_after_seconds ?? '?';
+        setSubmitError(`Bạn đã sai hơi nhiều, hãy đọc lại bài và thử lại sau ${retryAfter} giây nhé!`);
+        return;
+      }
+
+      if (axios.isAxiosError(error)) {
+        setSubmitError(error.response?.data?.message ?? 'Khong the nop bai luc nay.');
+      } else if (error instanceof Error) {
+        setSubmitError(error.message);
+      } else {
+        setSubmitError('Khong the nop bai luc nay.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -126,13 +144,12 @@ export default function QuizPage({
   const restartQuiz = () => {
     setQuizState({ currentIndex: 0, selectedAnswers: {} });
     setQuizResult(null);
+    setSubmitError(null);
     setMode('quiz');
   };
 
-  const handleFlashcardComplete = (known: number, total: number) => {
-    if (total <= 0) return;
-    const exp = Math.round((known / total) * 60);
-    addExpAndStreak(exp);
+  const handleFlashcardComplete = () => {
+    // Flashcard reward is intentionally server-owned in the next backend phase.
   };
 
   if (mode === 'select') {
@@ -237,6 +254,11 @@ export default function QuizPage({
           <p className="text-zinc-400">Server score</p>
           <div className={`text-6xl my-6 ${grade.color}`} style={{ fontWeight: 800 }}>{score}%</div>
           <p className="text-zinc-300 text-sm">{correctCount}/{questions.length} correct answers</p>
+          {quizResult?.first_pass_awarded && (
+            <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              Chuc mung! Ban da vuot quiz lan dau va nhan {quizResult.exp_earned} EXP.
+            </div>
+          )}
 
           <div className="mt-6 space-y-2 text-left">
             {(quizResult?.results ?? []).map((answer, i) => (
@@ -362,6 +384,11 @@ export default function QuizPage({
                 <><Trophy size={16} />{isSubmitting ? 'Submitting...' : 'Submit quiz'}</>
               )}
             </button>
+            {submitError && (
+              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {submitError}
+              </div>
+            )}
           </div>
         </motion.div>
       </AnimatePresence>

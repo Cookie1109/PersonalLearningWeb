@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { useParams, useNavigate } from 'react-router';
 import {
@@ -8,7 +9,7 @@ import {
   MessageSquare, List
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { generateLessonContent, searchYouTube } from '../../api/learning';
+import { completeLessonProgress, generateLessonContent, searchYouTube } from '../../api/learning';
 import { YouTubeVideoDTO } from '../../api/dto';
 import { LessonContent } from '../lib/types';
 import ChatTutor from '../components/ChatTutor';
@@ -71,7 +72,7 @@ function formatInline(text: string) {
 export default function LearningWorkspace() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
-  const { roadmap, completeLesson, addExpAndStreak } = useApp();
+  const { roadmap, completeLesson, applyServerExp } = useApp();
 
   const [content, setContent] = useState<LessonContent | null>(null);
   const [videos, setVideos] = useState<YouTubeVideoDTO[]>([]);
@@ -80,7 +81,10 @@ export default function LearningWorkspace() {
   const [showOutline, setShowOutline] = useState(false);
   const [expandedExample, setExpandedExample] = useState<number | null>(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [showCompletionBadge, setShowCompletionBadge] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState<string>('');
+  const [completeError, setCompleteError] = useState<string | null>(null);
 
   // Find lesson info
   const allLessons = roadmap.flatMap(w =>
@@ -109,12 +113,34 @@ export default function LearningWorkspace() {
     });
   }, [lessonId]);
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!currentLesson || isCompleted) return;
-    completeLesson(currentLesson.id);
-    setIsCompleted(true);
-    setShowCompletionBadge(true);
-    setTimeout(() => setShowCompletionBadge(false), 3000);
+
+    setIsCompleting(true);
+    setCompleteError(null);
+    try {
+      const result = await completeLessonProgress(currentLesson.id);
+      completeLesson(currentLesson.id);
+      applyServerExp(result.exp_earned);
+      setIsCompleted(true);
+      setCompletionMessage(
+        result.exp_earned > 0
+          ? `+${result.exp_earned} EXP đã được cộng vào tài khoản.`
+          : 'Bài học đã được ghi nhận, chưa có EXP mới.'
+      );
+      setShowCompletionBadge(true);
+      setTimeout(() => setShowCompletionBadge(false), 3000);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setCompleteError(error.response?.data?.message ?? 'Không thể hoàn thành bài học lúc này.');
+      } else if (error instanceof Error) {
+        setCompleteError(error.message);
+      } else {
+        setCompleteError('Không thể hoàn thành bài học lúc này.');
+      }
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   if (!currentLesson) {
@@ -365,7 +391,7 @@ export default function LearningWorkspace() {
 
               <button
                 onClick={handleComplete}
-                disabled={isCompleted}
+                disabled={isCompleted || isCompleting}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${
                   isCompleted
                     ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 cursor-default'
@@ -374,9 +400,9 @@ export default function LearningWorkspace() {
                 style={{ fontWeight: 600 }}
               >
                 {isCompleted ? (
-                  <><CheckCircle2 size={16} />Đã hoàn thành · +50 EXP</>
+                  <><CheckCircle2 size={16} />Đã hoàn thành</>
                 ) : (
-                  <><Zap size={16} />Hoàn thành bài học</>
+                  <><Zap size={16} />{isCompleting ? 'Đang ghi nhận...' : 'Hoàn thành bài học'}</>
                 )}
               </button>
 
@@ -388,6 +414,11 @@ export default function LearningWorkspace() {
                 Bài sau<ChevronRight size={16} />
               </button>
             </div>
+            {completeError && (
+              <div className="max-w-3xl mx-auto mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+                {completeError}
+              </div>
+            )}
           </div>
         </div>
 
@@ -421,7 +452,7 @@ export default function LearningWorkspace() {
             </div>
             <div>
               <p className="text-white text-sm" style={{ fontWeight: 700 }}>Bài học hoàn thành! 🎉</p>
-              <p className="text-emerald-400 text-xs">+50 EXP đã được thêm vào tài khoản</p>
+              <p className="text-emerald-400 text-xs">{completionMessage}</p>
             </div>
           </motion.div>
         )}

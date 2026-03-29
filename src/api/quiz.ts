@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, createAuthHeaders } from './client';
 import {
   QuizResponseDTO,
   QuizSubmitRequestDTO,
@@ -6,11 +6,19 @@ import {
 } from './dto';
 
 export async function fetchQuizByLesson(lessonId: string): Promise<QuizResponseDTO> {
-  const response = await apiClient.get<QuizResponseDTO>(`/lessons/${lessonId}/quiz`);
+  const response = await apiClient.get<QuizResponseDTO>(`/lessons/${lessonId}/quiz`, {
+    headers: {
+      ...createAuthHeaders(),
+    },
+  });
   return response.data;
 }
 
-export async function submitQuiz(payload: QuizSubmitRequestDTO): Promise<QuizSubmitResponseDTO> {
-  const response = await apiClient.post<QuizSubmitResponseDTO>('/quizzes/submit', payload);
+export async function submitQuiz(quizId: string, payload: QuizSubmitRequestDTO): Promise<QuizSubmitResponseDTO> {
+  const response = await apiClient.post<QuizSubmitResponseDTO>(`/quizzes/${quizId}/submit`, payload, {
+    headers: {
+      ...createAuthHeaders(),
+    },
+  });
   return response.data;
 }

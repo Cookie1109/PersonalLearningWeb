@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=15, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    refresh_cookie_name: str = Field(default="refresh_token", alias="REFRESH_COOKIE_NAME")
+    idempotency_ttl_seconds: int = Field(default=86400, alias="IDEMPOTENCY_TTL_SECONDS")
+    lesson_complete_reward_exp: int = Field(default=50, alias="LESSON_COMPLETE_REWARD_EXP")
+    quiz_pass_score: int = Field(default=80, alias="QUIZ_PASS_SCORE")
+    quiz_first_pass_reward_type: str = Field(default="quiz_first_pass", alias="QUIZ_FIRST_PASS_REWARD_TYPE")
+    quiz_cooldown_fail_4_5_seconds: int = Field(default=30, alias="QUIZ_COOLDOWN_FAIL_4_5_SECONDS")
+    quiz_cooldown_fail_6_plus_seconds: int = Field(default=60, alias="QUIZ_COOLDOWN_FAIL_6_PLUS_SECONDS")
+    quiz_cooldown_state_ttl_seconds: int = Field(default=86400, alias="QUIZ_COOLDOWN_STATE_TTL_SECONDS")
 
 
 @lru_cache

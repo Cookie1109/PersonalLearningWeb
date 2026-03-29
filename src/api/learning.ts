@@ -1,5 +1,6 @@
-import { apiClient } from './client';
+import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
 import {
+  LessonCompleteResponseDTO,
   LessonContentDTO,
   RoadmapGenerateResponseDTO,
   WeekModuleDTO,
@@ -46,4 +47,19 @@ export async function generateLessonContent(lessonTitle: string, weekTitle: stri
 export async function searchYouTube(query: string): Promise<YouTubeVideoDTO[]> {
   const response = await apiClient.get<{ videos: YouTubeVideoDTO[] } | YouTubeVideoDTO[]>('/content/youtube', { params: { q: query } });
   return response.data.videos ?? response.data;
+}
+
+export async function completeLessonProgress(lessonId: string): Promise<LessonCompleteResponseDTO> {
+  const response = await apiClient.post<LessonCompleteResponseDTO>(
+    `/lessons/${lessonId}/complete`,
+    {},
+    {
+      headers: {
+        ...createAuthHeaders(),
+        'Idempotency-Key': createIdempotencyKey(),
+      },
+    }
+  );
+
+  return response.data;
 }

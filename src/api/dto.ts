@@ -7,6 +7,36 @@ export interface LessonDTO {
   description: string;
 }
 
+export interface LoginRequestDTO {
+  email: string;
+  password: string;
+  device_id?: string;
+}
+
+export interface UserProfileDTO {
+  user_id: number;
+  email: string;
+  display_name: string;
+  level: number;
+  total_exp: number;
+}
+
+export interface LoginResponseDTO {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: UserProfileDTO;
+}
+
+export interface LogoutRequestDTO {
+  revoke_all_devices: boolean;
+}
+
+export interface GenericStatusDTO {
+  status: string;
+  message: string;
+}
+
 export interface WeekModuleDTO {
   id: string;
   week_number: number;
@@ -67,16 +97,19 @@ export interface QuizResponseDTO {
   questions: QuizPublicQuestionDTO[];
 }
 
+export interface QuizSubmitAnswerDTO {
+  question_id: string;
+  selected_option: string;
+}
+
 export interface QuizSubmitRequestDTO {
-  quiz_id: string;
-  lesson_id: string;
-  user_answers: Record<string, string>;
+  answers: QuizSubmitAnswerDTO[];
 }
 
 export interface QuizSubmitResultDTO {
   question_id: string;
   is_correct: boolean;
-  selected_option: string;
+  selected_option?: string | null;
   correct_answer?: string | null;
   explanation?: string | null;
 }
@@ -84,8 +117,18 @@ export interface QuizSubmitResultDTO {
 export interface QuizSubmitResponseDTO {
   score: number;
   is_passed: boolean;
+  exp_earned: number;
+  first_pass_awarded: boolean;
   wrong_question_ids: string[];
   results?: QuizSubmitResultDTO[] | null;
+}
+
+export interface LessonCompleteResponseDTO {
+  lesson_id: number;
+  exp_earned: number;
+  total_exp: number;
+  already_completed: boolean;
+  message: string;
 }
 
 export interface ChatMessageDTO {

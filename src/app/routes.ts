@@ -5,8 +5,13 @@ import RoadmapGenerator from './pages/RoadmapGenerator';
 import LearningWorkspace from './pages/LearningWorkspace';
 import QuizPage from './pages/QuizPage';
 import LessonsPage from './pages/LessonsPage';
+import LoginPage from './pages/LoginPage';
 
 export const router = createBrowserRouter([
+  {
+    path: '/login',
+    Component: LoginPage,
+  },
   {
     path: '/',
     Component: Layout,

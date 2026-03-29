@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { UserProfileDTO } from '../../api/dto';
 import { WeekModule, Lesson, UserStats, ActivityDay } from '../lib/types';
 
 const DEFAULT_USER_STATS: UserStats = {
@@ -22,10 +23,12 @@ interface AppContextType {
   setCurrentGoal: (goal: string) => void;
   setCurrentLessonId: (id: string | null) => void;
   completeLesson: (lessonId: string) => void;
+  applyServerExp: (expEarned: number) => void;
+  setUserFromAuth: (userProfile: UserProfileDTO) => void;
+  resetSessionState: () => void;
   toggleWeekExpand: (weekId: string) => void;
   deleteWeek: (weekId: string) => void;
   deleteLesson: (weekId: string, lessonId: string) => void;
-  addExpAndStreak: (exp: number) => void;
   resetRoadmap: () => void;
   addCustomLesson: (title: string, type: Lesson['type']) => void;
 }
@@ -80,9 +83,13 @@ export function AppProvider({
         };
       })
     );
+  }, []);
+
+  const applyServerExp = useCallback((expEarned: number) => {
+    if (expEarned <= 0) return;
 
     setUser(prev => {
-      const newExp = prev.exp + 50;
+      const newExp = prev.exp + expEarned;
       const levelUp = newExp >= prev.expToNextLevel;
       return {
         ...prev,
@@ -91,6 +98,15 @@ export function AppProvider({
         expToNextLevel: levelUp ? prev.expToNextLevel + 1000 : prev.expToNextLevel,
       };
     });
+  }, []);
+
+  const setUserFromAuth = useCallback((userProfile: UserProfileDTO) => {
+    setUser(prev => ({
+      ...prev,
+      name: userProfile.display_name,
+      level: userProfile.level,
+      exp: userProfile.total_exp,
+    }));
   }, []);
 
   const toggleWeekExpand = useCallback((weekId: string) => {
@@ -113,23 +129,18 @@ export function AppProvider({
     );
   }, []);
 
-  const addExpAndStreak = useCallback((exp: number) => {
-    setUser(prev => {
-      const newExp = prev.exp + exp;
-      const levelUp = newExp >= prev.expToNextLevel;
-      return {
-        ...prev,
-        exp: levelUp ? newExp - prev.expToNextLevel : newExp,
-        level: levelUp ? prev.level + 1 : prev.level,
-        expToNextLevel: levelUp ? prev.expToNextLevel + 1000 : prev.expToNextLevel,
-      };
-    });
-  }, []);
-
   const resetRoadmap = useCallback(() => {
     setRoadmapState([]);
     setCurrentGoal('');
     setCompletedLessons(new Set());
+  }, []);
+
+  const resetSessionState = useCallback(() => {
+    setUser(DEFAULT_USER_STATS);
+    setRoadmapState([]);
+    setCurrentGoal('');
+    setCompletedLessons(new Set());
+    setCurrentLessonId(null);
   }, []);
 
   const addCustomLesson = useCallback((title: string, type: Lesson['type']) => {
@@ -170,7 +181,7 @@ export function AppProvider({
       user, roadmap, currentGoal, activityData, completedLessons,
       currentLessonId, setRoadmap, setCurrentGoal, setCurrentLessonId,
       completeLesson, toggleWeekExpand, deleteWeek, deleteLesson,
-      addExpAndStreak, resetRoadmap, addCustomLesson,
+      applyServerExp, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
     }}>
       {children}
     </AppContext.Provider>
