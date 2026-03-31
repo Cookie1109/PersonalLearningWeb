@@ -69,6 +69,29 @@ export interface RoadmapGenerateResponseDTO {
   weeks: WeekModuleDTO[];
 }
 
+export interface RoadmapLessonItemDTO {
+  id: number;
+  title: string;
+  is_completed: boolean;
+}
+
+export interface RoadmapWeekItemDTO {
+  week_number: number;
+  title: string;
+  lessons: RoadmapLessonItemDTO[];
+}
+
+export interface RoadmapItemDTO {
+  roadmap_id: number;
+  goal: string;
+  title: string;
+  weeks: RoadmapWeekItemDTO[];
+}
+
+export interface RoadmapMeResponseDTO {
+  roadmaps: RoadmapItemDTO[];
+}
+
 export interface LessonExampleDTO {
   title: string;
   description: string;

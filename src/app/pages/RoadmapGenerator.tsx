@@ -58,6 +58,7 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStep, setGeneratingStep] = useState(0);
   const [hasGenerated, setHasGenerated] = useState(roadmap.length > 0);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const STEPS = [
     'Phân tích mục tiêu của bạn...',
@@ -69,6 +70,7 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
 
   const handleGenerate = async () => {
     if (!inputGoal.trim() || isGenerating) return;
+    setGenerateError(null);
     setIsGenerating(true);
     setGeneratingStep(0);
 
@@ -85,6 +87,12 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
       setRoadmap(newRoadmap);
       setCurrentGoal(inputGoal);
       setHasGenerated(true);
+    } catch (error) {
+      if (error instanceof Error) {
+        setGenerateError(error.message);
+      } else {
+        setGenerateError('Khong the tao lo trinh luc nay. Vui long thu lai sau.');
+      }
     } finally {
       clearInterval(stepInterval);
       setIsGenerating(false);
@@ -128,6 +136,7 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
         <textarea
           value={inputGoal}
           onChange={e => setInputGoal(e.target.value)}
+          disabled={isGenerating}
           placeholder='Ví dụ: "Tôi muốn học Python cơ bản để phân tích dữ liệu trong 4 tuần"'
           rows={3}
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-200 placeholder:text-zinc-600 resize-none outline-none focus:border-violet-500/60 transition-colors text-sm"
@@ -140,6 +149,7 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
             {suggestedGoalOptions.slice(0, 3).map(goal => (
               <button
                 key={goal}
+                disabled={isGenerating}
                 onClick={() => setInputGoal(goal)}
                 className="text-xs px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-violet-300 hover:border-violet-500/40 transition-all"
               >
@@ -148,6 +158,12 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
             ))}
           </div>
         </div>
+
+        {generateError && (
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {generateError}
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-4">
           {hasGenerated && (
@@ -179,6 +195,11 @@ export default function RoadmapGenerator({ suggestedGoalOptions = [], onGenerate
             exit={{ opacity: 0, height: 0 }}
             className="mb-6 bg-violet-500/10 border border-violet-500/30 rounded-2xl p-6"
           >
+            <div className="mb-4 rounded-xl bg-zinc-900/70 border border-violet-500/30 px-4 py-3">
+              <p className="text-sm text-violet-100" style={{ fontWeight: 600 }}>
+                AI dang phan tich va thiet ke lo trinh hoc rieng cho ban. Qua trinh nay co the mat 15-30 giay...
+              </p>
+            </div>
             <div className="flex items-center gap-3 mb-4">
               <div className="relative w-8 h-8">
                 <div className="w-8 h-8 rounded-full border-2 border-violet-500/30 border-t-violet-500 animate-spin" />

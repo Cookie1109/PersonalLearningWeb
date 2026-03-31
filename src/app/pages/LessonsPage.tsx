@@ -1,329 +1,249 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
 import {
-  BookMarked, CheckCircle2, Clock, Play, Search,
-  BookOpen, Hammer, Rocket, Filter, ChevronDown,
-  Circle, Layers, ListChecks, TrendingUp
+  BookMarked,
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  Lock,
+  PlayCircle,
+  RefreshCw,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { Lesson } from '../lib/types';
-
-type FilterTab = 'all' | 'inprogress' | 'completed';
-
-function TypeBadge({ type }: { type: Lesson['type'] }) {
-  if (type === 'theory')
-    return (
-      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-        <BookOpen size={10} />Lý thuyết
-      </span>
-    );
-  if (type === 'practice')
-    return (
-      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        <Hammer size={10} />Thực hành
-      </span>
-    );
-  return (
-    <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
-      <Rocket size={10} />Dự án
-    </span>
-  );
-}
-
-interface LessonWithMeta extends Lesson {
-  weekTitle: string;
-  weekId: string;
-  weekNumber: number;
-}
+import { getMyRoadmaps, MyRoadmap } from '../../api/learning';
 
 export default function LessonsPage() {
-  const { roadmap } = useApp();
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<FilterTab>('all');
-  const [search, setSearch] = useState('');
-  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set(['all']));
+  const [roadmaps, setRoadmaps] = useState<MyRoadmap[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedRoadmaps, setExpandedRoadmaps] = useState<Set<number>>(new Set());
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
 
-  const allLessonsFlat: LessonWithMeta[] = useMemo(() =>
-    roadmap.flatMap(week =>
-      week.lessons.map(lesson => ({
-        ...lesson,
-        weekTitle: week.title,
-        weekId: week.id,
-        weekNumber: week.weekNumber,
-      }))
-    ), [roadmap]);
+  const totalLessons = useMemo(
+    () => roadmaps.flatMap(roadmap => roadmap.weeks.flatMap(week => week.lessons)).length,
+    [roadmaps]
+  );
+  const completedLessons = useMemo(
+    () => roadmaps.flatMap(roadmap => roadmap.weeks.flatMap(week => week.lessons)).filter(lesson => lesson.isCompleted).length,
+    [roadmaps]
+  );
 
-  const filtered = useMemo(() => {
-    return allLessonsFlat.filter(l => {
-      const matchSearch = search === '' || l.title.toLowerCase().includes(search.toLowerCase()) || l.description.toLowerCase().includes(search.toLowerCase());
-      const matchFilter =
-        filter === 'all' ? true :
-        filter === 'completed' ? l.completed :
-        !l.completed;
-      return matchSearch && matchFilter;
-    });
-  }, [allLessonsFlat, filter, search]);
+  const fetchRoadmaps = async () => {
+    setError(null);
+    setIsLoading(true);
 
-  // Group filtered lessons by week
-  const groupedByWeek = useMemo(() => {
-    const map = new Map<string, { weekTitle: string; weekNumber: number; weekId: string; lessons: LessonWithMeta[] }>();
-    filtered.forEach(l => {
-      if (!map.has(l.weekId)) {
-        map.set(l.weekId, { weekTitle: l.weekTitle, weekNumber: l.weekNumber, weekId: l.weekId, lessons: [] });
+    try {
+      const payload = await getMyRoadmaps();
+      setRoadmaps(payload);
+
+      if (payload.length > 0) {
+        const firstRoadmapId = payload[0].roadmapId;
+        setExpandedRoadmaps(new Set([firstRoadmapId]));
+
+        const initialWeeks = payload[0].weeks.map(week => `${firstRoadmapId}-${week.weekNumber}`);
+        setExpandedWeeks(new Set(initialWeeks.slice(0, 1)));
       }
-      map.get(l.weekId)!.lessons.push(l);
-    });
-    return Array.from(map.values()).sort((a, b) => a.weekNumber - b.weekNumber);
-  }, [filtered]);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Khong the tai du lieu bai hoc. Vui long thu lai.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const stats = useMemo(() => {
-    const total = allLessonsFlat.length;
-    const completed = allLessonsFlat.filter(l => l.completed).length;
-    const inProgress = total - completed;
-    const thisWeek = roadmap.find(w => !w.completed);
-    return { total, completed, inProgress, currentWeek: thisWeek?.title ?? '—' };
-  }, [allLessonsFlat, roadmap]);
+  useEffect(() => {
+    void fetchRoadmaps();
+  }, []);
 
-  const toggleWeek = (weekId: string) => {
-    setExpandedWeeks(prev => {
+  const toggleRoadmap = (roadmapId: number) => {
+    setExpandedRoadmaps(prev => {
       const next = new Set(prev);
-      if (next.has(weekId)) next.delete(weekId);
-      else next.add(weekId);
+      if (next.has(roadmapId)) next.delete(roadmapId);
+      else next.add(roadmapId);
       return next;
     });
   };
 
-  const tabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: 'all', label: 'Tất cả', count: allLessonsFlat.length },
-    { key: 'inprogress', label: 'Đang học', count: allLessonsFlat.filter(l => !l.completed).length },
-    { key: 'completed', label: 'Đã hoàn thành', count: allLessonsFlat.filter(l => l.completed).length },
-  ];
+  const toggleWeek = (roadmapId: number, weekNumber: number) => {
+    const key = `${roadmapId}-${weekNumber}`;
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center gap-3 mb-1">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center">
             <BookMarked size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Bài Học Của Tôi</h1>
-            <p className="text-zinc-500 text-sm">Toàn bộ nội dung học tập theo lộ trình</p>
+            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Bai hoc cua toi</h1>
+            <p className="text-zinc-500 text-sm">Hien thi theo cau truc Lo trinh -&gt; Tuan -&gt; Bai hoc</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="grid grid-cols-2 sm:grid-cols-4 gap-4"
-      >
-        {[
-          { icon: Layers, label: 'Tổng bài học', value: stats.total, color: 'text-zinc-300', bg: 'bg-zinc-800/60', border: 'border-zinc-700' },
-          { icon: TrendingUp, label: 'Đang học', value: stats.inProgress, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
-          { icon: CheckCircle2, label: 'Đã hoàn thành', value: stats.completed, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-          { icon: ListChecks, label: 'Tuần hiện tại', value: stats.currentWeek, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
-        ].map(({ icon: Icon, label, value, color, bg, border }) => (
-          <div key={label} className={`${bg} border ${border} rounded-2xl p-4`}>
-            <Icon size={16} className={`${color} mb-2`} />
-            <p className={`text-xl ${color}`} style={{ fontWeight: 700 }}>{value}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
-          </div>
-        ))}
-      </motion.div>
-
-      {/* Controls */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-col sm:flex-row gap-3"
-      >
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm kiếm bài học..."
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-violet-500/50 transition-colors"
-          />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-xs text-zinc-500">Tong bai hoc</p>
+          <p className="text-xl text-zinc-100" style={{ fontWeight: 700 }}>{totalLessons}</p>
         </div>
-
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                filter === tab.key
-                  ? 'bg-violet-600 text-white'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-              style={{ fontWeight: filter === tab.key ? 600 : 400 }}
-            >
-              {tab.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                filter === tab.key ? 'bg-white/20' : 'bg-zinc-800'
-              }`}>{tab.count}</span>
-            </button>
-          ))}
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+          <p className="text-xs text-emerald-300">Da hoan thanh</p>
+          <p className="text-xl text-emerald-300" style={{ fontWeight: 700 }}>{completedLessons}</p>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Lessons grouped by week */}
-      <div className="space-y-4">
-        <AnimatePresence mode="popLayout">
-          {groupedByWeek.length === 0 ? (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-16"
-            >
-              <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3">
-                <BookOpen size={28} className="text-zinc-700" />
-              </div>
-              <p className="text-zinc-400" style={{ fontWeight: 500 }}>Không tìm thấy bài học nào</p>
-              <p className="text-zinc-600 text-sm mt-1">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
-            </motion.div>
-          ) : groupedByWeek.map((group, gi) => {
-            const isExpanded = expandedWeeks.has(group.weekId) || expandedWeeks.has('all');
-            const weekCompleted = group.lessons.every(l => l.completed);
-            const weekProgress = Math.round((group.lessons.filter(l => l.completed).length / group.lessons.length) * 100);
+      {isLoading && (
+        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-5 flex items-center gap-3">
+          <Loader2 size={18} className="text-violet-300 animate-spin" />
+          <p className="text-sm text-violet-200">Dang tai danh sach lo trinh va bai hoc...</p>
+        </div>
+      )}
+
+      {!isLoading && error && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4">
+          <p className="text-sm text-red-300">{error}</p>
+          <button
+            onClick={() => void fetchRoadmaps()}
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-200"
+          >
+            <RefreshCw size={12} />Thu lai
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !error && roadmaps.length === 0 && (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+          <p className="text-zinc-300" style={{ fontWeight: 600 }}>Chua co lo trinh nao</p>
+          <p className="text-sm text-zinc-500 mt-1">Hay tao lo trinh moi tai trang Lo trinh AI.</p>
+        </div>
+      )}
+
+      {!isLoading && !error && roadmaps.length > 0 && (
+        <div className="space-y-4">
+          {roadmaps.map(roadmap => {
+            const roadmapExpanded = expandedRoadmaps.has(roadmap.roadmapId);
+            const roadmapLessonCount = roadmap.weeks.flatMap(week => week.lessons).length;
+            const roadmapCompletedCount = roadmap.weeks.flatMap(week => week.lessons).filter(lesson => lesson.isCompleted).length;
 
             return (
-              <motion.div
-                key={group.weekId}
-                initial={{ opacity: 0, y: 12 }}
+              <motion.section
+                key={roadmap.roadmapId}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ delay: gi * 0.05 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden"
+                className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden"
               >
-                {/* Week header */}
                 <button
-                  onClick={() => toggleWeek(group.weekId)}
-                  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-zinc-800/40 transition-colors text-left"
+                  onClick={() => toggleRoadmap(roadmap.roadmapId)}
+                  className="w-full text-left px-4 sm:px-5 py-4 hover:bg-zinc-800/50 transition-colors"
                 >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm flex-shrink-0 border ${
-                    weekCompleted
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : 'bg-violet-500/10 border-violet-500/30 text-violet-400'
-                  }`} style={{ fontWeight: 700 }}>
-                    {weekCompleted ? <CheckCircle2 size={16} /> : group.weekNumber}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-white truncate" style={{ fontWeight: 600 }}>
-                        {group.weekId === 'week-custom' ? '📌 ' : `Tuần ${group.weekNumber}: `}{group.weekTitle}
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg text-white truncate" style={{ fontWeight: 700 }}>{roadmap.title}</p>
+                      <p className="text-sm text-zinc-400 mt-1">Muc tieu: {roadmap.goal}</p>
+                      <p className="text-xs text-zinc-500 mt-2">
+                        {roadmapCompletedCount}/{roadmapLessonCount} bai da hoan thanh
                       </p>
-                      {weekCompleted && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex-shrink-0">
-                          Hoàn thành
-                        </span>
-                      )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden max-w-32">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${weekCompleted ? 'bg-emerald-500' : 'bg-violet-500'}`}
-                          style={{ width: `${weekProgress}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-zinc-500">
-                        {group.lessons.filter(l => l.completed).length}/{group.lessons.length} bài
-                      </span>
-                    </div>
+                    <motion.div animate={{ rotate: roadmapExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                      <ChevronDown size={18} className="text-zinc-500 mt-1" />
+                    </motion.div>
                   </div>
-                  <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <ChevronDown size={16} className="text-zinc-500 flex-shrink-0" />
-                  </motion.div>
                 </button>
 
-                {/* Lessons list */}
                 <AnimatePresence initial={false}>
-                  {isExpanded && (
+                  {roadmapExpanded && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="overflow-hidden border-t border-zinc-800"
+                      className="border-t border-zinc-800"
                     >
-                      <div className="p-3 space-y-1.5">
-                        {group.lessons.map((lesson, li) => (
-                          <motion.div
-                            key={lesson.id}
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: li * 0.04 }}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group ${
-                              lesson.completed
-                                ? 'bg-emerald-500/5 border-emerald-500/15 hover:border-emerald-500/30'
-                                : 'bg-zinc-800/40 border-zinc-700/50 hover:border-violet-500/30 hover:bg-zinc-800/70'
-                            }`}
-                          >
-                            {/* Status icon */}
-                            <div className="flex-shrink-0">
-                              {lesson.completed ? (
-                                <CheckCircle2 size={18} className="text-emerald-400" />
-                              ) : (
-                                <Circle size={18} className="text-zinc-600 group-hover:text-violet-400 transition-colors" />
-                              )}
-                            </div>
+                      <div className="p-3 sm:p-4 space-y-3">
+                        {roadmap.weeks.map(week => {
+                          const weekKey = `${roadmap.roadmapId}-${week.weekNumber}`;
+                          const weekExpanded = expandedWeeks.has(weekKey);
+                          const weekCompleted = week.lessons.every(lesson => lesson.isCompleted);
 
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm truncate ${lesson.completed ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-zinc-200'}`} style={{ fontWeight: lesson.completed ? 400 : 500 }}>
-                                {lesson.title}
-                              </p>
-                              <p className="text-xs text-zinc-600 mt-0.5 truncate">{lesson.description}</p>
-                            </div>
-
-                            {/* Meta */}
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <TypeBadge type={lesson.type} />
-                              <div className="flex items-center gap-1 text-xs text-zinc-600">
-                                <Clock size={11} />
-                                <span>{lesson.duration}</span>
-                              </div>
-                            </div>
-
-                            {/* Action */}
-                            {!lesson.completed && (
+                          return (
+                            <div key={weekKey} className="rounded-xl border border-zinc-700/70 bg-zinc-800/40 overflow-hidden">
                               <button
-                                onClick={() => navigate(`/learn/${lesson.id}`)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                                style={{ fontWeight: 600 }}
+                                onClick={() => toggleWeek(roadmap.roadmapId, week.weekNumber)}
+                                className="w-full px-3 sm:px-4 py-3 text-left hover:bg-zinc-700/30 transition-colors"
                               >
-                                <Play size={11} />Học
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${weekCompleted ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300' : 'border-zinc-600 bg-zinc-700/60 text-zinc-300'}`}>
+                                    {weekCompleted ? <CheckCircle2 size={14} /> : week.weekNumber}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-zinc-100" style={{ fontWeight: 600 }}>{week.title}</p>
+                                    <p className="text-xs text-zinc-500">{week.lessons.length} bai hoc</p>
+                                  </div>
+                                  <motion.div animate={{ rotate: weekExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                    <ChevronDown size={15} className="text-zinc-500" />
+                                  </motion.div>
+                                </div>
                               </button>
-                            )}
-                            {lesson.completed && (
-                              <button
-                                onClick={() => navigate(`/learn/${lesson.id}`)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                              >
-                                Ôn lại
-                              </button>
-                            )}
-                          </motion.div>
-                        ))}
+
+                              <AnimatePresence initial={false}>
+                                {weekExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="border-t border-zinc-700/70"
+                                  >
+                                    <div className="p-2 sm:p-3 space-y-2">
+                                      {week.lessons.map(lesson => (
+                                        <button
+                                          key={lesson.id}
+                                          onClick={() => navigate(`/learn/${lesson.id}`)}
+                                          className={`w-full text-left rounded-lg border px-3 py-2.5 flex items-center gap-3 transition-colors ${lesson.isCompleted ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15' : 'border-zinc-600 bg-zinc-800 hover:bg-zinc-700/60'}`}
+                                        >
+                                          {lesson.isCompleted ? (
+                                            <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                                          ) : (
+                                            <Lock size={16} className="text-zinc-500 flex-shrink-0" />
+                                          )}
+
+                                          <div className="flex-1 min-w-0">
+                                            <p className={`text-sm truncate ${lesson.isCompleted ? 'text-emerald-100' : 'text-zinc-200'}`} style={{ fontWeight: 600 }}>
+                                              {lesson.title}
+                                            </p>
+                                            <p className={`text-xs ${lesson.isCompleted ? 'text-emerald-300/80' : 'text-zinc-500'}`}>
+                                              {lesson.isCompleted ? 'Da hoan thanh' : 'Chua hoan thanh'}
+                                            </p>
+                                          </div>
+
+                                          <PlayCircle size={16} className="text-violet-400 flex-shrink-0" />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </motion.section>
             );
           })}
-        </AnimatePresence>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

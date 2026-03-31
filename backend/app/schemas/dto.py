@@ -93,6 +93,29 @@ class RoadmapGenerateResponseDTO(BaseModel):
     weeks: list[WeekModuleDTO]
 
 
+class RoadmapLessonItemDTO(BaseModel):
+    id: int
+    title: str
+    is_completed: bool
+
+
+class RoadmapWeekItemDTO(BaseModel):
+    week_number: int = Field(..., ge=1)
+    title: str
+    lessons: list[RoadmapLessonItemDTO] = Field(default_factory=list)
+
+
+class RoadmapItemDTO(BaseModel):
+    roadmap_id: int
+    goal: str
+    title: str
+    weeks: list[RoadmapWeekItemDTO] = Field(default_factory=list)
+
+
+class RoadmapMeResponseDTO(BaseModel):
+    roadmaps: list[RoadmapItemDTO] = Field(default_factory=list)
+
+
 class LessonExampleDTO(BaseModel):
     title: str
     description: str

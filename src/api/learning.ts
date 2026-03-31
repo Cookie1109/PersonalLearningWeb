@@ -2,11 +2,31 @@ import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
 import {
   LessonCompleteResponseDTO,
   LessonContentDTO,
+  RoadmapItemDTO,
   RoadmapGenerateResponseDTO,
   WeekModuleDTO,
   YouTubeVideoDTO,
 } from './dto';
 import { LessonContent, WeekModule } from '../app/lib/types';
+
+export interface MyRoadmapLesson {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+}
+
+export interface MyRoadmapWeek {
+  weekNumber: number;
+  title: string;
+  lessons: MyRoadmapLesson[];
+}
+
+export interface MyRoadmap {
+  roadmapId: number;
+  goal: string;
+  title: string;
+  weeks: MyRoadmapWeek[];
+}
 
 function mapWeekModule(dto: WeekModuleDTO): WeekModule {
   return {
@@ -34,8 +54,33 @@ function mapLessonContent(dto: LessonContentDTO): LessonContent {
   };
 }
 
+function mapRoadmapItem(dto: RoadmapItemDTO): MyRoadmap {
+  return {
+    roadmapId: dto.roadmap_id,
+    goal: dto.goal,
+    title: dto.title,
+    weeks: (dto.weeks ?? []).map(week => ({
+      weekNumber: week.week_number,
+      title: week.title,
+      lessons: (week.lessons ?? []).map(lesson => ({
+        id: String(lesson.id),
+        title: lesson.title,
+        isCompleted: lesson.is_completed,
+      })),
+    })),
+  };
+}
+
 export async function generateRoadmap(goal: string): Promise<WeekModule[]> {
-  const response = await apiClient.post<RoadmapGenerateResponseDTO>('/roadmaps/generate', { goal });
+  const response = await apiClient.post<RoadmapGenerateResponseDTO>(
+    '/roadmaps/generate',
+    { goal },
+    {
+      headers: {
+        ...createAuthHeaders(),
+      },
+    }
+  );
   return (response.data.weeks ?? []).map(mapWeekModule);
 }
 
@@ -62,4 +107,14 @@ export async function completeLessonProgress(lessonId: string): Promise<LessonCo
   );
 
   return response.data;
+}
+
+export async function getMyRoadmaps(): Promise<MyRoadmap[]> {
+  const response = await apiClient.get<RoadmapItemDTO[]>('/roadmaps/me', {
+    headers: {
+      ...createAuthHeaders(),
+    },
+  });
+
+  return (response.data ?? []).map(mapRoadmapItem);
 }
