@@ -169,15 +169,12 @@ export interface LessonCompleteResponseDTO {
 }
 
 export interface ChatMessageDTO {
-  id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: string;
 }
 
 export interface ChatRequestDTO {
-  message: string;
-  history: ChatMessageDTO[];
+  messages: ChatMessageDTO[];
 }
 
 export interface ChatResponseDTO {

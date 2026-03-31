@@ -184,15 +184,12 @@ class QuizSubmitResponseDTO(BaseModel):
 
 
 class ChatMessageDTO(BaseModel):
-    id: str
     role: Literal["user", "assistant"]
-    content: str
-    timestamp: str
+    content: str = Field(..., min_length=1, max_length=8000)
 
 
 class ChatRequestDTO(BaseModel):
-    message: str = Field(..., min_length=1, max_length=4000)
-    history: list[ChatMessageDTO] = Field(default_factory=list)
+    messages: list[ChatMessageDTO] = Field(default_factory=list)
 
 
 class ChatResponseDTO(BaseModel):

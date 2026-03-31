@@ -7,6 +7,7 @@ import QuizPage from './pages/QuizPage';
 import LessonsPage from './pages/LessonsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ChatPage from './pages/ChatPage';
 
 export const router = createBrowserRouter([
   {
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: 'learn', Component: LearningWorkspace },
       { path: 'learn/:lessonId', Component: LearningWorkspace },
       { path: 'quiz', Component: QuizPage },
+      { path: 'chat', Component: ChatPage },
     ],
   },
 ]);

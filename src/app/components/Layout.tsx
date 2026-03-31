@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, Map, BookOpen, Brain, Trophy,
   Zap, Flame, ChevronRight, Menu, Sparkles, Target,
-  Settings, Bell, Star, BookMarked, LogOut
+  Settings, Bell, Star, BookMarked, LogOut, MessageSquare
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserStats, WeekModule } from '../lib/types';
@@ -18,6 +18,7 @@ const navItems = [
   { to: '/lessons', icon: BookMarked, label: 'Bài Học Của Tôi' },
   { to: '/learn', icon: BookOpen, label: 'Không Gian Học' },
   { to: '/quiz', icon: Brain, label: 'Kiểm Tra & Flashcard' },
+  { to: '/chat', icon: MessageSquare, label: 'DocsShare Assistant' },
 ];
 
 export interface LayoutProps {
