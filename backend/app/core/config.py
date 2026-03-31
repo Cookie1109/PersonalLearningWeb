@@ -1,16 +1,24 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(BASE_DIR / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     app_name: str = Field(default="Personal Learning API", alias="APP_NAME")
     app_env: str = Field(default="dev", alias="APP_ENV")
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
-    app_port: int = Field(default=8000, alias="APP_PORT")
+    app_port: int = Field(default=8001, alias="APP_PORT")
     api_prefix: str = Field(default="/api", alias="API_PREFIX")
 
     database_url: str = Field(
@@ -33,6 +41,7 @@ class Settings(BaseSettings):
     quiz_cooldown_state_ttl_seconds: int = Field(default=86400, alias="QUIZ_COOLDOWN_STATE_TTL_SECONDS")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
+    gemini_pro_model: str = Field(default="gemini-2.5-pro", alias="GEMINI_PRO_MODEL")
     gemini_timeout_seconds: float = Field(default=120.0, alias="GEMINI_TIMEOUT_SECONDS")
 
 
