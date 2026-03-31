@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -23,6 +23,7 @@ from app.services.auth_service import (
     revoke_session,
     rotate_tokens,
 )
+from app.services.audit_service import queue_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -66,7 +67,9 @@ def _clear_refresh_cookie(response: Response) -> None:
 )
 def login(
     payload: LoginRequestDTO,
+    request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     redis_client=Depends(get_redis_client),
 ) -> LoginResponseDTO:
@@ -78,6 +81,19 @@ def login(
     )
 
     _set_refresh_cookie(response, refresh_token)
+
+    queue_audit_log(
+        background_tasks,
+        user_id=user.id,
+        action="USER_LOGIN",
+        resource_id=str(user.id),
+        details={
+            "device_id": payload.device_id,
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": request.client.host if request.client else None,
+        },
+    )
+
     return LoginResponseDTO(
         access_token=access_token,
         expires_in=expires_in,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from redis import Redis
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
 from app.schemas import ErrorResponseDTO, QuizSubmitRequestDTO, QuizSubmitResponseDTO
+from app.services.audit_service import queue_audit_log
 from app.services.quiz_cooldown_store import QuizCooldownStore
 from app.services.quiz_service import submit_quiz_for_user
 
@@ -35,6 +36,8 @@ ERROR_RESPONSES = {
 def submit_quiz(
     quiz_id: str,
     payload: QuizSubmitRequestDTO,
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     redis_client: Redis = Depends(get_redis_client),
@@ -61,5 +64,20 @@ def submit_quiz(
         cooldown_store.reset(user_id=current_user.id, quiz_id=quiz_id)
     else:
         cooldown_store.register_failure(user_id=current_user.id, quiz_id=quiz_id)
+
+    queue_audit_log(
+        background_tasks,
+        user_id=current_user.id,
+        action="QUIZ_SUBMITTED",
+        resource_id=quiz_id,
+        details={
+            "score": result.score,
+            "is_passed": result.is_passed,
+            "exp_earned": result.exp_earned,
+            "first_pass_awarded": result.first_pass_awarded,
+            "wrong_question_count": len(result.wrong_question_ids),
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
     return result

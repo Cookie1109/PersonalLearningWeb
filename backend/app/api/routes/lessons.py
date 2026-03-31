@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, status
 from redis import Redis
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
 from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO
+from app.services.audit_service import queue_audit_log
 from app.services.idempotency_store import IdempotencyStore
 from app.services.lesson_service import complete_lesson_for_user
 
@@ -35,6 +36,8 @@ ERROR_RESPONSES = {
 )
 def complete_lesson(
     lesson_id: int,
+    request: Request,
+    background_tasks: BackgroundTasks,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -49,6 +52,18 @@ def complete_lesson(
 
     state, payload = idempotency_store.begin(redis_key)
     if state == "completed" and payload is not None:
+        queue_audit_log(
+            background_tasks,
+            user_id=current_user.id,
+            action="LESSON_COMPLETED",
+            resource_id=str(lesson_id),
+            details={
+                "already_completed": payload.get("already_completed", True),
+                "exp_earned": payload.get("exp_earned", 0),
+                "request_id": getattr(request.state, "request_id", None),
+                "idempotency_replay": True,
+            },
+        )
         return LessonCompleteResponseDTO(**payload)
 
     if state == "in_progress":
@@ -70,4 +85,18 @@ def complete_lesson(
         raise
 
     idempotency_store.complete(redis_key, result.model_dump())
+
+    queue_audit_log(
+        background_tasks,
+        user_id=current_user.id,
+        action="LESSON_COMPLETED",
+        resource_id=str(lesson_id),
+        details={
+            "already_completed": result.already_completed,
+            "exp_earned": result.exp_earned,
+            "request_id": getattr(request.state, "request_id", None),
+            "idempotency_replay": False,
+        },
+    )
+
     return result
