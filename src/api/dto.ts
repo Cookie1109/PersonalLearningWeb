@@ -13,6 +13,12 @@ export interface LoginRequestDTO {
   device_id?: string;
 }
 
+export interface RegisterRequestDTO {
+  email: string;
+  password: string;
+  display_name?: string;
+}
+
 export interface UserProfileDTO {
   user_id: number;
   email: string;
@@ -26,6 +32,14 @@ export interface LoginResponseDTO {
   token_type: string;
   expires_in: number;
   user: UserProfileDTO;
+}
+
+export interface RegisterResponseDTO {
+  user_id: number;
+  email: string;
+  display_name: string;
+  level: number;
+  total_exp: number;
 }
 
 export interface LogoutRequestDTO {

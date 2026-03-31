@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from redis import Redis
 
 from app.core.exceptions import AppException
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.models import User
 from app.schemas import UserProfileDTO
 from app.services.refresh_token_store import RefreshTokenStore
@@ -16,6 +17,48 @@ def authenticate_user(db: Session, *, email: str, password: str) -> User:
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(password, user.password_hash):
         raise AppException(status_code=401, message="Invalid credentials", detail={"code": "INVALID_CREDENTIALS"})
+    return user
+
+
+def register_user(
+    db: Session,
+    *,
+    email: str,
+    password: str,
+    display_name: str | None,
+) -> User:
+    normalized_email = email.strip().lower()
+    normalized_display_name = (display_name or normalized_email.split("@")[0]).strip()
+
+    existing_user = db.scalar(select(User).where(User.email == normalized_email))
+    if existing_user is not None:
+        raise AppException(
+            status_code=400,
+            message="Ten dang nhap da ton tai",
+            detail={"code": "USER_ALREADY_EXISTS"},
+        )
+
+    user = User(
+        email=normalized_email,
+        password_hash=hash_password(password),
+        display_name=normalized_display_name,
+        level=1,
+        total_exp=0,
+        streak=0,
+    )
+
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppException(
+            status_code=400,
+            message="Ten dang nhap da ton tai",
+            detail={"code": "USER_ALREADY_EXISTS"},
+        ) from exc
+
     return user
 
 

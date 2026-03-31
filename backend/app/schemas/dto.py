@@ -47,6 +47,12 @@ class LogoutRequestDTO(BaseModel):
     revoke_all_devices: bool = False
 
 
+class RegisterRequestDTO(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=8, max_length=255)
+    display_name: str | None = Field(default=None, min_length=2, max_length=120)
+
+
 class GenericStatusDTO(BaseModel):
     status: str
     message: str

@@ -13,13 +13,16 @@ from app.schemas import (
     LoginRequestDTO,
     LoginResponseDTO,
     LogoutRequestDTO,
+    RegisterRequestDTO,
     RefreshTokenRequestDTO,
     RefreshTokenResponseDTO,
+    UserProfileDTO,
 )
 from app.services.auth_service import (
     authenticate_user,
     build_user_profile,
     issue_login_tokens,
+    register_user,
     revoke_session,
     rotate_tokens,
 )
@@ -29,12 +32,32 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 ERROR_RESPONSES = {
+    400: {"model": ErrorResponseDTO, "description": "Bad Request"},
     401: {"model": ErrorResponseDTO, "description": "Unauthorized"},
     403: {"model": ErrorResponseDTO, "description": "Forbidden"},
     409: {"model": ErrorResponseDTO, "description": "Conflict"},
     429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }
+
+
+@router.post(
+    "/register",
+    response_model=UserProfileDTO,
+    status_code=status.HTTP_201_CREATED,
+    responses=ERROR_RESPONSES,
+)
+def register(
+    payload: RegisterRequestDTO,
+    db: Session = Depends(get_db),
+) -> UserProfileDTO:
+    user = register_user(
+        db,
+        email=payload.email,
+        password=payload.password,
+        display_name=payload.display_name,
+    )
+    return build_user_profile(user)
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:

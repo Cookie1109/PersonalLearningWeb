@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import { login } from '../../api/auth';
 import { getAccessToken } from '../../api/client';
@@ -88,6 +88,13 @@ export default function LoginPage() {
           >
             {isSubmitting ? 'Dang dang nhap...' : 'Dang nhap'}
           </button>
+
+          <p className="text-sm text-zinc-400 text-center">
+            Chua co tai khoan?{' '}
+            <Link to="/register" className="text-violet-400 hover:text-violet-300">
+              Dang ky ngay
+            </Link>
+          </p>
         </form>
       </div>
     </div>

@@ -6,11 +6,16 @@ import LearningWorkspace from './pages/LearningWorkspace';
 import QuizPage from './pages/QuizPage';
 import LessonsPage from './pages/LessonsPage';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
 export const router = createBrowserRouter([
   {
     path: '/login',
     Component: LoginPage,
+  },
+  {
+    path: '/register',
+    Component: RegisterPage,
   },
   {
     path: '/',

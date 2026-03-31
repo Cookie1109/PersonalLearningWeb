@@ -4,11 +4,18 @@ import {
   LoginRequestDTO,
   LoginResponseDTO,
   LogoutRequestDTO,
+  RegisterRequestDTO,
+  RegisterResponseDTO,
 } from './dto';
 
 export async function login(payload: LoginRequestDTO): Promise<LoginResponseDTO> {
   const response = await apiClient.post<LoginResponseDTO>('/auth/login', payload);
   setAccessToken(response.data.access_token);
+  return response.data;
+}
+
+export async function register(payload: RegisterRequestDTO): Promise<RegisterResponseDTO> {
+  const response = await apiClient.post<RegisterResponseDTO>('/auth/register', payload);
   return response.data;
 }
 
