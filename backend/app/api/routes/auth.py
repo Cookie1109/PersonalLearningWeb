@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.exceptions import AppException
+from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
@@ -39,6 +40,26 @@ ERROR_RESPONSES = {
     429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }
+
+
+def _extract_user_id_from_bearer_header(request: Request) -> int | None:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = auth_header[7:].strip()
+    if not token:
+        return None
+
+    try:
+        payload = decode_access_token(token)
+    except AppException:
+        return None
+
+    try:
+        return int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
 
 
 @router.post(
@@ -166,15 +187,29 @@ def logout(
     payload: LogoutRequestDTO,
     request: Request,
     response: Response,
-    current_user: User = Depends(get_current_user),
     redis_client=Depends(get_redis_client),
 ) -> GenericStatusDTO:
+    user_id = _extract_user_id_from_bearer_header(request)
     refresh_token = request.cookies.get(settings.refresh_cookie_name)
-    revoke_session(
-        user_id=current_user.id,
-        refresh_token=refresh_token,
-        revoke_all_devices=payload.revoke_all_devices,
-        redis_client=redis_client,
-    )
+
+    try:
+        if payload.revoke_all_devices and user_id is not None:
+            revoke_session(
+                user_id=user_id,
+                refresh_token=refresh_token,
+                revoke_all_devices=True,
+                redis_client=redis_client,
+            )
+        elif refresh_token:
+            revoke_session(
+                user_id=user_id or 0,
+                refresh_token=refresh_token,
+                revoke_all_devices=False,
+                redis_client=redis_client,
+            )
+    except AppException:
+        # Logout is best-effort: token can already be expired/invalid, client still must be able to clear local state.
+        pass
+
     _clear_refresh_cookie(response)
     return GenericStatusDTO(status="ok", message="Logged out")

@@ -168,6 +168,22 @@ export interface LessonCompleteResponseDTO {
   message: string;
 }
 
+export interface LessonDetailDTO {
+  id: number;
+  title: string;
+  week_number: number;
+  position: number;
+  roadmap_id: number;
+  roadmap_title: string;
+  is_completed: boolean;
+  content_markdown?: string | null;
+  is_draft: boolean;
+}
+
+export interface LessonGenerateResponseDTO {
+  lesson: LessonDetailDTO;
+}
+
 export interface ChatMessageDTO {
   role: 'user' | 'assistant';
   content: string;
@@ -179,4 +195,11 @@ export interface ChatRequestDTO {
 
 export interface ChatResponseDTO {
   reply: string;
+}
+
+export interface ChatHistoryMessageDTO {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
 }

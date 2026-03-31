@@ -1,4 +1,4 @@
-import { apiClient, createAuthHeaders, setAccessToken } from './client';
+import { apiClient, clearClientAuthState, getAccessToken, setAccessToken } from './client';
 import {
   GenericStatusDTO,
   LoginRequestDTO,
@@ -20,12 +20,15 @@ export async function register(payload: RegisterRequestDTO): Promise<RegisterRes
 }
 
 export async function logout(payload: LogoutRequestDTO = { revoke_all_devices: false }): Promise<GenericStatusDTO> {
-  const response = await apiClient.post<GenericStatusDTO>('/auth/logout', payload, {
-    headers: {
-      ...createAuthHeaders(),
-    },
-  });
+  const token = getAccessToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  setAccessToken(null);
-  return response.data;
+  try {
+    const response = await apiClient.post<GenericStatusDTO>('/auth/logout', payload, { headers });
+    return response.data;
+  } catch {
+    return { status: 'ok', message: 'Logged out locally' };
+  } finally {
+    clearClientAuthState();
+  }
 }

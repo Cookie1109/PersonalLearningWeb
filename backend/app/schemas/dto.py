@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -130,6 +131,22 @@ class LessonContentDTO(BaseModel):
     youtube_query: str
 
 
+class LessonDetailDTO(BaseModel):
+    id: int
+    title: str
+    week_number: int
+    position: int
+    roadmap_id: int
+    roadmap_title: str
+    is_completed: bool
+    content_markdown: str | None = None
+    is_draft: bool = True
+
+
+class LessonGenerateResponseDTO(BaseModel):
+    lesson: LessonDetailDTO
+
+
 class YouTubeVideoDTO(BaseModel):
     id: str
     title: str
@@ -194,3 +211,10 @@ class ChatRequestDTO(BaseModel):
 
 class ChatResponseDTO(BaseModel):
     reply: str
+
+
+class ChatHistoryMessageDTO(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime

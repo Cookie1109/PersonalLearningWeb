@@ -1,10 +1,13 @@
 from .dto import (
+    ChatHistoryMessageDTO,
     ChatRequestDTO,
     ChatResponseDTO,
     ErrorResponseDTO,
     GenericStatusDTO,
+    LessonDetailDTO,
     LessonContentDTO,
     LessonCompleteResponseDTO,
+    LessonGenerateResponseDTO,
     LessonExampleDTO,
     LessonDTO,
     LoginRequestDTO,
@@ -32,12 +35,15 @@ from .dto import (
 )
 
 __all__ = [
+    "ChatHistoryMessageDTO",
     "ChatRequestDTO",
     "ChatResponseDTO",
     "ErrorResponseDTO",
     "GenericStatusDTO",
+    "LessonDetailDTO",
     "LessonContentDTO",
     "LessonCompleteResponseDTO",
+    "LessonGenerateResponseDTO",
     "LessonExampleDTO",
     "LessonDTO",
     "LoginRequestDTO",

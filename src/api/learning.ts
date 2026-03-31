@@ -1,7 +1,9 @@
 import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
 import {
   LessonCompleteResponseDTO,
+  LessonDetailDTO,
   LessonContentDTO,
+  LessonGenerateResponseDTO,
   RoadmapItemDTO,
   RoadmapGenerateResponseDTO,
   WeekModuleDTO,
@@ -26,6 +28,18 @@ export interface MyRoadmap {
   goal: string;
   title: string;
   weeks: MyRoadmapWeek[];
+}
+
+export interface LessonDetail {
+  id: number;
+  title: string;
+  weekNumber: number;
+  position: number;
+  roadmapId: number;
+  roadmapTitle: string;
+  isCompleted: boolean;
+  contentMarkdown: string | null;
+  isDraft: boolean;
 }
 
 function mapWeekModule(dto: WeekModuleDTO): WeekModule {
@@ -68,6 +82,20 @@ function mapRoadmapItem(dto: RoadmapItemDTO): MyRoadmap {
         isCompleted: lesson.is_completed,
       })),
     })),
+  };
+}
+
+function mapLessonDetail(dto: LessonDetailDTO): LessonDetail {
+  return {
+    id: dto.id,
+    title: dto.title,
+    weekNumber: dto.week_number,
+    position: dto.position,
+    roadmapId: dto.roadmap_id,
+    roadmapTitle: dto.roadmap_title,
+    isCompleted: dto.is_completed,
+    contentMarkdown: dto.content_markdown ?? null,
+    isDraft: dto.is_draft,
   };
 }
 
@@ -117,4 +145,28 @@ export async function getMyRoadmaps(): Promise<MyRoadmap[]> {
   });
 
   return (response.data ?? []).map(mapRoadmapItem);
+}
+
+export async function getLessonDetail(lessonId: string): Promise<LessonDetail> {
+  const response = await apiClient.get<LessonDetailDTO>(`/lessons/${lessonId}`, {
+    headers: {
+      ...createAuthHeaders(),
+    },
+  });
+
+  return mapLessonDetail(response.data);
+}
+
+export async function generateLesson(lessonId: string): Promise<LessonDetail> {
+  const response = await apiClient.post<LessonGenerateResponseDTO>(
+    `/lessons/${lessonId}/generate`,
+    {},
+    {
+      headers: {
+        ...createAuthHeaders(),
+      },
+    }
+  );
+
+  return mapLessonDetail(response.data.lesson);
 }

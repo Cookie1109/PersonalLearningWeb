@@ -24,8 +24,11 @@ class GeneratedWeekPlan:
 
 def build_roadmap_prompt(goal: str) -> str:
     return (
-        "You are an expert curriculum designer. "
-        "Given a learning goal, return ONLY valid JSON array with this schema: "
+        "Ban la mot Chuyen gia Dao tao Da linh vuc (Polymath) hang dau the gioi. "
+        "Ban co kha nang thiet ke lo trinh va giang day BAT KY chu de nao. "
+        "TUYET DOI KHONG su dung cac thuat ngu IT/Lap trinh (nhu moi truong code, bien, cu phap...) "
+        "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
+        "Return ONLY valid JSON array with this schema: "
         "[{\"week\": 1, \"title\": \"...\", \"lessons\": [\"...\", \"...\"]}]. "
         "Rules: include at least 4 weeks, each week must have at least 2 lessons, "
         "lesson titles must be short and practical, no markdown, no prose outside JSON. "
@@ -38,37 +41,37 @@ def _mock_llm_response(goal: str) -> str:
     weeks = [
         {
             "week": 1,
-            "title": f"Nen tang {topic}",
+            "title": f"Nen tang va dinh huong ve {topic}",
             "lessons": [
                 f"Tong quan {topic}",
-                "Cai dat moi truong hoc tap",
-                "Cu phap va quy tac co ban",
+                f"Khai niem cot loi trong {topic}",
+                "Muc tieu hoc tap va cach theo doi tien do",
             ],
         },
         {
             "week": 2,
-            "title": "Thanh phan cot loi",
+            "title": "Kien thuc cot loi",
             "lessons": [
-                "Bien, kieu du lieu va toan tu",
-                "Cau truc dieu kien va vong lap",
-                "Ham va to chuc ma nguon",
+                f"Nguyen ly quan trong cua {topic}",
+                "Ky nang phan tich va ra quyet dinh theo tinh huong",
+                "Bai tap ung dung co huong dan",
             ],
         },
         {
             "week": 3,
-            "title": "Ung dung thuc hanh",
+            "title": "Luyen tap va ung dung",
             "lessons": [
-                "Xu ly dau vao dau ra",
-                "Lam viec voi thu vien pho bien",
-                "Bai tap thuc hanh tong hop",
+                "Mo phong tinh huong thuc te",
+                "Thuc hanh theo buoc voi phan hoi",
+                "Tu danh gia diem manh va diem can cai thien",
             ],
         },
         {
             "week": 4,
-            "title": "Tong ket va du an",
+            "title": "Tong ket va nang cao",
             "lessons": [
                 "On tap theo chu de",
-                "Xay dung mini project",
+                "Bai tap tong hop hoac de an nho",
                 "Danh gia ket qua va huong phat trien tiep",
             ],
         },

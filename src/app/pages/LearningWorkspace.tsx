@@ -4,42 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useParams, useNavigate } from 'react-router';
 import {
   CheckCircle2, ChevronLeft, ChevronRight, BookOpen,
-  Hammer, Rocket, Loader2, Play, ExternalLink, Youtube,
-  Code2, Lightbulb, ChevronDown, ChevronUp, Zap, Clock,
+  Hammer, Rocket, Loader2, Zap, Clock,
   MessageSquare, List
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { completeLessonProgress, generateLessonContent, searchYouTube } from '../../api/learning';
-import { YouTubeVideoDTO } from '../../api/dto';
-import { LessonContent } from '../lib/types';
+import { completeLessonProgress, generateLesson, getLessonDetail, LessonDetail } from '../../api/learning';
 import ChatTutor from '../components/ChatTutor';
-
-function CodeBlock({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <div className="relative group rounded-xl overflow-hidden border border-zinc-700">
-      <div className="flex items-center justify-between px-4 py-2 bg-zinc-800 border-b border-zinc-700">
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500/70" />
-          <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
-          <div className="w-3 h-3 rounded-full bg-emerald-500/70" />
-        </div>
-        <span className="text-xs text-zinc-500">Python</span>
-        <button onClick={copy} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-0.5 rounded bg-zinc-700 hover:bg-zinc-600">
-          {copied ? '✓ Đã copy' : 'Copy'}
-        </button>
-      </div>
-      <pre className="p-4 bg-zinc-950 text-sm text-zinc-300 overflow-x-auto leading-relaxed">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
 
 function MarkdownContent({ content }: { content: string }) {
   return (
@@ -74,55 +44,106 @@ export default function LearningWorkspace() {
   const navigate = useNavigate();
   const { roadmap, completeLesson, applyServerExp } = useApp();
 
-  const [content, setContent] = useState<LessonContent | null>(null);
-  const [videos, setVideos] = useState<YouTubeVideoDTO[]>([]);
+  const [lessonDetail, setLessonDetail] = useState<LessonDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(true);
   const [showOutline, setShowOutline] = useState(false);
-  const [expandedExample, setExpandedExample] = useState<number | null>(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showCompletionBadge, setShowCompletionBadge] = useState(false);
   const [completionMessage, setCompletionMessage] = useState<string>('');
   const [completeError, setCompleteError] = useState<string | null>(null);
 
-  // Find lesson info
+  // Build optional navigation metadata from in-memory roadmap context.
   const allLessons = roadmap.flatMap(w =>
     w.lessons.map(l => ({ ...l, weekTitle: w.title, weekId: w.id }))
   );
   const currentIndex = allLessons.findIndex(l => l.id === lessonId);
-  const currentLesson = allLessons[currentIndex];
+  const currentLesson = currentIndex >= 0 ? allLessons[currentIndex] : null;
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
-  useEffect(() => {
-    if (!currentLesson) return;
+  const loadLesson = async (targetLessonId: string) => {
     setIsLoading(true);
-    setContent(null);
-    setVideos([]);
-    setIsCompleted(currentLesson.completed);
-    setExpandedExample(0);
+    setLoadError(null);
+    setGenerationError(null);
 
-    Promise.all([
-      generateLessonContent(currentLesson.title, currentLesson.weekTitle),
-      searchYouTube(currentLesson.title),
-    ]).then(([lessonContent, ytVideos]) => {
-      setContent(lessonContent);
-      setVideos(ytVideos);
+    try {
+      const detail = await getLessonDetail(targetLessonId);
+      setLessonDetail(detail);
+      const cachedLesson = allLessons.find(lesson => lesson.id === targetLessonId);
+      setIsCompleted(detail.isCompleted || Boolean(cachedLesson?.completed));
+
+      const missingContent = !detail.contentMarkdown || !detail.contentMarkdown.trim() || detail.isDraft;
+      if (missingContent) {
+        setIsGeneratingContent(true);
+        try {
+          const generatedDetail = await generateLesson(targetLessonId);
+          setLessonDetail(generatedDetail);
+        } catch (error) {
+          if (axios.isAxiosError(error)) {
+            setGenerationError(error.response?.data?.message ?? 'Khong the tao noi dung bai hoc luc nay.');
+          } else if (error instanceof Error) {
+            setGenerationError(error.message);
+          } else {
+            setGenerationError('Khong the tao noi dung bai hoc luc nay.');
+          }
+        } finally {
+          setIsGeneratingContent(false);
+        }
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setLoadError(error.response?.data?.message ?? 'Khong the tai thong tin bai hoc.');
+      } else if (error instanceof Error) {
+        setLoadError(error.message);
+      } else {
+        setLoadError('Khong the tai thong tin bai hoc.');
+      }
+    } finally {
       setIsLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    if (!lessonId) return;
+    void loadLesson(lessonId);
   }, [lessonId]);
 
+  const retryGeneration = async () => {
+    if (!lessonId) return;
+    setGenerationError(null);
+    setIsGeneratingContent(true);
+    try {
+      const generatedDetail = await generateLesson(lessonId);
+      setLessonDetail(generatedDetail);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setGenerationError(error.response?.data?.message ?? 'Khong the tao noi dung bai hoc luc nay.');
+      } else if (error instanceof Error) {
+        setGenerationError(error.message);
+      } else {
+        setGenerationError('Khong the tao noi dung bai hoc luc nay.');
+      }
+    } finally {
+      setIsGeneratingContent(false);
+    }
+  };
+
   const handleComplete = async () => {
-    if (!currentLesson || isCompleted) return;
+    if (!lessonId || isCompleted) return;
 
     setIsCompleting(true);
     setCompleteError(null);
     try {
-      const result = await completeLessonProgress(currentLesson.id);
-      completeLesson(currentLesson.id);
+      const result = await completeLessonProgress(lessonId);
+      completeLesson(lessonId);
       applyServerExp(result.exp_earned);
       setIsCompleted(true);
+      setLessonDetail(prev => (prev ? { ...prev, isCompleted: true } : prev));
       setCompletionMessage(
         result.exp_earned > 0
           ? `+${result.exp_earned} EXP đã được cộng vào tài khoản.`
@@ -143,13 +164,13 @@ export default function LearningWorkspace() {
     }
   };
 
-  if (!currentLesson) {
+  if (!lessonId) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <BookOpen size={48} className="text-zinc-700" />
         <p className="text-zinc-400">Chọn một bài học để bắt đầu</p>
-        <button onClick={() => navigate('/roadmap')} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm">
-          Xem lộ trình
+        <button onClick={() => navigate('/lessons')} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm">
+          Den danh sach bai hoc
         </button>
       </div>
     );
@@ -168,29 +189,35 @@ export default function LearningWorkspace() {
           >
             <div className="p-4">
               <h3 className="text-sm text-white mb-3" style={{ fontWeight: 600 }}>Danh sách bài học</h3>
-              {roadmap.map(week => (
-                <div key={week.id} className="mb-4">
-                  <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider" style={{ fontWeight: 600 }}>Tuần {week.weekNumber}: {week.title}</p>
-                  {week.lessons.map(lesson => (
-                    <button
-                      key={lesson.id}
-                      onClick={() => navigate(`/learn/${lesson.id}`)}
-                      className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg mb-1 text-sm transition-colors ${
-                        lesson.id === lessonId
-                          ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                      }`}
-                    >
-                      {lesson.completed ? (
-                        <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
-                      ) : (
-                        <div className="w-3.5 h-3.5 rounded-full border border-zinc-600 flex-shrink-0" />
-                      )}
-                      <span className="truncate">{lesson.title}</span>
-                    </button>
-                  ))}
-                </div>
-              ))}
+              {roadmap.length === 0 ? (
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  Khong co du lieu outline trong phien hien tai. Ban van co the hoc bai bang noi dung duoc tai tu server.
+                </p>
+              ) : (
+                roadmap.map(week => (
+                  <div key={week.id} className="mb-4">
+                    <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider" style={{ fontWeight: 600 }}>Tuần {week.weekNumber}: {week.title}</p>
+                    {week.lessons.map(lesson => (
+                      <button
+                        key={lesson.id}
+                        onClick={() => navigate(`/learn/${lesson.id}`)}
+                        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg mb-1 text-sm transition-colors ${
+                          lesson.id === lessonId
+                            ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        }`}
+                      >
+                        {lesson.completed ? (
+                          <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 rounded-full border border-zinc-600 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{lesson.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))
+              )}
             </div>
           </motion.aside>
         )}
@@ -211,23 +238,29 @@ export default function LearningWorkspace() {
                 <List size={16} />
               </button>
               <div className="text-xs text-zinc-500">
-                <span className="text-violet-400">{currentLesson.weekTitle}</span>
+                <span className="text-violet-400">
+                  {lessonDetail ? `Tuan ${lessonDetail.weekNumber}` : (currentLesson?.weekTitle ?? 'Bai hoc')}
+                </span>
                 <span className="mx-1">›</span>
-                <span>{currentLesson.title}</span>
+                <span>{lessonDetail?.title ?? currentLesson?.title ?? 'Dang tai...'}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${
-                currentLesson.type === 'theory' ? 'bg-blue-500/20 text-blue-400' :
-                currentLesson.type === 'practice' ? 'bg-emerald-500/20 text-emerald-400' :
-                'bg-orange-500/20 text-orange-400'
-              }`}>
-                {currentLesson.type === 'theory' ? <BookOpen size={11} /> : currentLesson.type === 'practice' ? <Hammer size={11} /> : <Rocket size={11} />}
-                {currentLesson.type === 'theory' ? 'Lý thuyết' : currentLesson.type === 'practice' ? 'Thực hành' : 'Dự án'}
-              </div>
-              <div className="flex items-center gap-1 text-xs text-zinc-500">
-                <Clock size={12} />{currentLesson.duration}
-              </div>
+              {currentLesson && (
+                <>
+                  <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${
+                    currentLesson.type === 'theory' ? 'bg-blue-500/20 text-blue-400' :
+                    currentLesson.type === 'practice' ? 'bg-emerald-500/20 text-emerald-400' :
+                    'bg-orange-500/20 text-orange-400'
+                  }`}>
+                    {currentLesson.type === 'theory' ? <BookOpen size={11} /> : currentLesson.type === 'practice' ? <Hammer size={11} /> : <Rocket size={11} />}
+                    {currentLesson.type === 'theory' ? 'Ly thuyet' : currentLesson.type === 'practice' ? 'Thuc hanh' : 'Du an'}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-zinc-500">
+                    <Clock size={12} />{currentLesson.duration}
+                  </div>
+                </>
+              )}
               <button
                 onClick={() => setShowChat(!showChat)}
                 className={`p-2 rounded-lg transition-colors ${showChat ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
@@ -242,12 +275,28 @@ export default function LearningWorkspace() {
             {/* Lesson title */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
               <h1 className="text-3xl text-white" style={{ fontWeight: 700 }}>
-                {currentLesson.title}
+                {lessonDetail?.title ?? currentLesson?.title ?? 'Bai hoc'}
               </h1>
-              <p className="text-zinc-500 text-sm mt-1">{currentLesson.description}</p>
+              <p className="text-zinc-500 text-sm mt-1">
+                {lessonDetail
+                  ? `Lo trinh: ${lessonDetail.roadmapTitle}`
+                  : (currentLesson?.description ?? 'Dang tai thong tin bai hoc...')}
+              </p>
             </motion.div>
 
-            {isLoading ? (
+            {loadError && (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                <p className="text-sm text-red-300">{loadError}</p>
+                <button
+                  onClick={() => lessonId && void loadLesson(lessonId)}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-100"
+                >
+                  <Loader2 size={12} />Thu tai lai
+                </button>
+              </div>
+            )}
+
+            {!loadError && (isLoading || isGeneratingContent) ? (
               <div className="space-y-4">
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="space-y-2">
@@ -258,124 +307,46 @@ export default function LearningWorkspace() {
                 ))}
                 <div className="flex items-center gap-3 py-4">
                   <Loader2 size={20} className="text-violet-400 animate-spin" />
-                  <span className="text-zinc-400 text-sm">AI đang biên soạn nội dung bài học...</span>
+                  <span className="text-zinc-300 text-sm" style={{ fontWeight: 600 }}>
+                    AI dang bien soan noi dung chi tiet cho bai hoc nay, vui long doi...
+                  </span>
                 </div>
               </div>
-            ) : content && (
+            ) : !loadError && generationError ? (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4">
+                <p className="text-sm text-red-300">{generationError}</p>
+                <button
+                  onClick={() => void retryGeneration()}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-100"
+                >
+                  <Loader2 size={12} />Thu tao lai
+                </button>
+              </div>
+            ) : !loadError && lessonDetail?.contentMarkdown ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-                {/* Theory */}
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
                       <BookOpen size={13} className="text-blue-400" />
                     </div>
-                    <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Lý Thuyết</h2>
+                    <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
                   </div>
                   <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                    <MarkdownContent content={content.theory} />
+                    <MarkdownContent content={lessonDetail.contentMarkdown} />
                   </div>
                 </div>
-
-                {/* Key points */}
-                <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Lightbulb size={16} className="text-yellow-400" />
-                    <h3 className="text-sm text-white" style={{ fontWeight: 600 }}>Điểm Cần Nhớ</h3>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {content.keyPoints.map((point, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm text-zinc-300">
-                        <div className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                        {point}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Examples */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                      <Code2 size={13} className="text-emerald-400" />
-                    </div>
-                    <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Ví Dụ Thực Tế</h2>
-                  </div>
-                  <div className="space-y-4">
-                    {content.examples.map((example, i) => (
-                      <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                        <button
-                          onClick={() => setExpandedExample(expandedExample === i ? null : i)}
-                          className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-800/30 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center flex-shrink-0" style={{ fontWeight: 700 }}>{i + 1}</span>
-                            <div className="text-left">
-                              <p className="text-sm text-white" style={{ fontWeight: 600 }}>{example.title}</p>
-                              <p className="text-xs text-zinc-500">{example.description}</p>
-                            </div>
-                          </div>
-                          {expandedExample === i ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
-                        </button>
-                        <AnimatePresence>
-                          {expandedExample === i && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="px-5 pb-5">
-                                {example.code && <CodeBlock code={example.code} />}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* YouTube Videos */}
-                {videos.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-6 h-6 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-                        <Youtube size={13} className="text-red-400" />
-                      </div>
-                      <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Video Tham Khảo</h2>
-                      <span className="text-xs text-zinc-600">· Được AI chọn lọc</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {videos.map(video => (
-                        <a
-                          key={video.id}
-                          href={video.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group flex gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-red-500/30 transition-all"
-                        >
-                          <div className="relative flex-shrink-0 w-28 h-16 rounded-lg overflow-hidden bg-zinc-800">
-                            <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Play size={20} className="text-white" fill="white" />
-                            </div>
-                            <div className="absolute bottom-1 right-1 text-xs bg-black/80 text-white px-1.5 py-0.5 rounded">
-                              {video.duration}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-zinc-200 leading-snug line-clamp-2 group-hover:text-white transition-colors">{video.title}</p>
-                            <p className="text-xs text-zinc-600 mt-1">{video.channel}</p>
-                            <p className="text-xs text-zinc-700 mt-0.5">{video.views}</p>
-                          </div>
-                          <ExternalLink size={14} className="text-zinc-600 flex-shrink-0 mt-0.5 group-hover:text-zinc-400" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </motion.div>
-            )}
+            ) : !loadError ? (
+              <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
+                <p className="text-sm text-zinc-300">Noi dung bai hoc dang trong trang thai ban nhap.</p>
+                <button
+                  onClick={() => void retryGeneration()}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-500 px-3 py-2 text-xs text-white"
+                >
+                  <Zap size={12} />Tao noi dung ngay
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* Navigation & Complete */}

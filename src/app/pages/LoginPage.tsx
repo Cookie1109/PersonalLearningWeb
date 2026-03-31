@@ -1,9 +1,10 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router';
+import { toast } from 'sonner';
 
 import { login } from '../../api/auth';
-import { getAccessToken } from '../../api/client';
+import { consumeAuthExpiredNotice, getAccessToken } from '../../api/client';
 import { useApp } from '../context/AppContext';
 
 export default function LoginPage() {
@@ -20,6 +21,12 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     }
   }, [navigate]);
+
+  useEffect(() => {
+    if (consumeAuthExpiredNotice()) {
+      toast.error('Phien dang nhap da het han, vui long dang nhap lai');
+    }
+  }, []);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

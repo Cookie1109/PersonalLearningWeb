@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -34,7 +33,6 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
   const { resetSessionState } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,21 +42,14 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
   }, [navigate]);
 
   const handleLogout = async () => {
-    setLogoutError(null);
     setIsLoggingOut(true);
     try {
       await logout({ revoke_all_devices: false });
+    } catch {
+      // Logout API failures are ignored because client-side state must always be cleared.
+    } finally {
       resetSessionState();
       navigate('/login', { replace: true });
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        setLogoutError(error.response?.data?.message ?? 'Khong the dang xuat luc nay.');
-      } else if (error instanceof Error) {
-        setLogoutError(error.message);
-      } else {
-        setLogoutError('Khong the dang xuat luc nay.');
-      }
-    } finally {
       setIsLoggingOut(false);
     }
   };
@@ -231,12 +222,6 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
             </button>
           </div>
         </div>
-
-        {logoutError && (
-          <div className="mx-6 mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {logoutError}
-          </div>
-        )}
 
         {/* Page content */}
         <div className="flex-1 overflow-auto">

@@ -10,15 +10,20 @@ from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
-from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO
+from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO, LessonGenerateResponseDTO
 from app.services.audit_service import queue_audit_log
 from app.services.idempotency_store import IdempotencyStore
-from app.services.lesson_service import complete_lesson_for_user
+from app.services.lesson_service import (
+    complete_lesson_for_user,
+    generate_lesson_content_for_user,
+    get_lesson_detail_for_user,
+)
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 settings = get_settings()
 
 ERROR_RESPONSES = {
+    400: {"model": ErrorResponseDTO, "description": "Bad Request"},
     401: {"model": ErrorResponseDTO, "description": "Unauthorized"},
     403: {"model": ErrorResponseDTO, "description": "Forbidden"},
     404: {"model": ErrorResponseDTO, "description": "Lesson Not Found"},
@@ -26,6 +31,35 @@ ERROR_RESPONSES = {
     429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }
+
+
+@router.get(
+    "/{lesson_id}",
+    response_model=LessonDetailDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_lesson_detail(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonDetailDTO:
+    return get_lesson_detail_for_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
+
+
+@router.post(
+    "/{lesson_id}/generate",
+    response_model=LessonGenerateResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def generate_lesson(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonGenerateResponseDTO:
+    lesson = generate_lesson_content_for_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
+    return LessonGenerateResponseDTO(lesson=lesson)
 
 
 @router.post(
