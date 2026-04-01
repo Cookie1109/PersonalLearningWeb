@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any
@@ -22,6 +23,7 @@ logger = logging.getLogger("app.lesson")
 YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
+JSON_CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -102,18 +104,21 @@ def get_lesson_detail_for_user(*, db: Session, user_id: int, lesson_id: int) -> 
 def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
     roadmap_title = roadmap.title or roadmap.goal
     return (
-        "Ban la mot Chuyen gia Dao tao Da linh vuc (Polymath) hang dau the gioi. "
-        "Ban co kha nang thiet ke lo trinh va giang day BAT KY chu de nao. "
-        "TUYET DOI KHONG su dung cac thuat ngu IT/Lap trinh (nhu moi truong code, bien, cu phap...) "
-        "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
-        "Hay viet bai giang chi tiet bang Markdown, de hieu, co vi du thuc te theo dung nganh cua chu de, va co phan tom tat cuoi bai. "
+        "Ban la chuyen gia giao duc da linh vuc. "
+        "Hay viet noi dung bai hoc chi tiet bang Markdown, de hieu, dung ngu canh va thuat ngu chuyen nganh cua chu de. "
+        "TUYET DOI KHONG chen cac thuat ngu IT/Lap trinh neu chu de khong lien quan cong nghe. "
         "Can giu cau truc ro rang voi tieu de, bullet points va huong dan tung buoc khi can. "
-        "Bat buoc tao day du cac muc: 1) Muc tieu bai hoc, 2) Boi canh/nen tang, 3) Kien thuc cot loi, "
-        "4) Phan tich chi tiet, 5) Vi du thuc te, 6) Bai tap tu luyen, 7) Tong ket. "
-        "Khong duoc dung giua cau, giua muc, hoac ket thuc bang tieu de dang do. "
+        "Neu can trinh bay du lieu bang bang bieu, BAT BUOC dung bang Markdown GFM hop le (co dong header va dong separator ---). "
+        "Tuyet doi KHONG xuong dong giua mot cell hoac giua mot hang cua bang. Moi hang du lieu phai nam tren mot dong duy nhat. "
+        "Bat buoc tao day du cac muc: 1) Muc tieu bai hoc, 2) Boi canh/nen tang, 3) Kien thuc cot loi, 4) Phan tich chi tiet, "
+        "5) Vi du thuc te, 6) Bai tap tu luyen, 7) Tong ket. "
+        "Sau khi viet xong, hay dua ra 1 cau lenh tim kiem YouTube toi uu nhat, ngan gon, chua cac thuat ngu chuyen nganh de tim video minh hoa chinh xac cho bai hoc nay. "
+        "BAT BUOC tra ve JSON nghiem ngat voi cau truc: "
+        '{"content_markdown":"...", "youtube_search_query":"..."}. '
+        "Khong kem bat ky van ban nao khac ngoai JSON. "
         f"Bai hoc: '{lesson.title}'. "
         f"Bai hoc nay thuoc Tuan {lesson.week_number} cua Khoa hoc '{roadmap_title}'. "
-        "Tra ve duy nhat noi dung Markdown, khong them giai thich ngoai le."
+        "Dam bao content_markdown la markdown thuan, khong bao quanh bang code fence."
     )
 
 
@@ -158,8 +163,8 @@ def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
     return reason if isinstance(reason, str) else None
 
 
-def _is_markdown_truncated(markdown: str, *, finish_reason: str | None) -> bool:
-    content = markdown.strip()
+def _is_generation_output_truncated(generation_text: str, *, finish_reason: str | None) -> bool:
+    content = generation_text.strip()
     if not content:
         return True
 
@@ -183,19 +188,65 @@ def _is_markdown_truncated(markdown: str, *, finish_reason: str | None) -> bool:
     if re.match(r"^\d+\.\s+\S{1,6}$", last_line):
         return True
 
+    if content.count("{") > content.count("}"):
+        return True
+
+    if content.count("[") > content.count("]"):
+        return True
+
     return False
 
 
-def _build_continuation_prompt(*, original_prompt: str, partial_markdown: str) -> str:
+def _build_continuation_prompt(*, original_prompt: str, partial_output: str) -> str:
     return (
-        "Noi dung bai hoc sau dang bi cat giua chung. "
-        "Hay viet tiep noi dung con thieu, KHONG lap lai phan da viet, giu dung phong cach va so muc hien tai. "
-        "Bat buoc ket thuc tron ven bang muc Tong ket.\n\n"
+        "Dau ra JSON dang bi cat giua chung. "
+        "Hay tra lai TOAN BO ket qua duoi dang 1 JSON object hop le voi dung 2 key: content_markdown va youtube_search_query. "
+        "Khong chen bat ky van ban nao ngoai JSON.\n\n"
         "[Yeu cau ban dau]\n"
         f"{original_prompt}\n\n"
-        "[Noi dung da co]\n"
-        f"{partial_markdown[-8000:]}"
+        "[Dau ra bi cat]\n"
+        f"{partial_output[-8000:]}"
     )
+
+
+def _sanitize_json_payload_text(raw_text: str) -> str:
+    text = (raw_text or "").strip()
+    if not text:
+        raise ValueError("Empty generation output")
+
+    code_fence_match = JSON_CODE_FENCE_PATTERN.search(text)
+    if code_fence_match:
+        text = code_fence_match.group(1).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+
+    return text
+
+
+def parse_lesson_generation_output(raw_text: str) -> tuple[str, str]:
+    cleaned = _sanitize_json_payload_text(raw_text)
+    payload = json.loads(cleaned)
+
+    if not isinstance(payload, dict):
+        raise ValueError("Generation payload must be a JSON object")
+
+    content_markdown = payload.get("content_markdown")
+    youtube_search_query = payload.get("youtube_search_query")
+
+    if not isinstance(content_markdown, str) or not content_markdown.strip():
+        raise ValueError("content_markdown is required")
+
+    if not isinstance(youtube_search_query, str) or not youtube_search_query.strip():
+        raise ValueError("youtube_search_query is required")
+
+    normalized_query = _collapse_whitespace(youtube_search_query)[:300]
+    if not normalized_query:
+        raise ValueError("youtube_search_query is empty")
+
+    return content_markdown.strip(), normalized_query
 
 
 def generate_lesson_markdown(*, prompt: str) -> str:
@@ -301,10 +352,10 @@ def generate_lesson_markdown(*, prompt: str) -> str:
                     detail={"code": "LLM_INVALID_RESPONSE"},
                 ) from exc
 
-            markdown = _extract_gemini_text(response_payload)
-            if markdown:
+            generation_text = _extract_gemini_text(response_payload)
+            if generation_text:
                 finish_reason = _extract_finish_reason(response_payload)
-                if _is_markdown_truncated(markdown, finish_reason=finish_reason):
+                if _is_generation_output_truncated(generation_text, finish_reason=finish_reason):
                     logger.warning(
                         "lesson.llm_detected_truncation model=%s finish_reason=%s",
                         model_name,
@@ -314,7 +365,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
                         "contents": [
                             {
                                 "role": "user",
-                                "parts": [{"text": _build_continuation_prompt(original_prompt=prompt, partial_markdown=markdown)}],
+                                "parts": [{"text": _build_continuation_prompt(original_prompt=prompt, partial_output=generation_text)}],
                             }
                         ],
                         "generationConfig": {
@@ -329,7 +380,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
                             continuation_json = continuation_response.json()
                             continuation_text = _extract_gemini_text(continuation_json)
                             if continuation_text:
-                                markdown = f"{markdown.rstrip()}\n\n{continuation_text.lstrip()}"
+                                generation_text = continuation_text
                     except Exception as exc:
                         logger.warning(
                             "lesson.llm_continuation_failed model=%s error=%s",
@@ -339,7 +390,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
 
                 if index > 0:
                     logger.warning("lesson.llm_fallback_success model=%s", model_name)
-                return markdown
+                return generation_text
 
             logger.error(
                 "lesson.llm_empty_response model=%s status_code=%s payload_preview=%s",
@@ -414,8 +465,20 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
     lesson, roadmap = get_lesson_for_user(db=db, user_id=user_id, lesson_id=lesson_id)
 
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
-    markdown = generate_lesson_markdown(prompt=prompt)
+    llm_output = generate_lesson_markdown(prompt=prompt)
     youtube_query = build_youtube_search_query(lesson=lesson)
+
+    try:
+        markdown, ai_youtube_query = parse_lesson_generation_output(llm_output)
+        youtube_query = ai_youtube_query
+    except Exception as exc:
+        logger.warning(
+            "lesson.llm_output_parse_failed lesson_id=%s title=%s error=%s",
+            lesson.id,
+            lesson.title,
+            str(exc),
+        )
+        markdown = llm_output.strip()
 
     youtube_video_id = lesson.youtube_video_id
     try:

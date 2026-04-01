@@ -74,6 +74,14 @@ def test_generate_lesson_persists_markdown(
     user, headers = auth_headers
     lesson = _seed_lesson(db_session, user_id=user.id, title="Control Flow")
     generated_markdown = "## Control Flow\n\n- if\n- for\n"
+    generated_output = (
+        "```json\n"
+        "{\n"
+        "  \"content_markdown\": \"## Control Flow\\n\\n- if\\n- for\\n\",\n"
+        "  \"youtube_search_query\": \"control flow python tutorial tieng viet\"\n"
+        "}\n"
+        "```"
+    )
     captured_query: dict[str, str] = {}
 
     import app.services.lesson_service as lesson_service
@@ -81,7 +89,7 @@ def test_generate_lesson_persists_markdown(
     monkeypatch.setattr(
         lesson_service,
         "generate_lesson_markdown",
-        lambda prompt: generated_markdown,
+        lambda prompt: generated_output,
     )
 
     def _fake_fetch_youtube_video_id(*, query: str) -> str | None:
@@ -102,12 +110,55 @@ def test_generate_lesson_persists_markdown(
     assert payload["lesson"]["is_draft"] is False
     assert payload["lesson"]["content_markdown"] == generated_markdown.strip()
     assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
-    assert captured_query["value"] == "Control Flow"
+    assert captured_query["value"] == "control flow python tutorial tieng viet"
 
     db_session.refresh(lesson)
-    assert lesson.content_markdown == generated_markdown
+    assert lesson.content_markdown == generated_markdown.strip()
     assert lesson.youtube_video_id == "dQw4w9WgXcQ"
     assert lesson.version == 2
+
+
+def test_generate_lesson_fallbacks_to_legacy_query_when_llm_output_invalid_json(
+    client,
+    db_session: Session,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    user, headers = auth_headers
+    lesson = _seed_lesson(db_session, user_id=user.id, title="Relational Data")
+    generated_output = "## Relational Data\n\n- Bang du lieu\n- Khoa chinh"
+    captured_query: dict[str, str] = {}
+
+    import app.services.lesson_service as lesson_service
+
+    monkeypatch.setattr(
+        lesson_service,
+        "generate_lesson_markdown",
+        lambda prompt: generated_output,
+    )
+
+    def _fake_fetch_youtube_video_id(*, query: str) -> str | None:
+        captured_query["value"] = query
+        return "dQw4w9WgXcQ"
+
+    monkeypatch.setattr(
+        lesson_service,
+        "fetch_youtube_video_id",
+        _fake_fetch_youtube_video_id,
+    )
+
+    response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["lesson"]["id"] == lesson.id
+    assert payload["lesson"]["content_markdown"] == generated_output
+    assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
+    assert captured_query["value"] == "Relational Data"
+
+    db_session.refresh(lesson)
+    assert lesson.content_markdown == generated_output
+    assert lesson.youtube_video_id == "dQw4w9WgXcQ"
 
 
 def test_generate_lesson_returns_controlled_error_when_llm_fails(

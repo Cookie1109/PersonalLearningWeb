@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { useParams, useNavigate } from 'react-router';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   CheckCircle2, ChevronLeft, ChevronRight, BookOpen,
   Hammer, Rocket, Loader2, Zap, Clock,
@@ -13,30 +15,35 @@ import ChatTutor from '../components/ChatTutor';
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-invert max-w-none">
-      {content.split('\n').map((line, i) => {
-        if (line.startsWith('## ')) return <h2 key={i} className="text-xl text-white mt-6 mb-3" style={{ fontWeight: 700 }}>{line.slice(3)}</h2>;
-        if (line.startsWith('### ')) return <h3 key={i} className="text-base text-zinc-200 mt-4 mb-2" style={{ fontWeight: 600 }}>{line.slice(4)}</h3>;
-        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="text-zinc-200 my-1" style={{ fontWeight: 600 }}>{line.slice(2, -2)}</p>;
-        if (line.startsWith('- ')) return <li key={i} className="text-zinc-300 text-sm my-1 ml-4 list-disc">{formatInline(line.slice(2))}</li>;
-        if (line === '') return <div key={i} className="h-2" />;
-        return <p key={i} className="text-zinc-300 text-sm leading-relaxed">{formatInline(line)}</p>;
-      })}
+    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-violet-300 prose-headings:text-white prose-code:text-cyan-300">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h2: ({ children }) => <h2 className="text-xl text-white mt-6 mb-3" style={{ fontWeight: 700 }}>{children}</h2>,
+          h3: ({ children }) => <h3 className="text-base text-zinc-200 mt-4 mb-2" style={{ fontWeight: 600 }}>{children}</h3>,
+          p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed my-2">{children}</p>,
+          li: ({ children }) => <li className="text-zinc-300 text-sm my-1">{children}</li>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs">{children}</pre>,
+          code: ({ inline, children, ...props }) => {
+            if (inline) {
+              return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
+            }
+            return <code className="text-zinc-200" {...props}>{children}</code>;
+          },
+          table: ({ children }) => (
+            <div className="my-4 overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-900/60">
+              <table className="min-w-full border-collapse text-sm text-zinc-200">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-zinc-800/80">{children}</thead>,
+          th: ({ children }) => <th className="border border-zinc-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-zinc-300">{children}</th>,
+          td: ({ children }) => <td className="border border-zinc-800 px-3 py-2 align-top text-sm">{children}</td>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
-}
-
-function formatInline(text: string) {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} className="text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs font-mono">{part.slice(1, -1)}</code>;
-    }
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="text-violet-300">{part.slice(2, -2)}</strong>;
-    }
-    return <span key={i}>{part}</span>;
-  });
 }
 
 export default function LearningWorkspace() {

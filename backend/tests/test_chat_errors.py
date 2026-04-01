@@ -54,6 +54,30 @@ def _patch_http_client(monkeypatch, *, response: FakeResponse | None = None, err
     monkeypatch.setattr(chat_service.httpx, "Client", FakeClient)
 
 
+def _patch_http_client_sequence(monkeypatch, *, responses: list[FakeResponse]) -> None:
+    import app.services.chat_service as chat_service
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            _ = (args, kwargs)
+            self._calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+        def post(self, *args, **kwargs):
+            _ = (args, kwargs)
+            current_index = min(self._calls, len(responses) - 1)
+            self._calls += 1
+            return responses[current_index]
+
+    monkeypatch.setattr(chat_service.httpx, "Client", FakeClient)
+
+
 def test_chat_returns_controlled_error_when_provider_401(
     client,
     auth_headers,
@@ -127,3 +151,59 @@ def test_chat_returns_controlled_error_when_provider_returns_error_json(
 
     assert response.status_code in (401, 503)
     assert response.status_code != 500
+
+
+def test_chat_auto_continues_when_provider_truncates_response(
+    client,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    _user, headers = auth_headers
+
+    _patch_chat_settings(monkeypatch)
+    _patch_http_client_sequence(
+        monkeypatch,
+        responses=[
+            FakeResponse(
+                status_code=200,
+                payload={
+                    "candidates": [
+                        {
+                            "finishReason": "MAX_TOKENS",
+                            "content": {
+                                "parts": [
+                                    {"text": "Ban nen bat dau voi JavaScript de lam quen"},
+                                ]
+                            },
+                        }
+                    ]
+                },
+            ),
+            FakeResponse(
+                status_code=200,
+                payload={
+                    "candidates": [
+                        {
+                            "finishReason": "STOP",
+                            "content": {
+                                "parts": [
+                                    {"text": "sau do chuyen sang TypeScript de tang do an toan kieu du lieu."},
+                                ]
+                            },
+                        }
+                    ]
+                },
+            ),
+        ],
+    )
+
+    response = client.post(
+        "/api/chat",
+        json={"messages": [{"role": "user", "content": "Nen hoc ngon ngu nao de lam web?"}]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    reply = response.json()["reply"]
+    assert "JavaScript" in reply
+    assert "TypeScript" in reply

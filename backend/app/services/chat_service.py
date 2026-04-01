@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -12,6 +13,7 @@ from app.core.exceptions import AppException
 from app.models import ChatMessage
 
 logger = logging.getLogger("app.chat")
+INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -90,6 +92,52 @@ def _extract_reply_from_gemini(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
+        return None
+
+    reason = first_candidate.get("finishReason")
+    return reason if isinstance(reason, str) else None
+
+
+def _is_reply_truncated(reply: str, *, finish_reason: str | None) -> bool:
+    content = (reply or "").strip()
+    if not content:
+        return True
+
+    if finish_reason == "MAX_TOKENS":
+        return True
+
+    lines = [line.rstrip() for line in content.splitlines() if line.strip()]
+    if not lines:
+        return True
+
+    last_line = lines[-1]
+    if INCOMPLETE_TRAILING_PATTERN.search(last_line):
+        return True
+    if re.match(r"^#{1,6}\s*$", last_line):
+        return True
+    if re.match(r"^\*\*[^*]*$", last_line):
+        return True
+
+    return False
+
+
+def _build_continuation_prompt(*, partial_reply: str) -> str:
+    return (
+        "Cau tra loi ban vua gui dang bi cat giua chung. "
+        "Hay viet tiep phan con lai that tron ven, KHONG lap lai noi dung da viet, "
+        "giu dung ngu canh va ket thuc bang cau day du.\n\n"
+        "[Noi dung da tra loi]\n"
+        f"{partial_reply[-6000:]}"
+    )
+
+
 def generate_chat_reply(*, messages: list[dict[str, str]], system_prompt: str = SYSTEM_PROMPT) -> str:
     settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
@@ -122,13 +170,78 @@ def generate_chat_reply(*, messages: list[dict[str, str]], system_prompt: str = 
         "contents": contents,
         "generationConfig": {
             "temperature": 0.5,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 3072,
         },
     }
 
     try:
         with httpx.Client(timeout=settings.gemini_timeout_seconds) as client:
             response = client.post(endpoint, params={"key": api_key}, json=request_payload)
+            if response.status_code in (401, 403):
+                logger.warning("chat.llm_auth_failed", extra={"status_code": response.status_code})
+                raise AppException(
+                    status_code=503,
+                    message="AI service authentication failed",
+                    detail={"code": "LLM_AUTH_FAILED"},
+                )
+
+            if response.status_code >= 400:
+                logger.warning("chat.llm_error", extra={"status_code": response.status_code})
+                raise AppException(
+                    status_code=503,
+                    message="AI service unavailable",
+                    detail={"code": "LLM_SERVICE_ERROR"},
+                )
+
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned invalid response",
+                    detail={"code": "LLM_INVALID_RESPONSE"},
+                ) from exc
+
+            reply = _extract_reply_from_gemini(payload)
+            if not reply:
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned empty response",
+                    detail={"code": "LLM_EMPTY_RESPONSE"},
+                )
+
+            finish_reason = _extract_finish_reason(payload)
+            if not _is_reply_truncated(reply, finish_reason=finish_reason):
+                return reply
+
+            logger.warning("chat.llm_detected_truncation finish_reason=%s", finish_reason)
+            continuation_payload = {
+                "systemInstruction": {
+                    "role": "user",
+                    "parts": [{"text": system_prompt}],
+                },
+                "contents": [
+                    *contents,
+                    {"role": "model", "parts": [{"text": reply}]},
+                    {"role": "user", "parts": [{"text": _build_continuation_prompt(partial_reply=reply)}]},
+                ],
+                "generationConfig": {
+                    "temperature": 0.45,
+                    "maxOutputTokens": 2048,
+                },
+            }
+
+            try:
+                continuation_response = client.post(endpoint, params={"key": api_key}, json=continuation_payload)
+                if continuation_response.status_code < 400:
+                    continuation_json = continuation_response.json()
+                    continuation_text = _extract_reply_from_gemini(continuation_json)
+                    if continuation_text:
+                        return f"{reply.rstrip()}\n\n{continuation_text.lstrip()}"
+            except Exception as continuation_exc:
+                logger.warning("chat.llm_continuation_failed error=%s", str(continuation_exc))
+
+            return reply
     except httpx.TimeoutException as exc:
         raise AppException(
             status_code=503,
@@ -141,41 +254,6 @@ def generate_chat_reply(*, messages: list[dict[str, str]], system_prompt: str = 
             message="AI service network error",
             detail={"code": "LLM_NETWORK_ERROR"},
         ) from exc
-
-    if response.status_code in (401, 403):
-        logger.warning("chat.llm_auth_failed", extra={"status_code": response.status_code})
-        raise AppException(
-            status_code=503,
-            message="AI service authentication failed",
-            detail={"code": "LLM_AUTH_FAILED"},
-        )
-
-    if response.status_code >= 400:
-        logger.warning("chat.llm_error", extra={"status_code": response.status_code})
-        raise AppException(
-            status_code=503,
-            message="AI service unavailable",
-            detail={"code": "LLM_SERVICE_ERROR"},
-        )
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise AppException(
-            status_code=503,
-            message="AI service returned invalid response",
-            detail={"code": "LLM_INVALID_RESPONSE"},
-        ) from exc
-
-    reply = _extract_reply_from_gemini(payload)
-    if not reply:
-        raise AppException(
-            status_code=503,
-            message="AI service returned empty response",
-            detail={"code": "LLM_EMPTY_RESPONSE"},
-        )
-
-    return reply
 
 
 def get_chat_history(*, db: Session, user_id: int, limit: int = 200) -> list[ChatMessage]:
