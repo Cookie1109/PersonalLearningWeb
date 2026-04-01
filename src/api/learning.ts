@@ -39,6 +39,7 @@ export interface LessonDetail {
   roadmapTitle: string;
   isCompleted: boolean;
   contentMarkdown: string | null;
+  youtubeVideoId: string | null;
   isDraft: boolean;
 }
 
@@ -95,6 +96,7 @@ function mapLessonDetail(dto: LessonDetailDTO): LessonDetail {
     roadmapTitle: dto.roadmap_title,
     isCompleted: dto.is_completed,
     contentMarkdown: dto.content_markdown ?? null,
+    youtubeVideoId: dto.youtube_video_id ?? null,
     isDraft: dto.is_draft,
   };
 }
@@ -117,10 +119,10 @@ export async function generateLessonContent(lessonTitle: string, weekTitle: stri
   return mapLessonContent(response.data);
 }
 
-export async function searchYouTube(query: string): Promise<YouTubeVideoDTO[]> {
-  const response = await apiClient.get<{ videos: YouTubeVideoDTO[] } | YouTubeVideoDTO[]>('/content/youtube', { params: { q: query } });
-  return response.data.videos ?? response.data;
-}
+//export async function searchYouTube(query: string): Promise<YouTubeVideoDTO[]> {
+// const response = await apiClient.get<{ videos: YouTubeVideoDTO[] } | YouTubeVideoDTO[]>('/content/youtube', { params: { q: query } });
+//  return response.data.videos ?? response.data;
+//}
 
 export async function completeLessonProgress(lessonId: string): Promise<LessonCompleteResponseDTO> {
   const response = await apiClient.post<LessonCompleteResponseDTO>(

@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
     gemini_pro_model: str = Field(default="gemini-2.5-pro", alias="GEMINI_PRO_MODEL")
     gemini_timeout_seconds: float = Field(default=120.0, alias="GEMINI_TIMEOUT_SECONDS")
+    youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
 
 
 @lru_cache

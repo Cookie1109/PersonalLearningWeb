@@ -18,6 +18,7 @@ class Lesson(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    youtube_video_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

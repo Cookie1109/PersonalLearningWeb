@@ -74,6 +74,7 @@ class LessonDTO(BaseModel):
     completed: bool = False
     type: Literal["theory", "practice", "project"] = "theory"
     description: str
+    youtube_video_id: str | None = None
 
 
 class WeekModuleDTO(BaseModel):
@@ -140,6 +141,7 @@ class LessonDetailDTO(BaseModel):
     roadmap_title: str
     is_completed: bool
     content_markdown: str | None = None
+    youtube_video_id: str | None = None
     is_draft: bool = True
 
 

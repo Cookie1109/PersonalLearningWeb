@@ -53,6 +53,7 @@ def test_get_lesson_detail_requires_ownership(
     assert owner_payload["id"] == lesson.id
     assert owner_payload["is_draft"] is True
     assert owner_payload["content_markdown"] is None
+    assert owner_payload["youtube_video_id"] is None
 
     outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
     outsider_response = client.get(
@@ -82,6 +83,11 @@ def test_generate_lesson_persists_markdown(
         "generate_lesson_markdown",
         lambda prompt: generated_markdown,
     )
+    monkeypatch.setattr(
+        lesson_service,
+        "fetch_youtube_video_id",
+        lambda query: "dQw4w9WgXcQ",
+    )
 
     response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
     assert response.status_code == 200
@@ -90,9 +96,11 @@ def test_generate_lesson_persists_markdown(
     assert payload["lesson"]["id"] == lesson.id
     assert payload["lesson"]["is_draft"] is False
     assert payload["lesson"]["content_markdown"] == generated_markdown.strip()
+    assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
 
     db_session.refresh(lesson)
     assert lesson.content_markdown == generated_markdown
+    assert lesson.youtube_video_id == "dQw4w9WgXcQ"
     assert lesson.version == 2
 
 
@@ -123,3 +131,39 @@ def test_generate_lesson_returns_controlled_error_when_llm_fails(
 
     db_session.refresh(lesson)
     assert lesson.content_markdown is None
+
+
+def test_generate_lesson_still_succeeds_when_youtube_lookup_fails(
+    client,
+    db_session: Session,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    user, headers = auth_headers
+    lesson = _seed_lesson(db_session, user_id=user.id, title="Knife Skills")
+
+    import app.services.lesson_service as lesson_service
+
+    monkeypatch.setattr(
+        lesson_service,
+        "generate_lesson_markdown",
+        lambda prompt: "## Knife Skills\n\n- Safety first",
+    )
+
+    def _raise_youtube_failure(*, query: str) -> str | None:
+        _ = query
+        raise RuntimeError("YouTube quota exceeded")
+
+    monkeypatch.setattr(lesson_service, "fetch_youtube_video_id", _raise_youtube_failure)
+
+    response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["lesson"]["id"] == lesson.id
+    assert payload["lesson"]["content_markdown"] is not None
+    assert payload["lesson"]["youtube_video_id"] is None
+
+    db_session.refresh(lesson)
+    assert lesson.content_markdown is not None
+    assert lesson.youtube_video_id is None

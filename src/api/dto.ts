@@ -5,6 +5,7 @@ export interface LessonDTO {
   completed: boolean;
   type: 'theory' | 'practice' | 'project';
   description: string;
+  youtube_video_id?: string | null;
 }
 
 export interface LoginRequestDTO {
@@ -177,6 +178,7 @@ export interface LessonDetailDTO {
   roadmap_title: string;
   is_completed: boolean;
   content_markdown?: string | null;
+  youtube_video_id?: string | null;
   is_draft: boolean;
 }
 

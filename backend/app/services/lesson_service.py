@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -16,6 +17,8 @@ from app.schemas import LessonCompleteResponseDTO, LessonDetailDTO
 
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
 logger = logging.getLogger("app.lesson")
+YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
+YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 
 
 def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap) -> LessonDetailDTO:
@@ -29,6 +32,7 @@ def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap) -> LessonDetailDTO:
         roadmap_title=roadmap.title or roadmap.goal,
         is_completed=lesson.is_completed,
         content_markdown=content,
+        youtube_video_id=lesson.youtube_video_id,
         is_draft=not bool(content),
     )
 
@@ -200,14 +204,76 @@ def generate_lesson_markdown(*, prompt: str) -> str:
     return markdown
 
 
+def fetch_youtube_video_id(*, query: str) -> str | None:
+    settings = get_settings()
+    api_key = (settings.youtube_api_key or "").strip()
+    normalized_query = query.strip()
+
+    if not api_key or not normalized_query:
+        return None
+
+    params = {
+        "key": api_key,
+        "part": "snippet",
+        "type": "video",
+        "maxResults": 1,
+        "q": normalized_query,
+        "videoEmbeddable": "true",
+    }
+
+    with httpx.Client(timeout=20.0) as client:
+        response = client.get(YOUTUBE_SEARCH_ENDPOINT, params=params)
+
+    if response.status_code >= 400:
+        raise RuntimeError(f"YouTube API error status={response.status_code} body={response.text[:300]}")
+
+    payload = response.json()
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        return None
+
+    first_item = items[0]
+    if not isinstance(first_item, dict):
+        return None
+
+    item_id = first_item.get("id")
+    if not isinstance(item_id, dict):
+        return None
+
+    video_id = item_id.get("videoId")
+    if not isinstance(video_id, str):
+        return None
+
+    video_id = video_id.strip()
+    if not video_id or not YOUTUBE_VIDEO_ID_PATTERN.match(video_id):
+        return None
+
+    return video_id
+
+
 def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: int) -> LessonDetailDTO:
     lesson, roadmap = get_lesson_for_user(db=db, user_id=user_id, lesson_id=lesson_id)
 
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
     markdown = generate_lesson_markdown(prompt=prompt)
+    roadmap_title = roadmap.title or roadmap.goal
+
+    youtube_video_id = lesson.youtube_video_id
+    try:
+        searched_video_id = fetch_youtube_video_id(query=f"{lesson.title} {roadmap_title}")
+        if searched_video_id:
+            youtube_video_id = searched_video_id
+    except Exception as exc:
+        logger.warning(
+            "lesson.youtube_lookup_failed lesson_id=%s title=%s error=%s",
+            lesson.id,
+            lesson.title,
+            str(exc),
+        )
 
     try:
         lesson.content_markdown = markdown
+        lesson.youtube_video_id = youtube_video_id
         lesson.version = (lesson.version or 1) + 1
         db.commit()
         db.refresh(lesson)

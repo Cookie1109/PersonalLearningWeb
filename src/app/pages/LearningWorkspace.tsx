@@ -65,6 +65,9 @@ export default function LearningWorkspace() {
   const currentLesson = currentIndex >= 0 ? allLessons[currentIndex] : null;
   const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
+  const youtubeEmbedUrl = lessonDetail?.youtubeVideoId
+    ? `https://www.youtube.com/embed/${encodeURIComponent(lessonDetail.youtubeVideoId)}?rel=0`
+    : null;
 
   const loadLesson = async (targetLessonId: string) => {
     setIsLoading(true);
@@ -324,17 +327,52 @@ export default function LearningWorkspace() {
               </div>
             ) : !loadError && lessonDetail?.contentMarkdown ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                      <BookOpen size={13} className="text-blue-400" />
+                {youtubeEmbedUrl ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+                    <div className="xl:col-span-2">
+                      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+                        <div className="px-4 py-3 border-b border-zinc-800">
+                          <h3 className="text-sm text-zinc-100" style={{ fontWeight: 600 }}>Video goi y</h3>
+                          <p className="text-xs text-zinc-500 mt-1">Duoc tim tu YouTube theo noi dung bai hoc</p>
+                        </div>
+                        <div className="aspect-video bg-black">
+                          <iframe
+                            src={youtubeEmbedUrl}
+                            title={`YouTube video for ${lessonDetail.title}`}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
+
+                    <div className="xl:col-span-3">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                          <BookOpen size={13} className="text-blue-400" />
+                        </div>
+                        <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
+                      </div>
+                      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                        <MarkdownContent content={lessonDetail.contentMarkdown} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                    <MarkdownContent content={lessonDetail.contentMarkdown} />
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                        <BookOpen size={13} className="text-blue-400" />
+                      </div>
+                      <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
+                    </div>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                      <MarkdownContent content={lessonDetail.contentMarkdown} />
+                    </div>
                   </div>
-                </div>
+                )}
               </motion.div>
             ) : !loadError ? (
               <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
