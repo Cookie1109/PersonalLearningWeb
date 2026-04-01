@@ -24,9 +24,14 @@ YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
 JSON_CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
+TOKEN_PATTERN = re.compile(r"[\w#+\.]{2,}", re.UNICODE)
+
+YOUTUBE_CATEGORY_CANDIDATES: tuple[str | None, ...] = ("27,28", "27", "28", None)
+YOUTUBE_RELEVANCE_THRESHOLD = 0
 
 CONTEXT_KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
     "c#": ("c#", "c sharp", "csharp"),
+    "c++": ("c++", "cpp", "c plus plus"),
     ".net": (".net", "dotnet", "asp.net", "asp net"),
     "java": ("java",),
     "javascript": ("javascript", "js"),
@@ -41,6 +46,7 @@ CONTEXT_KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
 
 PROGRAMMING_CONTEXT_KEYWORDS = {
     "c#",
+    "c++",
     ".net",
     "java",
     "javascript",
@@ -51,6 +57,56 @@ PROGRAMMING_CONTEXT_KEYWORDS = {
     "swift",
     "rust",
     "golang",
+}
+
+CONTEXT_KEYWORD_PATTERNS: dict[str, re.Pattern[str]] = {
+    "c#": re.compile(r"c#|\bc\s*sharp\b|\bcsharp\b"),
+    "c++": re.compile(r"c\+\+|\bcpp\b|\bc\s*plus\s*plus\b"),
+    ".net": re.compile(r"\.net\b|\bdotnet\b|\basp\.net\b|\basp\s*net\b"),
+    "java": re.compile(r"\bjava\b"),
+    "javascript": re.compile(r"\bjavascript\b|\bjs\b"),
+    "typescript": re.compile(r"\btypescript\b|\bts\b"),
+    "python": re.compile(r"\bpython\b"),
+    "php": re.compile(r"\bphp\b"),
+    "kotlin": re.compile(r"\bkotlin\b"),
+    "swift": re.compile(r"\bswift\b"),
+    "rust": re.compile(r"\brust\b"),
+    "golang": re.compile(r"\bgolang\b|\bgo\s*lang\b"),
+}
+
+RELEVANCE_STOPWORDS = {
+    "va",
+    "voi",
+    "cho",
+    "cua",
+    "trong",
+    "tu",
+    "la",
+    "nhung",
+    "cac",
+    "mot",
+    "the",
+    "to",
+    "and",
+    "for",
+    "with",
+    "from",
+    "the",
+    "a",
+    "an",
+}
+
+ENTERTAINMENT_NOISE_TOKENS = {
+    "phim",
+    "nhac",
+    "karaoke",
+    "trailer",
+    "drama",
+    "reaction",
+    "highlight",
+    "mv",
+    "tiktok",
+    "showbiz",
 }
 
 
@@ -70,8 +126,14 @@ def _collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def build_youtube_search_query(*, lesson: Lesson) -> str:
+def build_youtube_search_query(*, lesson: Lesson, roadmap: Roadmap | None = None) -> str:
     lesson_title = _collapse_whitespace((lesson.title or "").strip())
+    roadmap_topic = ""
+    if roadmap is not None:
+        roadmap_topic = _collapse_whitespace(((roadmap.title or roadmap.goal) or "").strip())
+
+    if lesson_title and roadmap_topic:
+        return _collapse_whitespace(f"{lesson_title} {roadmap_topic}")[:300]
     if lesson_title:
         return lesson_title[:300]
     return "bai hoc"
@@ -95,14 +157,124 @@ def _detect_context_keywords(*, lesson: Lesson, roadmap: Roadmap | None) -> list
 
 def _query_contains_context_keyword(*, query: str, canonical_keyword: str) -> bool:
     query_lower = query.lower()
+
+    pattern = CONTEXT_KEYWORD_PATTERNS.get(canonical_keyword)
+    if pattern is not None:
+        return bool(pattern.search(query_lower))
+
     variants = CONTEXT_KEYWORD_VARIANTS.get(canonical_keyword, (canonical_keyword,))
     return any(variant in query_lower for variant in variants)
+
+
+def _extract_youtube_video_id(item: dict[str, Any]) -> str | None:
+    item_id = item.get("id")
+    if not isinstance(item_id, dict):
+        return None
+
+    video_id = item_id.get("videoId")
+    if not isinstance(video_id, str):
+        return None
+
+    normalized_video_id = video_id.strip()
+    if not normalized_video_id or not YOUTUBE_VIDEO_ID_PATTERN.match(normalized_video_id):
+        return None
+
+    return normalized_video_id
+
+
+def _extract_youtube_search_text(item: dict[str, Any]) -> tuple[str, str]:
+    snippet = item.get("snippet")
+    if not isinstance(snippet, dict):
+        return "", ""
+
+    title = snippet.get("title")
+    description = snippet.get("description")
+    channel_title = snippet.get("channelTitle")
+
+    text_parts: list[str] = []
+    normalized_title = _collapse_whitespace(title) if isinstance(title, str) else ""
+    if normalized_title:
+        text_parts.append(normalized_title)
+    if isinstance(description, str) and description.strip():
+        text_parts.append(_collapse_whitespace(description))
+    if isinstance(channel_title, str) and channel_title.strip():
+        text_parts.append(_collapse_whitespace(channel_title))
+
+    combined = _collapse_whitespace(" ".join(text_parts)).lower() if text_parts else ""
+    return normalized_title.lower(), combined
+
+
+def _tokenize_for_relevance(text: str) -> set[str]:
+    normalized_text = _collapse_whitespace(text).lower()
+    if not normalized_text:
+        return set()
+
+    tokens: set[str] = set()
+    for token in TOKEN_PATTERN.findall(normalized_text):
+        if token.isdigit() or token in RELEVANCE_STOPWORDS:
+            continue
+        tokens.add(token)
+
+    return tokens
+
+
+def _score_youtube_candidate(*, item: dict[str, Any], query: str, lesson: Lesson, roadmap: Roadmap | None) -> int:
+    title_text, searchable_text = _extract_youtube_search_text(item)
+    if not searchable_text:
+        return -999
+
+    lesson_tokens = _tokenize_for_relevance(lesson.title or "")
+    roadmap_tokens = _tokenize_for_relevance(
+        f"{roadmap.title or ''} {roadmap.goal or ''}" if roadmap is not None else ""
+    )
+    query_tokens = _tokenize_for_relevance(query)
+
+    score = 0
+
+    lesson_phrase = _collapse_whitespace((lesson.title or "").lower())
+    if lesson_phrase:
+        if lesson_phrase in title_text:
+            score += 18
+        elif lesson_phrase in searchable_text:
+            score += 10
+
+    score += sum(4 for token in lesson_tokens if token in searchable_text)
+    score += sum(2 for token in roadmap_tokens if token in searchable_text)
+    score += sum(1 for token in query_tokens if token in searchable_text)
+
+    context_keywords = _detect_context_keywords(lesson=lesson, roadmap=roadmap)
+    if context_keywords:
+        matched_context_keywords = [
+            keyword
+            for keyword in context_keywords
+            if _query_contains_context_keyword(query=searchable_text, canonical_keyword=keyword)
+        ]
+        score += len(matched_context_keywords) * 8
+        if not matched_context_keywords:
+            score -= 12
+
+        conflicting_keywords = [
+            keyword
+            for keyword in PROGRAMMING_CONTEXT_KEYWORDS
+            if keyword not in context_keywords
+            and _query_contains_context_keyword(query=searchable_text, canonical_keyword=keyword)
+        ]
+        score -= len(conflicting_keywords) * 8
+
+    score -= sum(8 for token in ENTERTAINMENT_NOISE_TOKENS if token in searchable_text)
+
+    return score
 
 
 def enrich_youtube_query_with_context(*, query: str, lesson: Lesson, roadmap: Roadmap | None) -> str:
     normalized_query = _collapse_whitespace(query)
     if not normalized_query:
-        normalized_query = build_youtube_search_query(lesson=lesson)
+        normalized_query = build_youtube_search_query(lesson=lesson, roadmap=roadmap)
+
+    if roadmap is not None:
+        roadmap_topic = _collapse_whitespace(((roadmap.title or roadmap.goal) or "").strip())
+        if roadmap_topic and roadmap_topic.lower() not in normalized_query.lower():
+            normalized_query = _collapse_whitespace(f"{normalized_query} {roadmap_topic}")
 
     context_keywords = _detect_context_keywords(lesson=lesson, roadmap=roadmap)
     missing_keywords = [
@@ -115,8 +287,12 @@ def enrich_youtube_query_with_context(*, query: str, lesson: Lesson, roadmap: Ro
     has_programming_context = any(keyword in PROGRAMMING_CONTEXT_KEYWORDS for keyword in context_keywords)
     if has_programming_context:
         lowered = normalized_query.lower()
-        if "lap trinh" not in lowered and "programming" not in lowered and "code" not in lowered:
-            normalized_query = _collapse_whitespace(f"lap trinh {normalized_query}")
+        if "programming" not in lowered and "code" not in lowered and "developer" not in lowered:
+            normalized_query = _collapse_whitespace(f"{normalized_query} programming")
+        if "tutorial" not in lowered:
+            normalized_query = _collapse_whitespace(f"{normalized_query} tutorial")
+        if "beginner" not in lowered and "for beginners" not in lowered:
+            normalized_query = _collapse_whitespace(f"{normalized_query} for beginners")
 
     return normalized_query[:300]
 
@@ -218,6 +394,18 @@ def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap | None) -
             "Hay bam sat chat che tieu de bai hoc va chi tra noi dung dung pham vi bai hoc hien tai. "
         )
 
+    context_keywords = _detect_context_keywords(lesson=lesson, roadmap=roadmap)
+    has_programming_context = any(keyword in PROGRAMMING_CONTEXT_KEYWORDS for keyword in context_keywords)
+    if has_programming_context:
+        youtube_query_language_rule = (
+            "Neu lo trinh thuoc linh vuc lap trinh/cong nghe (IT), youtube_search_query BAT BUOC viet bang TIENG ANH. "
+            "Vi du: thay vi 'C# thuoc tinh va truong', phai dung 'C# properties and fields tutorial for beginners'. "
+        )
+    else:
+        youtube_query_language_rule = (
+            "Neu chu de khong thuoc IT, youtube_search_query co the dung ngon ngu phu hop voi linh vuc do. "
+        )
+
     return (
         "Ban la chuyen gia giao duc da linh vuc. "
         "Hay viet noi dung bai hoc chi tiet bang Markdown, de hieu, dung ngu canh va thuat ngu chuyen nganh cua chu de. "
@@ -233,6 +421,7 @@ def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap | None) -
         "Dieu nay cuc ky quan trong de tranh nham lan sang linh vuc khac. "
         "youtube_search_query BAT BUOC phai chua keyword cot loi cua khoa hoc. "
         "Neu muc tieu hoc co ngon ngu/nen tang cu the (vi du C#, .NET), bat buoc xuat hien ro rang trong query. "
+        f"{youtube_query_language_rule}"
         "BAT BUOC tra ve JSON nghiem ngat voi cau truc: "
         '{"content_markdown":"...", "youtube_search_query":"..."}. '
         "Khong kem bat ky van ban nao khac ngoai JSON. "
@@ -534,7 +723,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
     )
 
 
-def fetch_youtube_video_id(*, query: str) -> str | None:
+def fetch_youtube_video_id(*, query: str, lesson: Lesson | None = None, roadmap: Roadmap | None = None) -> str | None:
     settings = get_settings()
     api_key = (settings.youtube_api_key or "").strip()
     normalized_query = query.strip()
@@ -542,45 +731,88 @@ def fetch_youtube_video_id(*, query: str) -> str | None:
     if not api_key or not normalized_query:
         return None
 
-    params = {
+    base_params = {
         "key": api_key,
         "part": "snippet",
         "type": "video",
         "videoDuration": "medium",
-        "maxResults": 1,
+        "maxResults": 5,
         "relevanceLanguage": "vi",
         "q": normalized_query,
         "videoEmbeddable": "true",
     }
 
     with httpx.Client(timeout=20.0) as client:
-        response = client.get(YOUTUBE_SEARCH_ENDPOINT, params=params)
+        payload: dict[str, Any] | None = None
+        last_error: RuntimeError | None = None
 
-    if response.status_code >= 400:
-        raise RuntimeError(f"YouTube API error status={response.status_code} body={response.text[:300]}")
+        for category_id in YOUTUBE_CATEGORY_CANDIDATES:
+            params = dict(base_params)
+            if category_id is not None:
+                params["videoCategoryId"] = category_id
 
-    payload = response.json()
+            response = client.get(YOUTUBE_SEARCH_ENDPOINT, params=params)
+            if response.status_code < 400:
+                payload = response.json()
+                break
+
+            error = RuntimeError(f"YouTube API error status={response.status_code} body={response.text[:300]}")
+            last_error = error
+
+            if category_id is not None and response.status_code in (400, 403):
+                logger.warning(
+                    "lesson.youtube_category_fallback status=%s category=%s query=%s",
+                    response.status_code,
+                    category_id,
+                    normalized_query,
+                )
+                continue
+
+            raise error
+
+        if payload is None:
+            if last_error is not None:
+                raise last_error
+            return None
+
     items = payload.get("items")
     if not isinstance(items, list) or not items:
         return None
 
-    first_item = items[0]
-    if not isinstance(first_item, dict):
+    valid_items: list[tuple[str, dict[str, Any]]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        video_id = _extract_youtube_video_id(item)
+        if video_id:
+            valid_items.append((video_id, item))
+
+    if not valid_items:
         return None
 
-    item_id = first_item.get("id")
-    if not isinstance(item_id, dict):
+    if lesson is None:
+        return valid_items[0][0]
+
+    best_video_id: str | None = None
+    best_score: int | None = None
+
+    for video_id, item in valid_items:
+        score = _score_youtube_candidate(item=item, query=normalized_query, lesson=lesson, roadmap=roadmap)
+        if best_score is None or score > best_score:
+            best_score = score
+            best_video_id = video_id
+
+    if best_score is None or best_score <= YOUTUBE_RELEVANCE_THRESHOLD:
+        logger.warning(
+            "lesson.youtube_relevance_rejected lesson_title=%s query=%s best_score=%s threshold=%s",
+            lesson.title,
+            normalized_query,
+            best_score,
+            YOUTUBE_RELEVANCE_THRESHOLD,
+        )
         return None
 
-    video_id = item_id.get("videoId")
-    if not isinstance(video_id, str):
-        return None
-
-    video_id = video_id.strip()
-    if not video_id or not YOUTUBE_VIDEO_ID_PATTERN.match(video_id):
-        return None
-
-    return video_id
+    return best_video_id
 
 
 def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: int) -> LessonDetailDTO:
@@ -589,7 +821,7 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
     llm_output = generate_lesson_markdown(prompt=prompt)
     youtube_query = enrich_youtube_query_with_context(
-        query=build_youtube_search_query(lesson=lesson),
+        query=build_youtube_search_query(lesson=lesson, roadmap=roadmap),
         lesson=lesson,
         roadmap=roadmap,
     )
@@ -610,9 +842,9 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
         )
         markdown = llm_output.strip()
 
-    youtube_video_id = lesson.youtube_video_id
+    youtube_video_id: str | None = None
     try:
-        searched_video_id = fetch_youtube_video_id(query=youtube_query)
+        searched_video_id = fetch_youtube_video_id(query=youtube_query, lesson=lesson, roadmap=roadmap)
         if searched_video_id:
             youtube_video_id = searched_video_id
     except Exception as exc:
