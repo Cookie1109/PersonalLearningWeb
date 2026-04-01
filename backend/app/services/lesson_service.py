@@ -25,6 +25,34 @@ YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
 JSON_CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
+CONTEXT_KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
+    "c#": ("c#", "c sharp", "csharp"),
+    ".net": (".net", "dotnet", "asp.net", "asp net"),
+    "java": ("java",),
+    "javascript": ("javascript", "js"),
+    "typescript": ("typescript", "ts"),
+    "python": ("python",),
+    "php": ("php",),
+    "kotlin": ("kotlin",),
+    "swift": ("swift",),
+    "rust": ("rust",),
+    "golang": ("golang",),
+}
+
+PROGRAMMING_CONTEXT_KEYWORDS = {
+    "c#",
+    ".net",
+    "java",
+    "javascript",
+    "typescript",
+    "python",
+    "php",
+    "kotlin",
+    "swift",
+    "rust",
+    "golang",
+}
+
 
 def _normalize_model_name(raw_model: str) -> str:
     model = (raw_model or "").strip()
@@ -49,6 +77,47 @@ def build_youtube_search_query(*, lesson: Lesson) -> str:
     return "bai hoc"
 
 
+def _detect_context_keywords(*, lesson: Lesson, roadmap: Roadmap) -> list[str]:
+    source = _collapse_whitespace(
+        f"{lesson.title or ''} {roadmap.title or ''} {roadmap.goal or ''}"
+    ).lower()
+
+    detected: list[str] = []
+    for canonical, variants in CONTEXT_KEYWORD_VARIANTS.items():
+        if any(variant in source for variant in variants):
+            detected.append(canonical)
+
+    return detected
+
+
+def _query_contains_context_keyword(*, query: str, canonical_keyword: str) -> bool:
+    query_lower = query.lower()
+    variants = CONTEXT_KEYWORD_VARIANTS.get(canonical_keyword, (canonical_keyword,))
+    return any(variant in query_lower for variant in variants)
+
+
+def enrich_youtube_query_with_context(*, query: str, lesson: Lesson, roadmap: Roadmap) -> str:
+    normalized_query = _collapse_whitespace(query)
+    if not normalized_query:
+        normalized_query = build_youtube_search_query(lesson=lesson)
+
+    context_keywords = _detect_context_keywords(lesson=lesson, roadmap=roadmap)
+    missing_keywords = [
+        keyword for keyword in context_keywords if not _query_contains_context_keyword(query=normalized_query, canonical_keyword=keyword)
+    ]
+
+    if missing_keywords:
+        normalized_query = _collapse_whitespace(f"{normalized_query} {' '.join(missing_keywords)}")
+
+    has_programming_context = any(keyword in PROGRAMMING_CONTEXT_KEYWORDS for keyword in context_keywords)
+    if has_programming_context:
+        lowered = normalized_query.lower()
+        if "lap trinh" not in lowered and "programming" not in lowered and "code" not in lowered:
+            normalized_query = _collapse_whitespace(f"lap trinh {normalized_query}")
+
+    return normalized_query[:300]
+
+
 def _build_lesson_model_candidates(settings) -> list[str]:
     configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-1.5-pro"
     configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
@@ -66,15 +135,22 @@ def _build_lesson_model_candidates(settings) -> list[str]:
     return candidates
 
 
-def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap) -> LessonDetailDTO:
+def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap | None) -> LessonDetailDTO:
     content = lesson.content_markdown.strip() if lesson.content_markdown else None
+    if roadmap is not None:
+        roadmap_id = roadmap.id
+        roadmap_title = roadmap.title or roadmap.goal
+    else:
+        roadmap_id = int(lesson.roadmap_id or 0)
+        roadmap_title = "Bai hoc tu do"
+
     return LessonDetailDTO(
         id=lesson.id,
         title=lesson.title,
         week_number=lesson.week_number,
         position=lesson.position,
-        roadmap_id=roadmap.id,
-        roadmap_title=roadmap.title or roadmap.goal,
+        roadmap_id=roadmap_id,
+        roadmap_title=roadmap_title,
         is_completed=lesson.is_completed,
         content_markdown=content,
         youtube_video_id=lesson.youtube_video_id,
@@ -101,6 +177,30 @@ def get_lesson_detail_for_user(*, db: Session, user_id: int, lesson_id: int) -> 
     return _to_lesson_detail(lesson, roadmap)
 
 
+def get_lesson_for_generation(*, db: Session, user_id: int, lesson_id: int) -> tuple[Lesson, Roadmap | None]:
+    lesson = db.get(Lesson, lesson_id)
+    if lesson is None:
+        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+
+    if lesson.roadmap_id is None:
+        logger.warning("lesson.roadmap_context_missing lesson_id=%s reason=no_roadmap_id", lesson.id)
+        return lesson, None
+
+    roadmap = db.get(Roadmap, lesson.roadmap_id)
+    if roadmap is None:
+        logger.warning(
+            "lesson.roadmap_context_missing lesson_id=%s roadmap_id=%s reason=not_found",
+            lesson.id,
+            lesson.roadmap_id,
+        )
+        return lesson, None
+
+    if roadmap.user_id != user_id:
+        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+
+    return lesson, roadmap
+
+
 def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
     roadmap_title = roadmap.title or roadmap.goal
     return (
@@ -113,6 +213,11 @@ def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
         "Bat buoc tao day du cac muc: 1) Muc tieu bai hoc, 2) Boi canh/nen tang, 3) Kien thuc cot loi, 4) Phan tich chi tiet, "
         "5) Vi du thuc te, 6) Bai tap tu luyen, 7) Tong ket. "
         "Sau khi viet xong, hay dua ra 1 cau lenh tim kiem YouTube toi uu nhat, ngan gon, chua cac thuat ngu chuyen nganh de tim video minh hoa chinh xac cho bai hoc nay. "
+        "RANG BUOC THEP: Tu khoa tim kiem BAT BUOC phai bao gom ten ngon ngu lap trinh, cong cu, hoac chu de goc cua lo trinh. "
+        "Vi du: neu bai hoc thuoc lo trinh C#, query phai la 'C# thuc hien cac phep toan' chu KHONG duoc ghi chung chung 'thuc hien cac phep toan'. "
+        "Dieu nay cuc ky quan trong de tranh nham lan sang linh vuc khac. "
+        "youtube_search_query BAT BUOC phai chua keyword cot loi cua khoa hoc. "
+        "Neu muc tieu hoc co ngon ngu/nen tang cu the (vi du C#, .NET), bat buoc xuat hien ro rang trong query. "
         "BAT BUOC tra ve JSON nghiem ngat voi cau truc: "
         '{"content_markdown":"...", "youtube_search_query":"..."}. '
         "Khong kem bat ky van ban nao khac ngoai JSON. "
@@ -425,6 +530,7 @@ def fetch_youtube_video_id(*, query: str) -> str | None:
         "key": api_key,
         "part": "snippet",
         "type": "video",
+        "videoDuration": "medium",
         "maxResults": 1,
         "relevanceLanguage": "vi",
         "q": normalized_query,
@@ -466,11 +572,19 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
 
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
     llm_output = generate_lesson_markdown(prompt=prompt)
-    youtube_query = build_youtube_search_query(lesson=lesson)
+    youtube_query = enrich_youtube_query_with_context(
+        query=build_youtube_search_query(lesson=lesson),
+        lesson=lesson,
+        roadmap=roadmap,
+    )
 
     try:
         markdown, ai_youtube_query = parse_lesson_generation_output(llm_output)
-        youtube_query = ai_youtube_query
+        youtube_query = enrich_youtube_query_with_context(
+            query=ai_youtube_query,
+            lesson=lesson,
+            roadmap=roadmap,
+        )
     except Exception as exc:
         logger.warning(
             "lesson.llm_output_parse_failed lesson_id=%s title=%s error=%s",

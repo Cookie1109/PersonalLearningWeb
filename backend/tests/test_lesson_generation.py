@@ -110,7 +110,7 @@ def test_generate_lesson_persists_markdown(
     assert payload["lesson"]["is_draft"] is False
     assert payload["lesson"]["content_markdown"] == generated_markdown.strip()
     assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
-    assert captured_query["value"] == "control flow python tutorial tieng viet"
+    assert captured_query["value"] == "lap trinh control flow python tutorial tieng viet"
 
     db_session.refresh(lesson)
     assert lesson.content_markdown == generated_markdown.strip()
@@ -154,11 +154,117 @@ def test_generate_lesson_fallbacks_to_legacy_query_when_llm_output_invalid_json(
     assert payload["lesson"]["id"] == lesson.id
     assert payload["lesson"]["content_markdown"] == generated_output
     assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
-    assert captured_query["value"] == "Relational Data"
+    assert captured_query["value"] == "lap trinh Relational Data python"
 
     db_session.refresh(lesson)
     assert lesson.content_markdown == generated_output
     assert lesson.youtube_video_id == "dQw4w9WgXcQ"
+
+
+def test_generate_lesson_enforces_csharp_context_in_youtube_query(
+    client,
+    db_session: Session,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    user, headers = auth_headers
+
+    roadmap = Roadmap(
+        user_id=user.id,
+        goal="Toi muon hoc C#",
+        title="Lo trinh C#",
+        is_active=True,
+    )
+    db_session.add(roadmap)
+    db_session.commit()
+    db_session.refresh(roadmap)
+
+    lesson = Lesson(
+        roadmap_id=roadmap.id,
+        week_number=4,
+        position=1,
+        title="Lap trinh bat dong bo",
+        content_markdown=None,
+        is_completed=False,
+    )
+    db_session.add(lesson)
+    db_session.commit()
+    db_session.refresh(lesson)
+
+    captured_query: dict[str, str] = {}
+
+    import app.services.lesson_service as lesson_service
+
+    monkeypatch.setattr(
+        lesson_service,
+        "generate_lesson_markdown",
+        lambda prompt: (
+            '{"content_markdown":"## Bai hoc\n\nNoi dung", '
+            '"youtube_search_query":"lap trinh bat dong bo"}'
+        ),
+    )
+
+    def _fake_fetch_youtube_video_id(*, query: str) -> str | None:
+        captured_query["value"] = query
+        return "dQw4w9WgXcQ"
+
+    monkeypatch.setattr(lesson_service, "fetch_youtube_video_id", _fake_fetch_youtube_video_id)
+
+    response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
+    assert response.status_code == 200
+
+    assert "c#" in captured_query["value"].lower()
+    assert "lap trinh" in captured_query["value"].lower()
+
+
+def test_fetch_youtube_video_id_uses_medium_duration_filter(monkeypatch) -> None:
+    import app.services.lesson_service as lesson_service
+
+    captured_params: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        lesson_service,
+        "get_settings",
+        lambda: type("_Settings", (), {"youtube_api_key": "fake-key"})(),
+    )
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict:
+            return {
+                "items": [
+                    {
+                        "id": {
+                            "videoId": "dQw4w9WgXcQ",
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            _ = (args, kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            _ = (exc_type, exc, tb)
+            return False
+
+        def get(self, url: str, params: dict[str, str]):
+            _ = url
+            captured_params.update(params)
+            return FakeResponse()
+
+    monkeypatch.setattr(lesson_service.httpx, "Client", FakeClient)
+
+    video_id = lesson_service.fetch_youtube_video_id(query="lap trinh C# bat dong bo")
+    assert video_id == "dQw4w9WgXcQ"
+    assert captured_params["type"] == "video"
+    assert captured_params["relevanceLanguage"] == "vi"
+    assert captured_params["videoDuration"] == "medium"
 
 
 def test_generate_lesson_returns_controlled_error_when_llm_fails(

@@ -1,4 +1,5 @@
 import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
+import axios from 'axios';
 import {
   LessonCompleteResponseDTO,
   LessonDetailDTO,
@@ -102,16 +103,36 @@ function mapLessonDetail(dto: LessonDetailDTO): LessonDetail {
 }
 
 export async function generateRoadmap(goal: string): Promise<WeekModule[]> {
-  const response = await apiClient.post<RoadmapGenerateResponseDTO>(
-    '/roadmaps/generate',
-    { goal },
-    {
-      headers: {
-        ...createAuthHeaders(),
-      },
+  const normalizedGoal = goal.trim();
+  if (normalizedGoal.length < 3) {
+    throw new Error('Muc tieu can toi thieu 3 ky tu.');
+  }
+  if (normalizedGoal.length > 500) {
+    throw new Error('Muc tieu toi da 500 ky tu. Vui long rut gon noi dung.');
+  }
+
+  try {
+    const response = await apiClient.post<RoadmapGenerateResponseDTO>(
+      '/roadmaps/generate',
+      { goal: normalizedGoal },
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+    return (response.data.weeks ?? []).map(mapWeekModule);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 422) {
+      throw new Error('Muc tieu khong hop le. Vui long nhap it nhat 3 ky tu ro rang.');
     }
-  );
-  return (response.data.weeks ?? []).map(mapWeekModule);
+
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.message ?? 'Khong the tao lo trinh luc nay.');
+    }
+
+    throw error;
+  }
 }
 
 export async function generateLessonContent(lessonTitle: string, weekTitle: string): Promise<LessonContent> {

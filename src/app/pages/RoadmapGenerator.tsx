@@ -16,6 +16,10 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
+  const trimmedGoal = inputGoal.trim();
+  const isGoalTooShort = trimmedGoal.length > 0 && trimmedGoal.length < 3;
+  const isGoalTooLong = trimmedGoal.length > 500;
+
   useEffect(() => {
     const queryGoal = searchParams.get('goal')?.trim();
     if (!queryGoal) return;
@@ -24,8 +28,8 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
 
   const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const goal = inputGoal.trim();
-    if (!goal || isGenerating) return;
+    const goal = trimmedGoal;
+    if (!goal || goal.length < 3 || goal.length > 500 || isGenerating) return;
 
     setGenerateError(null);
     setIsGenerating(true);
@@ -80,6 +84,18 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-200 placeholder:text-zinc-600 resize-y min-h-[160px] outline-none focus:border-violet-500/60 transition-colors text-sm disabled:opacity-70"
         />
 
+        {isGoalTooShort && (
+          <p className="mt-2 text-xs text-amber-300">
+            Muc tieu can it nhat 3 ky tu de AI tao lo trinh.
+          </p>
+        )}
+
+        {isGoalTooLong && (
+          <p className="mt-2 text-xs text-amber-300">
+            Muc tieu toi da 500 ky tu. Vui long rut gon de tiep tuc.
+          </p>
+        )}
+
         {isGenerating && (
           <div className="mt-4 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 flex items-center gap-3">
             <Loader2 size={16} className="text-violet-300 animate-spin" />
@@ -98,7 +114,7 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
         <div className="mt-5 flex justify-end">
           <button
             type="submit"
-            disabled={!inputGoal.trim() || isGenerating}
+            disabled={!trimmedGoal || isGoalTooShort || isGoalTooLong || isGenerating}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors text-sm"
             style={{ fontWeight: 600 }}
           >
