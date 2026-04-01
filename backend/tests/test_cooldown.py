@@ -1,11 +1,15 @@
 def test_graceful_cooldown_returns_429_after_four_failed_submissions(client, seed_quiz, auth_headers) -> None:
-    _, quiz_id = seed_quiz
+    _, quiz_id, lesson_id = seed_quiz
     _, headers = auth_headers
+
+    fetch_quiz = client.get(f"/api/lessons/{lesson_id}/quiz", headers=headers)
+    assert fetch_quiz.status_code == 200
+    question_ids = [item["question_id"] for item in fetch_quiz.json()["questions"]]
 
     wrong_payload = {
         "answers": [
-            {"question_id": "q1", "selected_option": "A"},
-            {"question_id": "q2", "selected_option": "A"},
+            {"question_id": question_ids[0], "selected_option": "A"},
+            {"question_id": question_ids[1], "selected_option": "A"},
         ]
     }
 

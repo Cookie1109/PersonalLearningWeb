@@ -13,7 +13,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.main import create_app
-from app.models import Lesson, QuizItem, Roadmap, User
+from app.models import Lesson, Question, Quiz, Roadmap, User
 
 
 class FakeRedisPipeline:
@@ -204,25 +204,34 @@ def seed_quiz(db_session: Session, auth_headers):
     db_session.commit()
     db_session.refresh(lesson)
 
-    quiz_id = "quiz-core-1"
+    quiz = Quiz(
+        lesson_id=lesson.id,
+        model_name="gemini-1.5-flash",
+    )
+    db_session.add(quiz)
+    db_session.commit()
+    db_session.refresh(quiz)
+
     db_session.add_all(
         [
-            QuizItem(
-                lesson_id=lesson.id,
-                quiz_id=quiz_id,
-                question_id="q1",
-                correct_option="B",
+            Question(
+                quiz_id=quiz.id,
+                question_text="Question 1",
+                options_json=["A1", "B1", "C1", "D1"],
+                correct_index=1,
                 explanation="q1 explanation",
+                position=1,
             ),
-            QuizItem(
-                lesson_id=lesson.id,
-                quiz_id=quiz_id,
-                question_id="q2",
-                correct_option="C",
+            Question(
+                quiz_id=quiz.id,
+                question_text="Question 2",
+                options_json=["A2", "B2", "C2", "D2"],
+                correct_index=2,
                 explanation="q2 explanation",
+                position=2,
             ),
         ]
     )
     db_session.commit()
 
-    return user, quiz_id
+    return user, str(quiz.id), lesson.id

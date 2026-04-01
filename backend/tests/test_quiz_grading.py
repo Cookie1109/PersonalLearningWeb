@@ -6,16 +6,24 @@ from app.models import ExpLedger, User
 
 
 def test_server_grades_from_db_and_awards_first_pass_exp_once(client, db_session: Session, seed_quiz, auth_headers) -> None:
-    user, quiz_id = seed_quiz
+    user, quiz_id, lesson_id = seed_quiz
     _, headers = auth_headers
+
+    fetch_quiz = client.get(f"/api/lessons/{lesson_id}/quiz", headers=headers)
+    assert fetch_quiz.status_code == 200
+    fetch_payload = fetch_quiz.json()
+    assert fetch_payload["quiz_id"] == quiz_id
+    assert len(fetch_payload["questions"]) == 2
+    assert "correct_index" not in fetch_payload["questions"][0]
+    question_ids = [item["question_id"] for item in fetch_payload["questions"]]
 
     # First submit is intentionally wrong to prove grading is server-side.
     wrong_submit = client.post(
         f"/api/quizzes/{quiz_id}/submit",
         json={
             "answers": [
-                {"question_id": "q1", "selected_option": "A"},
-                {"question_id": "q2", "selected_option": "A"},
+                {"question_id": question_ids[0], "selected_option": "A"},
+                {"question_id": question_ids[1], "selected_option": "A"},
             ]
         },
         headers=headers,
@@ -24,17 +32,19 @@ def test_server_grades_from_db_and_awards_first_pass_exp_once(client, db_session
     wrong_payload = wrong_submit.json()
     assert wrong_payload["score"] == 0
     assert wrong_payload["is_passed"] is False
-    assert wrong_payload["exp_earned"] == 0
-    assert wrong_payload["first_pass_awarded"] is False
-    assert any(item["question_id"] == "q1" and item["is_correct"] is False for item in wrong_payload["results"])
+    assert wrong_payload["exp_gained"] == 0
+    assert wrong_payload["reward_granted"] is False
+    assert wrong_payload["total_exp"] == 0
+    assert any(item["question_id"] == question_ids[0] and item["is_correct"] is False for item in wrong_payload["results"])
+    assert all(isinstance(item.get("explanation"), str) and item["explanation"] for item in wrong_payload["results"])
 
     # Correct submit should award exp only for the first pass.
     correct_submit = client.post(
         f"/api/quizzes/{quiz_id}/submit",
         json={
             "answers": [
-                {"question_id": "q1", "selected_option": "B"},
-                {"question_id": "q2", "selected_option": "C"},
+                {"question_id": question_ids[0], "selected_option": "B"},
+                {"question_id": question_ids[1], "selected_option": "C"},
             ]
         },
         headers=headers,
@@ -43,19 +53,22 @@ def test_server_grades_from_db_and_awards_first_pass_exp_once(client, db_session
     correct_payload = correct_submit.json()
     assert correct_payload["score"] == 100
     assert correct_payload["is_passed"] is True
-    assert correct_payload["exp_earned"] == 100
-    assert correct_payload["first_pass_awarded"] is True
+    assert correct_payload["exp_gained"] == 100
+    assert correct_payload["reward_granted"] is True
+    assert correct_payload["level"] == 1
+    assert correct_payload["total_exp"] == 100
 
     user_after_first_pass = db_session.scalar(select(User).where(User.id == user.id))
     assert user_after_first_pass is not None
+    assert user_after_first_pass.exp == 100
     assert user_after_first_pass.total_exp == 100
 
     second_pass = client.post(
         f"/api/quizzes/{quiz_id}/submit",
         json={
             "answers": [
-                {"question_id": "q1", "selected_option": "B"},
-                {"question_id": "q2", "selected_option": "C"},
+                {"question_id": question_ids[0], "selected_option": "B"},
+                {"question_id": question_ids[1], "selected_option": "C"},
             ]
         },
         headers=headers,
@@ -63,8 +76,8 @@ def test_server_grades_from_db_and_awards_first_pass_exp_once(client, db_session
     assert second_pass.status_code == 200
     second_payload = second_pass.json()
     assert second_payload["is_passed"] is True
-    assert second_payload["exp_earned"] == 0
-    assert second_payload["first_pass_awarded"] is False
+    assert second_payload["exp_gained"] == 0
+    assert second_payload["reward_granted"] is False
 
     settings = get_settings()
     reward_entries = list(

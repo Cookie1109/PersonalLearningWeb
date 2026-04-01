@@ -57,6 +57,7 @@ def submit_quiz(
         quiz_id=quiz_id,
         answers=payload.answers,
         pass_score=settings.quiz_pass_score,
+        reward_exp=settings.quiz_pass_reward_exp,
         reward_type=settings.quiz_first_pass_reward_type,
     )
 
@@ -73,9 +74,11 @@ def submit_quiz(
         details={
             "score": result.score,
             "is_passed": result.is_passed,
-            "exp_earned": result.exp_earned,
-            "first_pass_awarded": result.first_pass_awarded,
-            "wrong_question_count": len(result.wrong_question_ids),
+            "exp_gained": result.exp_gained,
+            "reward_granted": result.reward_granted,
+            "total_exp": result.total_exp,
+            "level": result.level,
+            "wrong_question_count": len([item for item in result.results if not item.is_correct]),
             "request_id": getattr(request.state, "request_id", None),
         },
     )

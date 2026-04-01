@@ -28,7 +28,7 @@ export default function QuizPage({
   onFetchQuizByLesson = fetchQuizByLesson,
   onSubmitQuiz = submitQuiz,
 }: QuizPageProps) {
-  const { roadmap, applyServerExp } = useApp();
+  const { roadmap, applyServerExp, syncServerGamification } = useApp();
   const [mode, setMode] = useState<Mode>('select');
   const [quizState, setQuizState] = useState<QuizState>({ currentIndex: 0, selectedAnswers: {} });
   const [loadedQuiz, setLoadedQuiz] = useState<QuizResponseDTO | null>(quizData ?? null);
@@ -108,7 +108,13 @@ export default function QuizPage({
       const result = await onSubmitQuiz(loadedQuiz.quiz_id, { answers });
 
       setQuizResult(result);
-      applyServerExp(result.exp_earned ?? 0);
+      const totalExpGained = (result.exp_gained ?? 0) + (result.streak_bonus_exp ?? 0);
+      applyServerExp(totalExpGained);
+      syncServerGamification({
+        totalExp: result.total_exp,
+        level: result.level,
+        currentStreak: result.current_streak,
+      });
       setMode('quiz-result');
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 429) {
@@ -254,9 +260,9 @@ export default function QuizPage({
           <p className="text-zinc-400">Server score</p>
           <div className={`text-6xl my-6 ${grade.color}`} style={{ fontWeight: 800 }}>{score}%</div>
           <p className="text-zinc-300 text-sm">{correctCount}/{questions.length} correct answers</p>
-          {quizResult?.first_pass_awarded && (
+          {quizResult?.reward_granted && (
             <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-              Chuc mung! Ban da vuot quiz lan dau va nhan {quizResult.exp_earned} EXP.
+              Chuc mung! Ban da vuot quiz lan dau va nhan {quizResult.exp_gained} EXP.
             </div>
           )}
 

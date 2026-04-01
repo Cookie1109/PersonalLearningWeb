@@ -10,7 +10,7 @@ from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
-from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO, LessonGenerateResponseDTO
+from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO, LessonGenerateResponseDTO, QuizResponseDTO
 from app.services.audit_service import queue_audit_log
 from app.services.idempotency_store import IdempotencyStore
 from app.services.lesson_service import (
@@ -18,6 +18,7 @@ from app.services.lesson_service import (
     generate_lesson_content_for_user,
     get_lesson_detail_for_user,
 )
+from app.services.quiz_service import generate_quiz_for_lesson_user, get_quiz_for_lesson_user
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 settings = get_settings()
@@ -60,6 +61,34 @@ def generate_lesson(
 ) -> LessonGenerateResponseDTO:
     lesson = generate_lesson_content_for_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
     return LessonGenerateResponseDTO(lesson=lesson)
+
+
+@router.post(
+    "/{lesson_id}/quiz/generate",
+    response_model=QuizResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def generate_lesson_quiz(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuizResponseDTO:
+    return generate_quiz_for_lesson_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
+
+
+@router.get(
+    "/{lesson_id}/quiz",
+    response_model=QuizResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_lesson_quiz(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuizResponseDTO:
+    return get_quiz_for_lesson_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
 
 
 @router.post(

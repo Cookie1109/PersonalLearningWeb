@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     idempotency_ttl_seconds: int = Field(default=86400, alias="IDEMPOTENCY_TTL_SECONDS")
     lesson_complete_reward_exp: int = Field(default=50, alias="LESSON_COMPLETE_REWARD_EXP")
     quiz_pass_score: int = Field(default=80, alias="QUIZ_PASS_SCORE")
+    quiz_pass_reward_exp: int = Field(default=100, alias="QUIZ_PASS_REWARD_EXP")
     quiz_first_pass_reward_type: str = Field(default="quiz_first_pass", alias="QUIZ_FIRST_PASS_REWARD_TYPE")
     quiz_cooldown_fail_4_5_seconds: int = Field(default=30, alias="QUIZ_COOLDOWN_FAIL_4_5_SECONDS")
     quiz_cooldown_fail_6_plus_seconds: int = Field(default=60, alias="QUIZ_COOLDOWN_FAIL_6_PLUS_SECONDS")
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
         alias="GEMINI_MODEL",
         validation_alias=AliasChoices("GEMINI_MODEL", "GEMINI_FLASH_MODEL"),
     )
+    gemini_quiz_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_QUIZ_MODEL")
     gemini_pro_model: str = Field(default="gemini-1.5-pro", alias="GEMINI_PRO_MODEL")
     gemini_timeout_seconds: float = Field(default=120.0, alias="GEMINI_TIMEOUT_SECONDS")
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")

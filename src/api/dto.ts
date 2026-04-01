@@ -155,10 +155,14 @@ export interface QuizSubmitResultDTO {
 export interface QuizSubmitResponseDTO {
   score: number;
   is_passed: boolean;
-  exp_earned: number;
-  first_pass_awarded: boolean;
-  wrong_question_ids: string[];
-  results?: QuizSubmitResultDTO[] | null;
+  exp_gained: number;
+  streak_bonus_exp: number;
+  total_exp: number;
+  level: number;
+  current_streak: number;
+  reward_granted: boolean;
+  message: string;
+  results: QuizSubmitResultDTO[];
 }
 
 export interface LessonCompleteResponseDTO {

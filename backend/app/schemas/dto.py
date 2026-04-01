@@ -199,10 +199,14 @@ class QuizSubmitResultDTO(BaseModel):
 class QuizSubmitResponseDTO(BaseModel):
     score: int = Field(..., ge=0, le=100)
     is_passed: bool
-    exp_earned: int = Field(default=0, ge=0)
-    first_pass_awarded: bool = False
-    wrong_question_ids: list[str] = Field(default_factory=list)
-    results: list[QuizSubmitResultDTO] | None = None
+    exp_gained: int = Field(default=0, ge=0)
+    streak_bonus_exp: int = Field(default=0, ge=0)
+    total_exp: int = Field(..., ge=0)
+    level: int = Field(..., ge=1)
+    current_streak: int = Field(..., ge=0)
+    reward_granted: bool = False
+    message: str
+    results: list[QuizSubmitResultDTO] = Field(default_factory=list)
 
 
 class ChatMessageDTO(BaseModel):
