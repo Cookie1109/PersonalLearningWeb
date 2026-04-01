@@ -49,6 +49,13 @@ class FakeRedis:
         self.kv_store[key] = value
         return True
 
+    def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool:
+        _ = ex
+        if nx and key in self.kv_store:
+            return False
+        self.kv_store[key] = value
+        return True
+
     def delete(self, key: str) -> int:
         removed = 0
         if key in self.kv_store:
@@ -153,7 +160,9 @@ def create_user(db_session: Session):
             password_hash=password,
             display_name=display_name,
             level=1,
+            exp=0,
             total_exp=0,
+            current_streak=0,
             streak=0,
         )
         db_session.add(user)

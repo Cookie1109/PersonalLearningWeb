@@ -42,7 +42,7 @@ function formatInline(text: string) {
 export default function LearningWorkspace() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
-  const { roadmap, completeLesson, applyServerExp } = useApp();
+  const { roadmap, completeLesson, applyServerExp, syncServerGamification } = useApp();
 
   const [lessonDetail, setLessonDetail] = useState<LessonDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -144,14 +144,18 @@ export default function LearningWorkspace() {
     try {
       const result = await completeLessonProgress(lessonId);
       completeLesson(lessonId);
-      applyServerExp(result.exp_earned);
+      const totalExpGained = result.exp_gained + (result.streak_bonus_exp ?? 0);
+      applyServerExp(totalExpGained);
+      syncServerGamification({
+        totalExp: result.total_exp,
+        level: result.level,
+        currentStreak: result.current_streak,
+      });
       setIsCompleted(true);
       setLessonDetail(prev => (prev ? { ...prev, isCompleted: true } : prev));
-      setCompletionMessage(
-        result.exp_earned > 0
-          ? `+${result.exp_earned} EXP đã được cộng vào tài khoản.`
-          : 'Bài học đã được ghi nhận, chưa có EXP mới.'
-      );
+      setCompletionMessage(totalExpGained > 0
+        ? `+${totalExpGained} EXP · Cấp ${result.level} · Chuỗi ${result.current_streak} ngày`
+        : result.message || 'Bài học đã được ghi nhận, chưa có EXP mới.');
       setShowCompletionBadge(true);
       setTimeout(() => setShowCompletionBadge(false), 3000);
     } catch (error) {

@@ -43,7 +43,9 @@ def register_user(
         password_hash=hash_password(password),
         display_name=normalized_display_name,
         level=1,
+        exp=0,
         total_exp=0,
+        current_streak=0,
         streak=0,
     )
 

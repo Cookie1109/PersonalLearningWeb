@@ -24,6 +24,7 @@ interface AppContextType {
   setCurrentLessonId: (id: string | null) => void;
   completeLesson: (lessonId: string) => void;
   applyServerExp: (expEarned: number) => void;
+  syncServerGamification: (payload: { totalExp: number; level: number; currentStreak: number }) => void;
   setUserFromAuth: (userProfile: UserProfileDTO) => void;
   resetSessionState: () => void;
   toggleWeekExpand: (weekId: string) => void;
@@ -100,12 +101,34 @@ export function AppProvider({
     });
   }, []);
 
+  const syncServerGamification = useCallback((payload: { totalExp: number; level: number; currentStreak: number }) => {
+    setUser(prev => {
+      const safeLevel = Math.max(1, payload.level || 1);
+      const safeTotalExp = Math.max(0, payload.totalExp || 0);
+      const levelBaseExp = (safeLevel - 1) * 1000;
+      const expIntoLevel = Math.max(0, safeTotalExp - levelBaseExp) % 1000;
+
+      return {
+        ...prev,
+        level: safeLevel,
+        exp: expIntoLevel,
+        expToNextLevel: 1000,
+        streak: Math.max(0, payload.currentStreak || 0),
+      };
+    });
+  }, []);
+
   const setUserFromAuth = useCallback((userProfile: UserProfileDTO) => {
+    const safeLevel = Math.max(1, userProfile.level || 1);
+    const levelBaseExp = (safeLevel - 1) * 1000;
+    const expIntoLevel = Math.max(0, userProfile.total_exp - levelBaseExp) % 1000;
+
     setUser(prev => ({
       ...prev,
       name: userProfile.display_name,
-      level: userProfile.level,
-      exp: userProfile.total_exp,
+      level: safeLevel,
+      exp: expIntoLevel,
+      expToNextLevel: 1000,
     }));
   }, []);
 
@@ -181,7 +204,7 @@ export function AppProvider({
       user, roadmap, currentGoal, activityData, completedLessons,
       currentLessonId, setRoadmap, setCurrentGoal, setCurrentLessonId,
       completeLesson, toggleWeekExpand, deleteWeek, deleteLesson,
-      applyServerExp, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
+      applyServerExp, syncServerGamification, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
     }}>
       {children}
     </AppContext.Provider>

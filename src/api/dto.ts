@@ -163,8 +163,11 @@ export interface QuizSubmitResponseDTO {
 
 export interface LessonCompleteResponseDTO {
   lesson_id: number;
-  exp_earned: number;
+  exp_gained: number;
+  streak_bonus_exp: number;
   total_exp: number;
+  level: number;
+  current_streak: number;
   already_completed: boolean;
   message: string;
 }

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import Date, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,8 +14,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    exp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_exp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_study_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

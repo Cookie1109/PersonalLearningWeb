@@ -14,8 +14,10 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models import ExpLedger, Lesson, Roadmap, User
 from app.schemas import LessonCompleteResponseDTO, LessonDetailDTO
+from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
 
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
+STREAK_BONUS_REWARD_TYPE = "streak_bonus"
 logger = logging.getLogger("app.lesson")
 YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
@@ -482,10 +484,17 @@ def complete_lesson_for_user(
                 lesson.completed_at = datetime.now(UTC)
                 db.commit()
 
+            total_exp = get_total_exp(locked_user)
+            current_streak = get_current_streak(locked_user)
+            level = (total_exp // 1000) + 1
+
             return LessonCompleteResponseDTO(
                 lesson_id=lesson_id,
-                exp_earned=0,
-                total_exp=locked_user.total_exp,
+                exp_gained=0,
+                streak_bonus_exp=0,
+                total_exp=total_exp,
+                level=level,
+                current_streak=current_streak,
                 already_completed=True,
                 message="Lesson already completed",
             )
@@ -493,26 +502,50 @@ def complete_lesson_for_user(
         lesson.is_completed = True
         lesson.completed_at = datetime.now(UTC)
 
+        streak_bonus_exp = update_study_streak(locked_user)
+        exp_gained = add_exp_and_check_level(locked_user, reward_exp)
+
         reward_entry = ExpLedger(
             user_id=user_id,
             lesson_id=lesson_id,
             quiz_id=None,
             reward_type=LESSON_COMPLETE_REWARD_TYPE,
-            exp_amount=reward_exp,
+            exp_amount=exp_gained,
             metadata_json={"source": LESSON_COMPLETE_REWARD_TYPE},
         )
 
-        locked_user.total_exp += reward_exp
         db.add(reward_entry)
+
+        if streak_bonus_exp > 0:
+            add_exp_and_check_level(locked_user, streak_bonus_exp)
+            streak_reward_entry = ExpLedger(
+                user_id=user_id,
+                lesson_id=lesson_id,
+                quiz_id=None,
+                reward_type=STREAK_BONUS_REWARD_TYPE,
+                exp_amount=streak_bonus_exp,
+                metadata_json={
+                    "source": STREAK_BONUS_REWARD_TYPE,
+                    "streak": locked_user.current_streak,
+                },
+            )
+            db.add(streak_reward_entry)
+
         db.commit()
         db.refresh(locked_user)
 
+        total_exp = get_total_exp(locked_user)
+        current_streak = get_current_streak(locked_user)
+
         return LessonCompleteResponseDTO(
             lesson_id=lesson_id,
-            exp_earned=reward_exp,
-            total_exp=locked_user.total_exp,
+            exp_gained=exp_gained,
+            streak_bonus_exp=streak_bonus_exp,
+            total_exp=total_exp,
+            level=locked_user.level,
+            current_streak=current_streak,
             already_completed=False,
-            message="Lesson completed",
+            message="Thanh cong",
         )
     except AppException:
         db.rollback()

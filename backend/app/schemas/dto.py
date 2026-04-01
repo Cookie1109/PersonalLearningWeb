@@ -61,8 +61,11 @@ class GenericStatusDTO(BaseModel):
 
 class LessonCompleteResponseDTO(BaseModel):
     lesson_id: int
-    exp_earned: int = Field(..., ge=0)
+    exp_gained: int = Field(..., ge=0)
+    streak_bonus_exp: int = Field(default=0, ge=0)
     total_exp: int = Field(..., ge=0)
+    level: int = Field(..., ge=1)
+    current_streak: int = Field(..., ge=0)
     already_completed: bool
     message: str
 

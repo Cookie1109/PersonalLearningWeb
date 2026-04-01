@@ -93,7 +93,8 @@ def complete_lesson(
             resource_id=str(lesson_id),
             details={
                 "already_completed": payload.get("already_completed", True),
-                "exp_earned": payload.get("exp_earned", 0),
+                "exp_gained": payload.get("exp_gained", 0),
+                "streak_bonus_exp": payload.get("streak_bonus_exp", 0),
                 "request_id": getattr(request.state, "request_id", None),
                 "idempotency_replay": True,
             },
@@ -127,7 +128,8 @@ def complete_lesson(
         resource_id=str(lesson_id),
         details={
             "already_completed": result.already_completed,
-            "exp_earned": result.exp_earned,
+            "exp_gained": result.exp_gained,
+            "streak_bonus_exp": result.streak_bonus_exp,
             "request_id": getattr(request.state, "request_id", None),
             "idempotency_replay": False,
         },
