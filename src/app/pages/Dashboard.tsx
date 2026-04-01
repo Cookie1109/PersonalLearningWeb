@@ -1,27 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import {
   BookOpen, Flame, Trophy, Zap, Target, ChevronRight,
   TrendingUp, Clock, Star, Play, CheckCircle2, Brain,
-  Send, Sparkles, BookOpen as TheoryIcon, Hammer, Rocket,
-  Plus, X
+  Send, Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import ProgressHeatmap from '../components/ProgressHeatmap';
-import { Lesson } from '../lib/types';
 
 const EXP_REWARDS = [
   { icon: BookOpen, label: 'Hoàn thành bài học', exp: '+50 EXP', color: 'text-violet-400', bg: 'bg-violet-500/10' },
   { icon: Brain, label: 'Làm đúng Quiz', exp: '+30 EXP', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
   { icon: Flame, label: 'Duy trì Streak', exp: '+20 EXP', color: 'text-orange-400', bg: 'bg-orange-500/10' },
   { icon: Trophy, label: 'Hoàn thành tuần', exp: '+200 EXP', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-];
-
-const TYPE_OPTIONS: { type: Lesson['type']; label: string; icon: React.ElementType; color: string; bg: string }[] = [
-  { type: 'theory', label: 'Lý thuyết', icon: TheoryIcon, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-  { type: 'practice', label: 'Thực hành', icon: Hammer, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  { type: 'project', label: 'Dự án', icon: Rocket, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
 ];
 
 const QUICK_SUGGESTIONS = [
@@ -33,25 +25,15 @@ const QUICK_SUGGESTIONS = [
 ];
 
 function QuickAddLesson() {
-  const { addCustomLesson } = useApp();
+  const navigate = useNavigate();
   const [value, setValue] = useState('');
-  const [selectedType, setSelectedType] = useState<Lesson['type']>('theory');
-  const [showTypePicker, setShowTypePicker] = useState(false);
-  const [added, setAdded] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleAdd = (title?: string) => {
     const t = (title ?? value).trim();
     if (!t) return;
-    addCustomLesson(t, selectedType);
-    setAdded(t);
-    setValue('');
-    setTimeout(() => setAdded(null), 2800);
-    inputRef.current?.focus();
+    navigate(`/roadmap-generator?goal=${encodeURIComponent(t)}`);
   };
-
-  const currentType = TYPE_OPTIONS.find(o => o.type === selectedType)!;
-  const TypeIcon = currentType.icon;
 
   return (
     <motion.div
@@ -61,59 +43,25 @@ function QuickAddLesson() {
       className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
     >
       {/* Label */}
-      <div className="flex items-center gap-2 mb-3">
-        <Plus size={14} className="text-violet-400" />
-        <p className="text-xs text-zinc-500" style={{ fontWeight: 500 }}>Thêm bài học mới vào danh sách của bạn</p>
-      </div>
+      <p className="text-xs text-zinc-500 mb-3" style={{ fontWeight: 500 }}>
+        Nhap muc tieu va nhan Enter de chuyen sang trang tao lo trinh AI
+      </p>
 
       {/* Input row */}
       <div className="flex gap-2">
-        {/* Type selector */}
-        <div className="relative">
-          <button
-            onClick={() => setShowTypePicker(p => !p)}
-            className={`h-10 flex items-center gap-1.5 px-3 rounded-xl border text-xs transition-colors ${currentType.bg} ${currentType.color}`}
-            style={{ fontWeight: 600 }}
-          >
-            <TypeIcon size={13} />
-            <span className="hidden sm:inline">{currentType.label}</span>
-          </button>
-          <AnimatePresence>
-            {showTypePicker && (
-              <motion.div
-                initial={{ opacity: 0, y: 4, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                transition={{ duration: 0.15 }}
-                className="absolute top-12 left-0 z-30 bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden shadow-xl min-w-36"
-              >
-                {TYPE_OPTIONS.map(opt => {
-                  const Icon = opt.icon;
-                  return (
-                    <button
-                      key={opt.type}
-                      onClick={() => { setSelectedType(opt.type); setShowTypePicker(false); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-zinc-800 transition-colors ${opt.color} ${selectedType === opt.type ? 'bg-zinc-800' : ''}`}
-                    >
-                      <Icon size={13} />
-                      <span style={{ fontWeight: selectedType === opt.type ? 600 : 400 }}>{opt.label}</span>
-                      {selectedType === opt.type && <CheckCircle2 size={12} className="ml-auto opacity-70" />}
-                    </button>
-                  );
-                })}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
         {/* Text input */}
         <div className="flex-1 flex items-center bg-zinc-800 border border-zinc-700 rounded-xl focus-within:border-violet-500/50 transition-colors overflow-hidden">
           <input
             ref={inputRef}
             value={value}
             onChange={e => setValue(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="Bạn muốn học gì? Nhấn Enter để thêm..."
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAdd();
+              }
+            }}
+            placeholder="Ban muon hoc gi? Nhan Enter de tao lo trinh..."
             className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 px-4 py-2.5 outline-none"
           />
           <button
@@ -125,28 +73,6 @@ function QuickAddLesson() {
           </button>
         </div>
       </div>
-
-      {/* Success toast */}
-      <AnimatePresence>
-        {added && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginTop: 10 }}
-            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
-              <p className="text-xs text-emerald-400" style={{ fontWeight: 500 }}>
-                Đã thêm: <span className="text-emerald-300">"{added}"</span>
-              </p>
-              <button onClick={() => setAdded(null)} className="ml-auto">
-                <X size={12} className="text-emerald-600 hover:text-emerald-400" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Quick suggestions */}
       <div className="mt-3 flex flex-wrap gap-1.5">

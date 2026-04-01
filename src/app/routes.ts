@@ -24,6 +24,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: 'roadmap', Component: RoadmapGenerator },
+      { path: 'roadmap-generator', Component: RoadmapGenerator },
       { path: 'lessons', Component: LessonsPage },
       { path: 'learn', Component: LearningWorkspace },
       { path: 'learn/:lessonId', Component: LearningWorkspace },

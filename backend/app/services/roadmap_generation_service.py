@@ -32,6 +32,10 @@ def build_roadmap_prompt(goal: str) -> str:
         "[{\"week\": 1, \"title\": \"...\", \"lessons\": [\"...\", \"...\"]}]. "
         "Rules: include at least 4 weeks, each week must have at least 2 lessons, "
         "lesson titles must be short and practical, no markdown, no prose outside JSON. "
+        "TUYET DOI KHONG lap lai cau noi cua nguoi dung trong ten bai hoc. "
+        "Ten bai hoc phai la mot ky nang, khai niem hoac buoc thuc hanh cu the trong nganh do. "
+        "Vi du: neu nguoi dung muon 'hoc nau an', bai hoc phai la 'Ky nang thai hanh tay', "
+        "KHONG DUOC dat la 'Tong quan hoc nau an'. "
         f"Learning goal: {goal.strip()}"
     )
 
