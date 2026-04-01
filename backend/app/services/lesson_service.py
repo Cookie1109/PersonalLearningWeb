@@ -19,6 +19,47 @@ LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
 logger = logging.getLogger("app.lesson")
 YOUTUBE_SEARCH_ENDPOINT = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
+INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
+
+
+def _normalize_model_name(raw_model: str) -> str:
+    model = (raw_model or "").strip()
+    if model.startswith("models/"):
+        model = model.split("/", 1)[1]
+
+    legacy_map = {
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
+    }
+    return legacy_map.get(model, model)
+
+
+def _collapse_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def build_youtube_search_query(*, lesson: Lesson) -> str:
+    lesson_title = _collapse_whitespace((lesson.title or "").strip())
+    if lesson_title:
+        return lesson_title[:300]
+    return "bai hoc"
+
+
+def _build_lesson_model_candidates(settings) -> list[str]:
+    configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-1.5-pro"
+    configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
+
+    candidates: list[str] = []
+    for candidate in (
+        configured_pro_model,
+        _normalize_model_name(configured_pro_model),
+        configured_flash_model,
+        _normalize_model_name(configured_flash_model),
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    return candidates
 
 
 def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap) -> LessonDetailDTO:
@@ -65,6 +106,9 @@ def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
         "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
         "Hay viet bai giang chi tiet bang Markdown, de hieu, co vi du thuc te theo dung nganh cua chu de, va co phan tom tat cuoi bai. "
         "Can giu cau truc ro rang voi tieu de, bullet points va huong dan tung buoc khi can. "
+        "Bat buoc tao day du cac muc: 1) Muc tieu bai hoc, 2) Boi canh/nen tang, 3) Kien thuc cot loi, "
+        "4) Phan tich chi tiet, 5) Vi du thuc te, 6) Bai tap tu luyen, 7) Tong ket. "
+        "Khong duoc dung giua cau, giua muc, hoac ket thuc bang tieu de dang do. "
         f"Bai hoc: '{lesson.title}'. "
         f"Bai hoc nay thuoc Tuan {lesson.week_number} cua Khoa hoc '{roadmap_title}'. "
         "Tra ve duy nhat noi dung Markdown, khong them giai thich ngoai le."
@@ -99,6 +143,59 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+
+    candidate = candidates[0]
+    if not isinstance(candidate, dict):
+        return None
+
+    reason = candidate.get("finishReason")
+    return reason if isinstance(reason, str) else None
+
+
+def _is_markdown_truncated(markdown: str, *, finish_reason: str | None) -> bool:
+    content = markdown.strip()
+    if not content:
+        return True
+
+    if finish_reason == "MAX_TOKENS":
+        return True
+
+    if content.count("```") % 2 == 1:
+        return True
+
+    lines = [line.rstrip() for line in content.splitlines() if line.strip()]
+    if not lines:
+        return True
+
+    last_line = lines[-1]
+    if INCOMPLETE_TRAILING_PATTERN.search(last_line):
+        return True
+
+    if re.match(r"^#{1,6}\s*$", last_line):
+        return True
+
+    if re.match(r"^\d+\.\s+\S{1,6}$", last_line):
+        return True
+
+    return False
+
+
+def _build_continuation_prompt(*, original_prompt: str, partial_markdown: str) -> str:
+    return (
+        "Noi dung bai hoc sau dang bi cat giua chung. "
+        "Hay viet tiep noi dung con thieu, KHONG lap lai phan da viet, giu dung phong cach va so muc hien tai. "
+        "Bat buoc ket thuc tron ven bang muc Tong ket.\n\n"
+        "[Yeu cau ban dau]\n"
+        f"{original_prompt}\n\n"
+        "[Noi dung da co]\n"
+        f"{partial_markdown[-8000:]}"
+    )
+
+
 def generate_lesson_markdown(*, prompt: str) -> str:
     settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
@@ -109,8 +206,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
             detail={"code": "LLM_API_KEY_MISSING"},
         )
 
-    model_name = settings.gemini_pro_model.strip() or "gemini-1.5-pro"
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    model_candidates = _build_lesson_model_candidates(settings)
     timeout_seconds = max(120.0, float(settings.gemini_timeout_seconds))
 
     payload = {
@@ -122,86 +218,146 @@ def generate_lesson_markdown(*, prompt: str) -> str:
         ],
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 4096,
+            "maxOutputTokens": 6144,
         },
     }
 
-    try:
-        with httpx.Client(timeout=timeout_seconds) as client:
-            response = client.post(endpoint, params={"key": api_key}, json=payload)
-    except httpx.TimeoutException as exc:
-        logger.exception(
-            "lesson.llm_timeout model=%s timeout_seconds=%.1f error=%s",
-            model_name,
-            timeout_seconds,
-            str(exc),
-        )
-        raise AppException(status_code=503, message="AI service timeout", detail={"code": "LLM_TIMEOUT"}) from exc
-    except httpx.RequestError as exc:
-        logger.exception(
-            "lesson.llm_network_error model=%s endpoint=%s error=%s",
-            model_name,
-            endpoint,
-            str(exc),
-        )
-        raise AppException(
-            status_code=503,
-            message="AI service network error",
-            detail={"code": "LLM_NETWORK_ERROR"},
-        ) from exc
+    with httpx.Client(timeout=timeout_seconds) as client:
+        for index, model_name in enumerate(model_candidates):
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            has_fallback = index < len(model_candidates) - 1
 
-    if response.status_code in (401, 403):
-        logger.error(
-            "lesson.llm_auth_failed status_code=%s body=%s",
-            response.status_code,
-            getattr(response, "text", "")[:500],
-        )
-        raise AppException(
-            status_code=503,
-            message="AI service authentication failed",
-            detail={"code": "LLM_AUTH_FAILED"},
-        )
+            try:
+                response = client.post(endpoint, params={"key": api_key}, json=payload)
+            except httpx.TimeoutException as exc:
+                logger.exception(
+                    "lesson.llm_timeout model=%s timeout_seconds=%.1f error=%s",
+                    model_name,
+                    timeout_seconds,
+                    str(exc),
+                )
+                if has_fallback:
+                    continue
+                raise AppException(status_code=503, message="AI service timeout", detail={"code": "LLM_TIMEOUT"}) from exc
+            except httpx.RequestError as exc:
+                logger.exception(
+                    "lesson.llm_network_error model=%s endpoint=%s error=%s",
+                    model_name,
+                    endpoint,
+                    str(exc),
+                )
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service network error",
+                    detail={"code": "LLM_NETWORK_ERROR"},
+                ) from exc
 
-    if response.status_code >= 400:
-        logger.error(
-            "lesson.llm_service_error status_code=%s body=%s",
-            response.status_code,
-            getattr(response, "text", "")[:500],
-        )
-        raise AppException(
-            status_code=503,
-            message="AI service unavailable",
-            detail={"code": "LLM_SERVICE_ERROR"},
-        )
+            if response.status_code in (401, 403):
+                logger.error(
+                    "lesson.llm_auth_failed model=%s status_code=%s body=%s",
+                    model_name,
+                    response.status_code,
+                    getattr(response, "text", "")[:500],
+                )
+                raise AppException(
+                    status_code=503,
+                    message="AI service authentication failed",
+                    detail={"code": "LLM_AUTH_FAILED"},
+                )
 
-    try:
-        response_payload = response.json()
-    except ValueError as exc:
-        logger.exception(
-            "lesson.llm_invalid_json status_code=%s body=%s",
-            response.status_code,
-            getattr(response, "text", "")[:500],
-        )
-        raise AppException(
-            status_code=503,
-            message="AI service returned invalid response",
-            detail={"code": "LLM_INVALID_RESPONSE"},
-        ) from exc
+            if response.status_code >= 400:
+                logger.error(
+                    "lesson.llm_service_error model=%s status_code=%s body=%s",
+                    model_name,
+                    response.status_code,
+                    getattr(response, "text", "")[:500],
+                )
+                if has_fallback and response.status_code in (404, 429, 500, 503):
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service unavailable",
+                    detail={"code": "LLM_SERVICE_ERROR"},
+                )
 
-    markdown = _extract_gemini_text(response_payload)
-    if not markdown:
-        logger.error(
-            "lesson.llm_empty_response status_code=%s payload_preview=%s",
-            response.status_code,
-            str(response_payload)[:500],
-        )
-        raise AppException(
-            status_code=503,
-            message="AI service returned empty response",
-            detail={"code": "LLM_EMPTY_RESPONSE"},
-        )
+            try:
+                response_payload = response.json()
+            except ValueError as exc:
+                logger.exception(
+                    "lesson.llm_invalid_json model=%s status_code=%s body=%s",
+                    model_name,
+                    response.status_code,
+                    getattr(response, "text", "")[:500],
+                )
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned invalid response",
+                    detail={"code": "LLM_INVALID_RESPONSE"},
+                ) from exc
 
-    return markdown
+            markdown = _extract_gemini_text(response_payload)
+            if markdown:
+                finish_reason = _extract_finish_reason(response_payload)
+                if _is_markdown_truncated(markdown, finish_reason=finish_reason):
+                    logger.warning(
+                        "lesson.llm_detected_truncation model=%s finish_reason=%s",
+                        model_name,
+                        finish_reason,
+                    )
+                    continuation_payload = {
+                        "contents": [
+                            {
+                                "role": "user",
+                                "parts": [{"text": _build_continuation_prompt(original_prompt=prompt, partial_markdown=markdown)}],
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.35,
+                            "maxOutputTokens": 4096,
+                        },
+                    }
+
+                    try:
+                        continuation_response = client.post(endpoint, params={"key": api_key}, json=continuation_payload)
+                        if continuation_response.status_code < 400:
+                            continuation_json = continuation_response.json()
+                            continuation_text = _extract_gemini_text(continuation_json)
+                            if continuation_text:
+                                markdown = f"{markdown.rstrip()}\n\n{continuation_text.lstrip()}"
+                    except Exception as exc:
+                        logger.warning(
+                            "lesson.llm_continuation_failed model=%s error=%s",
+                            model_name,
+                            str(exc),
+                        )
+
+                if index > 0:
+                    logger.warning("lesson.llm_fallback_success model=%s", model_name)
+                return markdown
+
+            logger.error(
+                "lesson.llm_empty_response model=%s status_code=%s payload_preview=%s",
+                model_name,
+                response.status_code,
+                str(response_payload)[:500],
+            )
+            if has_fallback:
+                continue
+            raise AppException(
+                status_code=503,
+                message="AI service returned empty response",
+                detail={"code": "LLM_EMPTY_RESPONSE"},
+            )
+
+    raise AppException(
+        status_code=503,
+        message="AI service unavailable",
+        detail={"code": "LLM_SERVICE_ERROR"},
+    )
 
 
 def fetch_youtube_video_id(*, query: str) -> str | None:
@@ -217,6 +373,7 @@ def fetch_youtube_video_id(*, query: str) -> str | None:
         "part": "snippet",
         "type": "video",
         "maxResults": 1,
+        "relevanceLanguage": "vi",
         "q": normalized_query,
         "videoEmbeddable": "true",
     }
@@ -256,18 +413,19 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
 
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
     markdown = generate_lesson_markdown(prompt=prompt)
-    roadmap_title = roadmap.title or roadmap.goal
+    youtube_query = build_youtube_search_query(lesson=lesson)
 
     youtube_video_id = lesson.youtube_video_id
     try:
-        searched_video_id = fetch_youtube_video_id(query=f"{lesson.title} {roadmap_title}")
+        searched_video_id = fetch_youtube_video_id(query=youtube_query)
         if searched_video_id:
             youtube_video_id = searched_video_id
     except Exception as exc:
         logger.warning(
-            "lesson.youtube_lookup_failed lesson_id=%s title=%s error=%s",
+            "lesson.youtube_lookup_failed lesson_id=%s title=%s query=%s error=%s",
             lesson.id,
             lesson.title,
+            youtube_query,
             str(exc),
         )
 

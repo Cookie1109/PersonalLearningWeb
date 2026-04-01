@@ -31,12 +31,21 @@ const WELCOME_MESSAGE: ChatMessage = {
 function parseAssistantReply(rawContent: string): Pick<ChatMessage, 'content' | 'rawContent' | 'suggestedRoadmapTopic'> {
   const topic = rawContent.match(ROADMAP_SUGGESTION_REGEX)?.[1]?.trim();
   const cleanedContent = rawContent.replace(ROADMAP_SUGGESTION_REGEX, '').trim();
+  const normalizedContent = normalizeAssistantText(cleanedContent || rawContent);
 
   return {
-    content: cleanedContent || rawContent,
+    content: normalizedContent,
     rawContent,
     suggestedRoadmapTopic: topic || undefined,
   };
+}
+
+function normalizeAssistantText(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.endsWith('```')) return trimmed;
+  if (/[.!?…:;)]$/.test(trimmed)) return trimmed;
+  return `${trimmed}.`;
 }
 
 function TypingIndicator() {

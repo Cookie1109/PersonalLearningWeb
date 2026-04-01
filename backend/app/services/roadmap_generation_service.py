@@ -21,6 +21,18 @@ logger = logging.getLogger("app.roadmap")
 AI_UNAVAILABLE_DETAIL = "Hệ thống AI đang quá tải hoặc lỗi kết nối. Vui lòng thử lại sau."
 
 
+def _normalize_model_name(raw_model: str) -> str:
+    model = (raw_model or "").strip()
+    if model.startswith("models/"):
+        model = model.split("/", 1)[1]
+
+    legacy_map = {
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
+    }
+    return legacy_map.get(model, model)
+
+
 @dataclass
 class GeneratedWeekPlan:
     week: int
@@ -95,7 +107,10 @@ def request_roadmap_from_llm(*, prompt: str) -> str:
         logger.error("roadmap.llm_api_key_missing")
         raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
 
-    model_name = settings.gemini_model.strip() or "gemini-1.5-flash"
+    configured_model = settings.gemini_model.strip() or "gemini-2.5-flash"
+    model_name = _normalize_model_name(configured_model)
+    if model_name != configured_model:
+        logger.warning("roadmap.remap_legacy_model from=%s to=%s", configured_model, model_name)
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     timeout_seconds = max(60.0, float(settings.gemini_timeout_seconds))
 

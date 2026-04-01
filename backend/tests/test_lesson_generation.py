@@ -73,8 +73,8 @@ def test_generate_lesson_persists_markdown(
 ) -> None:
     user, headers = auth_headers
     lesson = _seed_lesson(db_session, user_id=user.id, title="Control Flow")
-
     generated_markdown = "## Control Flow\n\n- if\n- for\n"
+    captured_query: dict[str, str] = {}
 
     import app.services.lesson_service as lesson_service
 
@@ -83,10 +83,15 @@ def test_generate_lesson_persists_markdown(
         "generate_lesson_markdown",
         lambda prompt: generated_markdown,
     )
+
+    def _fake_fetch_youtube_video_id(*, query: str) -> str | None:
+        captured_query["value"] = query
+        return "dQw4w9WgXcQ"
+
     monkeypatch.setattr(
         lesson_service,
         "fetch_youtube_video_id",
-        lambda query: "dQw4w9WgXcQ",
+        _fake_fetch_youtube_video_id,
     )
 
     response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
@@ -97,6 +102,7 @@ def test_generate_lesson_persists_markdown(
     assert payload["lesson"]["is_draft"] is False
     assert payload["lesson"]["content_markdown"] == generated_markdown.strip()
     assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
+    assert captured_query["value"] == "Control Flow"
 
     db_session.refresh(lesson)
     assert lesson.content_markdown == generated_markdown

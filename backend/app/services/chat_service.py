@@ -13,14 +13,27 @@ from app.models import ChatMessage
 
 logger = logging.getLogger("app.chat")
 
+
+def _normalize_model_name(raw_model: str) -> str:
+    model = (raw_model or "").strip()
+    if model.startswith("models/"):
+        model = model.split("/", 1)[1]
+
+    legacy_map = {
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
+    }
+    return legacy_map.get(model, model)
+
 SYSTEM_PROMPT = (
     "Ban la mot Chuyen gia Dao tao Da linh vuc (Polymath) hang dau the gioi. "
     "Ban co kha nang thiet ke lo trinh va giang day BAT KY chu de nao. "
     "TUYET DOI KHONG su dung cac thuat ngu IT/Lap trinh (nhu moi truong code, bien, cu phap...) "
     "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
-    "Tra loi ngan gon, ro rang, uu tien buoc hanh dong cu the, su dung Markdown khi can. "
-    "If the user expresses intent to learn a new topic, end the answer with this exact tag format: "
-    "[SUGGEST_ROADMAP: Topic Name]."
+    "Tra loi ro rang, co cau truc, va LUON ket thuc bang cau tron ven (khong bo do giua chung). "
+    "Neu nguoi dung yeu cau so sanh hoac tu van lua chon, dua ra khuyen nghi cu the va ly do ngan gon. "
+    "If the user expresses intent to learn a new topic, append this exact tag format on a NEW final line only after a complete answer: "
+    "[SUGGEST_ROADMAP: Topic Name]. Never cut the sentence right before this tag."
 )
 
 
@@ -95,7 +108,10 @@ def generate_chat_reply(*, messages: list[dict[str, str]], system_prompt: str = 
             detail={"code": "CHAT_MESSAGE_REQUIRED"},
         )
 
-    model_name = settings.gemini_model.strip() or "gemini-1.5-flash"
+    configured_model = settings.gemini_model.strip() or "gemini-2.5-flash"
+    model_name = _normalize_model_name(configured_model)
+    if model_name != configured_model:
+        logger.warning("chat.remap_legacy_model from=%s to=%s", configured_model, model_name)
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
 
     request_payload = {
@@ -106,7 +122,7 @@ def generate_chat_reply(*, messages: list[dict[str, str]], system_prompt: str = 
         "contents": contents,
         "generationConfig": {
             "temperature": 0.5,
-            "maxOutputTokens": 1024,
+            "maxOutputTokens": 2048,
         },
     }
 
