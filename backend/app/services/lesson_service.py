@@ -77,10 +77,13 @@ def build_youtube_search_query(*, lesson: Lesson) -> str:
     return "bai hoc"
 
 
-def _detect_context_keywords(*, lesson: Lesson, roadmap: Roadmap) -> list[str]:
-    source = _collapse_whitespace(
-        f"{lesson.title or ''} {roadmap.title or ''} {roadmap.goal or ''}"
-    ).lower()
+def _detect_context_keywords(*, lesson: Lesson, roadmap: Roadmap | None) -> list[str]:
+    source_parts = [lesson.title or ""]
+    if roadmap is not None:
+        source_parts.append(roadmap.title or "")
+        source_parts.append(roadmap.goal or "")
+
+    source = _collapse_whitespace(" ".join(source_parts)).lower()
 
     detected: list[str] = []
     for canonical, variants in CONTEXT_KEYWORD_VARIANTS.items():
@@ -96,7 +99,7 @@ def _query_contains_context_keyword(*, query: str, canonical_keyword: str) -> bo
     return any(variant in query_lower for variant in variants)
 
 
-def enrich_youtube_query_with_context(*, query: str, lesson: Lesson, roadmap: Roadmap) -> str:
+def enrich_youtube_query_with_context(*, query: str, lesson: Lesson, roadmap: Roadmap | None) -> str:
     normalized_query = _collapse_whitespace(query)
     if not normalized_query:
         normalized_query = build_youtube_search_query(lesson=lesson)
@@ -201,8 +204,20 @@ def get_lesson_for_generation(*, db: Session, user_id: int, lesson_id: int) -> t
     return lesson, roadmap
 
 
-def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
-    roadmap_title = roadmap.title or roadmap.goal
+def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap | None) -> str:
+    if roadmap is not None and (roadmap.goal or "").strip():
+        roadmap_title = roadmap.title or roadmap.goal
+        roadmap_context = (
+            f"ROADMAP GOAL BAT BUOC: '{roadmap.goal}'. "
+            "Moi noi dung va youtube_search_query phai bam sat dung muc tieu nay, khong lech sang chu de khac. "
+        )
+    else:
+        roadmap_title = "Bai hoc tu do"
+        roadmap_context = (
+            "Khong tim thay roadmap goal cho bai hoc nay. "
+            "Hay bam sat chat che tieu de bai hoc va chi tra noi dung dung pham vi bai hoc hien tai. "
+        )
+
     return (
         "Ban la chuyen gia giao duc da linh vuc. "
         "Hay viet noi dung bai hoc chi tiet bang Markdown, de hieu, dung ngu canh va thuat ngu chuyen nganh cua chu de. "
@@ -223,6 +238,7 @@ def build_lesson_generation_prompt(*, lesson: Lesson, roadmap: Roadmap) -> str:
         "Khong kem bat ky van ban nao khac ngoai JSON. "
         f"Bai hoc: '{lesson.title}'. "
         f"Bai hoc nay thuoc Tuan {lesson.week_number} cua Khoa hoc '{roadmap_title}'. "
+        f"{roadmap_context}"
         "Dam bao content_markdown la markdown thuan, khong bao quanh bang code fence."
     )
 
@@ -568,7 +584,7 @@ def fetch_youtube_video_id(*, query: str) -> str | None:
 
 
 def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: int) -> LessonDetailDTO:
-    lesson, roadmap = get_lesson_for_user(db=db, user_id=user_id, lesson_id=lesson_id)
+    lesson, roadmap = get_lesson_for_generation(db=db, user_id=user_id, lesson_id=lesson_id)
 
     prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
     llm_output = generate_lesson_markdown(prompt=prompt)

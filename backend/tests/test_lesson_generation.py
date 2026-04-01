@@ -217,6 +217,77 @@ def test_generate_lesson_enforces_csharp_context_in_youtube_query(
     assert "lap trinh" in captured_query["value"].lower()
 
 
+def test_build_lesson_generation_prompt_injects_roadmap_goal() -> None:
+    import app.services.lesson_service as lesson_service
+
+    lesson = Lesson(
+        roadmap_id=1,
+        week_number=2,
+        position=1,
+        title="Thuc hien cac phep toan",
+        content_markdown=None,
+        is_completed=False,
+    )
+    roadmap = Roadmap(
+        user_id=1,
+        goal="Toi muon hoc C#",
+        title="Lo trinh C#",
+        is_active=True,
+    )
+
+    prompt = lesson_service.build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
+
+    assert "ROADMAP GOAL BAT BUOC: 'Toi muon hoc C#'." in prompt
+    assert "Bai hoc nay thuoc Tuan 2 cua Khoa hoc 'Lo trinh C#'." in prompt
+
+
+def test_generate_lesson_still_parses_json_when_roadmap_context_missing(
+    client,
+    db_session: Session,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    user, headers = auth_headers
+    lesson = _seed_lesson(db_session, user_id=user.id, title="Food Safety Basics")
+    captured_prompt: dict[str, str] = {}
+    captured_query: dict[str, str] = {}
+
+    import app.services.lesson_service as lesson_service
+
+    original_get_lesson_for_generation = lesson_service.get_lesson_for_generation
+
+    def _fake_get_lesson_for_generation(*, db: Session, user_id: int, lesson_id: int):
+        selected_lesson, _ = original_get_lesson_for_generation(db=db, user_id=user_id, lesson_id=lesson_id)
+        return selected_lesson, None
+
+    def _fake_generate_lesson_markdown(prompt: str) -> str:
+        captured_prompt["value"] = prompt
+        return (
+            '{"content_markdown":"## Food Safety\\n\\n- Keep clean", '
+            '"youtube_search_query":"food safety basics"}'
+        )
+
+    def _fake_fetch_youtube_video_id(*, query: str) -> str | None:
+        captured_query["value"] = query
+        return "dQw4w9WgXcQ"
+
+    monkeypatch.setattr(lesson_service, "get_lesson_for_generation", _fake_get_lesson_for_generation)
+    monkeypatch.setattr(lesson_service, "generate_lesson_markdown", _fake_generate_lesson_markdown)
+    monkeypatch.setattr(lesson_service, "fetch_youtube_video_id", _fake_fetch_youtube_video_id)
+
+    response = client.post(f"/api/lessons/{lesson.id}/generate", json={}, headers=headers)
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["lesson"]["id"] == lesson.id
+    assert payload["lesson"]["content_markdown"] == "## Food Safety\n\n- Keep clean"
+    assert payload["lesson"]["youtube_video_id"] == "dQw4w9WgXcQ"
+    assert payload["lesson"]["roadmap_id"] == lesson.roadmap_id
+    assert payload["lesson"]["roadmap_title"] == "Bai hoc tu do"
+    assert "Khong tim thay roadmap goal cho bai hoc nay." in captured_prompt["value"]
+    assert captured_query["value"] == "food safety basics"
+
+
 def test_fetch_youtube_video_id_uses_medium_duration_filter(monkeypatch) -> None:
     import app.services.lesson_service as lesson_service
 
