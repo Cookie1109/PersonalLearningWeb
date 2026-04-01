@@ -109,7 +109,7 @@ def generate_lesson_markdown(*, prompt: str) -> str:
             detail={"code": "LLM_API_KEY_MISSING"},
         )
 
-    model_name = settings.gemini_pro_model.strip() or "gemini-2.5-pro"
+    model_name = settings.gemini_pro_model.strip() or "gemini-1.5-pro"
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
     timeout_seconds = max(120.0, float(settings.gemini_timeout_seconds))
 

@@ -4,15 +4,21 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
+
+import httpx
+from fastapi import HTTPException
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models import Lesson, Roadmap
 from app.schemas import LessonDTO, RoadmapGenerateResponseDTO, WeekModuleDTO
 
 logger = logging.getLogger("app.roadmap")
+AI_UNAVAILABLE_DETAIL = "Hệ thống AI đang quá tải hoặc lỗi kết nối. Vui lòng thử lại sau."
 
 
 @dataclass
@@ -40,65 +46,122 @@ def build_roadmap_prompt(goal: str) -> str:
     )
 
 
-def _mock_llm_response(goal: str) -> str:
-    topic = goal.strip()
-    weeks = [
-        {
-            "week": 1,
-            "title": f"Nen tang va dinh huong ve {topic}",
-            "lessons": [
-                f"Tong quan {topic}",
-                f"Khai niem cot loi trong {topic}",
-                "Muc tieu hoc tap va cach theo doi tien do",
-            ],
+def _extract_gemini_text(payload: dict[str, Any]) -> str:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return ""
+
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
+        return ""
+
+    content = first_candidate.get("content")
+    if not isinstance(content, dict):
+        return ""
+
+    parts = content.get("parts")
+    if not isinstance(parts, list):
+        return ""
+
+    chunks: list[str] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        text = part.get("text")
+        if isinstance(text, str) and text.strip():
+            chunks.append(text.strip())
+
+    return "\n\n".join(chunks).strip()
+
+
+def _extract_json_array_text(raw_text: str) -> str:
+    stripped = raw_text.strip()
+    if not stripped:
+        return stripped
+
+    if "```" in stripped:
+        fence_start = stripped.find("[")
+        fence_end = stripped.rfind("]")
+        if fence_start != -1 and fence_end != -1 and fence_end > fence_start:
+            return stripped[fence_start : fence_end + 1].strip()
+
+    return stripped
+
+
+def request_roadmap_from_llm(*, prompt: str) -> str:
+    settings = get_settings()
+    api_key = (settings.gemini_api_key or "").strip()
+    if not api_key:
+        logger.error("roadmap.llm_api_key_missing")
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+
+    model_name = settings.gemini_model.strip() or "gemini-1.5-flash"
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    timeout_seconds = max(60.0, float(settings.gemini_timeout_seconds))
+
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 4096,
         },
-        {
-            "week": 2,
-            "title": "Kien thuc cot loi",
-            "lessons": [
-                f"Nguyen ly quan trong cua {topic}",
-                "Ky nang phan tich va ra quyet dinh theo tinh huong",
-                "Bai tap ung dung co huong dan",
-            ],
-        },
-        {
-            "week": 3,
-            "title": "Luyen tap va ung dung",
-            "lessons": [
-                "Mo phong tinh huong thuc te",
-                "Thuc hanh theo buoc voi phan hoi",
-                "Tu danh gia diem manh va diem can cai thien",
-            ],
-        },
-        {
-            "week": 4,
-            "title": "Tong ket va nang cao",
-            "lessons": [
-                "On tap theo chu de",
-                "Bai tap tong hop hoac de an nho",
-                "Danh gia ket qua va huong phat trien tiep",
-            ],
-        },
-    ]
-    return json.dumps(weeks, ensure_ascii=False)
+    }
+
+    try:
+        with httpx.Client(timeout=timeout_seconds) as client:
+            response = client.post(endpoint, params={"key": api_key}, json=payload)
+    except httpx.TimeoutException:
+        logger.exception(
+            "roadmap.llm_timeout model=%s timeout_seconds=%.1f",
+            model_name,
+            timeout_seconds,
+        )
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+    except httpx.RequestError:
+        logger.exception("roadmap.llm_network_error model=%s endpoint=%s", model_name, endpoint)
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+
+    if response.status_code >= 400:
+        logger.error(
+            "roadmap.llm_http_error status_code=%s body=%s",
+            response.status_code,
+            getattr(response, "text", "")[:500],
+        )
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+
+    try:
+        response_payload = response.json()
+    except ValueError:
+        logger.exception(
+            "roadmap.llm_invalid_json_response status_code=%s body=%s",
+            response.status_code,
+            getattr(response, "text", "")[:500],
+        )
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+
+    roadmap_text = _extract_gemini_text(response_payload)
+    if not roadmap_text:
+        logger.error("roadmap.llm_empty_response payload_preview=%s", str(response_payload)[:500])
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
+
+    return _extract_json_array_text(roadmap_text)
 
 
 def _parse_week_plans(raw_llm_json: str) -> list[GeneratedWeekPlan]:
     try:
         payload = json.loads(raw_llm_json)
-    except json.JSONDecodeError as exc:
-        raise AppException(
-            status_code=503,
-            message="Roadmap generator returned invalid format",
-            detail={"code": "ROADMAP_GENERATOR_INVALID_JSON"},
-        ) from exc
+    except json.JSONDecodeError:
+        logger.exception("roadmap.invalid_json_from_llm raw_preview=%s", raw_llm_json[:500])
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
 
     if not isinstance(payload, list) or not payload:
-        raise AppException(
-            status_code=503,
-            message="Roadmap generator returned empty roadmap",
-            detail={"code": "ROADMAP_GENERATOR_EMPTY"},
-        )
+        logger.error("roadmap.empty_or_invalid_payload payload_type=%s", type(payload).__name__)
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
 
     week_plans: list[GeneratedWeekPlan] = []
     for index, item in enumerate(payload, start=1):
@@ -127,11 +190,8 @@ def _parse_week_plans(raw_llm_json: str) -> list[GeneratedWeekPlan]:
         week_plans.append(GeneratedWeekPlan(week=week_no, title=week_title[:255], lessons=lessons))
 
     if not week_plans:
-        raise AppException(
-            status_code=503,
-            message="Roadmap generator produced no valid weeks",
-            detail={"code": "ROADMAP_GENERATOR_NO_VALID_WEEK"},
-        )
+        logger.error("roadmap.no_valid_week_payload raw_preview=%s", raw_llm_json[:500])
+        raise HTTPException(status_code=503, detail=AI_UNAVAILABLE_DETAIL)
 
     return week_plans
 
@@ -156,7 +216,7 @@ def generate_and_store_roadmap(*, db: Session, user_id: int, goal: str) -> Roadm
     prompt = build_roadmap_prompt(goal)
     logger.info("roadmap.prompt_created", extra={"prompt_length": len(prompt)})
 
-    raw_llm_json = _mock_llm_response(goal)
+    raw_llm_json = request_roadmap_from_llm(prompt=prompt)
     week_plans = _parse_week_plans(raw_llm_json)
 
     try:

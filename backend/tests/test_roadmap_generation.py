@@ -38,7 +38,7 @@ def test_generate_roadmap_creates_draft_lessons_from_mocked_llm(
     )
 
     with patch(
-        "app.services.roadmap_generation_service._mock_llm_response",
+        "app.services.roadmap_generation_service.request_roadmap_from_llm",
         return_value=mocked_llm_output,
     ):
         response = client.post(
