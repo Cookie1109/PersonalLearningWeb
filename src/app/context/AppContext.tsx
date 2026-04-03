@@ -25,6 +25,7 @@ interface AppContextType {
   completeLesson: (lessonId: string) => void;
   applyServerExp: (expEarned: number) => void;
   syncServerGamification: (payload: { totalExp: number; level: number; currentStreak: number }) => void;
+  syncActivityData: (activity: ActivityDay[]) => void;
   setUserFromAuth: (userProfile: UserProfileDTO) => void;
   resetSessionState: () => void;
   toggleWeekExpand: (weekId: string) => void;
@@ -54,11 +55,35 @@ export function AppProvider({
   const [user, setUser] = useState<UserStats>(initialUserStats);
   const [roadmap, setRoadmapState] = useState<WeekModule[]>(initialRoadmap);
   const [currentGoal, setCurrentGoal] = useState(initialGoal);
-  const [activityData] = useState<ActivityDay[]>(initialActivityData);
+  const [activityData, setActivityData] = useState<ActivityDay[]>(initialActivityData);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(
     new Set(initialRoadmap.flatMap(w => w.lessons.filter(l => l.completed).map(l => l.id)))
   );
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
+
+  const getActiveDaysCount = useCallback((items: ActivityDay[]) => items.filter(day => day.count > 0).length, []);
+
+  const recordActivityToday = useCallback((increment: number = 1) => {
+    if (increment <= 0) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    setActivityData(prev => {
+      let found = false;
+      const next = prev.map(day => {
+        if (day.date !== today) return day;
+        found = true;
+        return { ...day, count: day.count + increment };
+      });
+
+      if (!found) {
+        next.push({ date: today, count: increment });
+      }
+
+      const totalDays = getActiveDaysCount(next);
+      setUser(prevUser => ({ ...prevUser, totalDays }));
+      return next;
+    });
+  }, [getActiveDaysCount]);
 
   const setRoadmap = useCallback((newRoadmap: WeekModule[]) => {
     setRoadmapState(newRoadmap);
@@ -89,6 +114,8 @@ export function AppProvider({
   const applyServerExp = useCallback((expEarned: number) => {
     if (expEarned <= 0) return;
 
+    recordActivityToday(1);
+
     setUser(prev => {
       const newExp = prev.exp + expEarned;
       const levelUp = newExp >= prev.expToNextLevel;
@@ -99,7 +126,7 @@ export function AppProvider({
         expToNextLevel: levelUp ? prev.expToNextLevel + 1000 : prev.expToNextLevel,
       };
     });
-  }, []);
+  }, [recordActivityToday]);
 
   const syncServerGamification = useCallback((payload: { totalExp: number; level: number; currentStreak: number }) => {
     setUser(prev => {
@@ -118,6 +145,21 @@ export function AppProvider({
     });
   }, []);
 
+  const syncActivityData = useCallback((activity: ActivityDay[]) => {
+    const normalized = activity
+      .filter(day => Boolean(day.date))
+      .map(day => ({
+        date: day.date,
+        count: Math.max(0, day.count || 0),
+      }));
+
+    setActivityData(normalized);
+    setUser(prev => ({
+      ...prev,
+      totalDays: getActiveDaysCount(normalized),
+    }));
+  }, [getActiveDaysCount]);
+
   const setUserFromAuth = useCallback((userProfile: UserProfileDTO) => {
     const safeLevel = Math.max(1, userProfile.level || 1);
     const levelBaseExp = (safeLevel - 1) * 1000;
@@ -129,6 +171,8 @@ export function AppProvider({
       level: safeLevel,
       exp: expIntoLevel,
       expToNextLevel: 1000,
+      streak: Math.max(0, userProfile.current_streak ?? prev.streak),
+      totalDays: Math.max(0, userProfile.total_study_days ?? prev.totalDays),
     }));
   }, []);
 
@@ -162,6 +206,7 @@ export function AppProvider({
     setUser(DEFAULT_USER_STATS);
     setRoadmapState([]);
     setCurrentGoal('');
+    setActivityData([]);
     setCompletedLessons(new Set());
     setCurrentLessonId(null);
   }, []);
@@ -204,7 +249,7 @@ export function AppProvider({
       user, roadmap, currentGoal, activityData, completedLessons,
       currentLessonId, setRoadmap, setCurrentGoal, setCurrentLessonId,
       completeLesson, toggleWeekExpand, deleteWeek, deleteLesson,
-      applyServerExp, syncServerGamification, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
+      applyServerExp, syncServerGamification, syncActivityData, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
     }}>
       {children}
     </AppContext.Provider>

@@ -26,6 +26,13 @@ export interface UserProfileDTO {
   display_name: string;
   level: number;
   total_exp: number;
+  current_streak?: number;
+  total_study_days?: number;
+}
+
+export interface ActivityDayDTO {
+  date: string;
+  count: number;
 }
 
 export interface LoginResponseDTO {

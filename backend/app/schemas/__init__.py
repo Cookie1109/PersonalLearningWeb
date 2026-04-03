@@ -1,4 +1,5 @@
 from .dto import (
+    ActivityDayDTO,
     ChatHistoryMessageDTO,
     ChatRequestDTO,
     ChatResponseDTO,
@@ -35,6 +36,7 @@ from .dto import (
 )
 
 __all__ = [
+    "ActivityDayDTO",
     "ChatHistoryMessageDTO",
     "ChatRequestDTO",
     "ChatResponseDTO",

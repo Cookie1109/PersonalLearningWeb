@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import {
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import ProgressHeatmap from '../components/ProgressHeatmap';
+import { fetchMyActivity } from '../../api/auth';
 
 const EXP_REWARDS = [
   { icon: BookOpen, label: 'Hoàn thành bài học', exp: '+50 EXP', color: 'text-violet-400', bg: 'bg-violet-500/10' },
@@ -92,8 +93,27 @@ function QuickAddLesson() {
 }
 
 export default function Dashboard() {
-  const { user, roadmap, activityData } = useApp();
+  const { user, roadmap, activityData, syncActivityData } = useApp();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadActivity = async () => {
+      try {
+        const activity = await fetchMyActivity();
+        if (!isMounted) return;
+        syncActivityData(activity);
+      } catch {
+        // Keep UI responsive with current local state if activity API is unavailable.
+      }
+    };
+
+    void loadActivity();
+    return () => {
+      isMounted = false;
+    };
+  }, [syncActivityData]);
 
   const allLessons = roadmap.flatMap(w => w.lessons);
   const completedLessons = allLessons.filter(l => l.completed).length;
@@ -143,11 +163,9 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Stats row */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           { icon: Flame, label: 'Streak', value: `${user.streak} ngày`, sub: 'Chuỗi học liên tục', bg: 'bg-orange-500/10', border: 'border-orange-500/20', iconColor: 'text-orange-400' },
-          { icon: Zap, label: 'EXP', value: `${user.exp.toLocaleString()}`, sub: `Cấp ${user.level} · ${expProgress}% → Cấp ${user.level + 1}`, bg: 'bg-violet-500/10', border: 'border-violet-500/20', iconColor: 'text-violet-400' },
-          { icon: CheckCircle2, label: 'Bài học', value: `${completedLessons}/${totalLessons}`, sub: `${overallProgress}% hoàn thành`, bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', iconColor: 'text-emerald-400' },
           { icon: Clock, label: 'Thời gian', value: `${user.totalDays} ngày`, sub: 'Tổng ngày học tập', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', iconColor: 'text-cyan-400' },
         ].map(({ icon: Icon, label, value, sub, bg, border, iconColor }) => (
           <div key={label} className={`${bg} border ${border} rounded-2xl p-5`}>

@@ -1,11 +1,13 @@
 import { apiClient, clearClientAuthState, getAccessToken, setAccessToken } from './client';
 import {
+  ActivityDayDTO,
   GenericStatusDTO,
   LoginRequestDTO,
   LoginResponseDTO,
   LogoutRequestDTO,
   RegisterRequestDTO,
   RegisterResponseDTO,
+  UserProfileDTO,
 } from './dto';
 
 export async function login(payload: LoginRequestDTO): Promise<LoginResponseDTO> {
@@ -31,4 +33,20 @@ export async function logout(payload: LogoutRequestDTO = { revoke_all_devices: f
   } finally {
     clearClientAuthState();
   }
+}
+
+export async function getMyProfile(): Promise<UserProfileDTO> {
+  const token = getAccessToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const response = await apiClient.get<UserProfileDTO>('/auth/me', { headers });
+  return response.data;
+}
+
+export async function fetchMyActivity(): Promise<ActivityDayDTO[]> {
+  const token = getAccessToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const response = await apiClient.get<ActivityDayDTO[]>('/auth/activity', { headers });
+  return response.data ?? [];
 }

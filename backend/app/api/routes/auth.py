@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
 from app.schemas import (
+    ActivityDayDTO,
     ErrorResponseDTO,
     GenericStatusDTO,
     LoginRequestDTO,
@@ -22,6 +23,7 @@ from app.schemas import (
 from app.services.auth_service import (
     authenticate_user,
     build_user_profile,
+    get_user_activity_last_365_days,
     issue_login_tokens,
     register_user,
     revoke_session,
@@ -78,7 +80,7 @@ def register(
         password=payload.password,
         display_name=payload.display_name,
     )
-    return build_user_profile(user)
+    return build_user_profile(db=db, user=user)
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -141,8 +143,34 @@ def login(
     return LoginResponseDTO(
         access_token=access_token,
         expires_in=expires_in,
-        user=build_user_profile(user),
+        user=build_user_profile(db=db, user=user),
     )
+
+
+@router.get(
+    "/me",
+    response_model=UserProfileDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfileDTO:
+    return build_user_profile(db=db, user=current_user)
+
+
+@router.get(
+    "/activity",
+    response_model=list[ActivityDayDTO],
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_my_activity(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ActivityDayDTO]:
+    return get_user_activity_last_365_days(db=db, user_id=current_user.id)
 
 
 @router.post(

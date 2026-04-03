@@ -630,3 +630,5 @@ def test_generate_lesson_still_succeeds_when_youtube_lookup_fails(
     db_session.refresh(lesson)
     assert lesson.content_markdown is not None
     assert lesson.youtube_video_id is None
+
+//zzz

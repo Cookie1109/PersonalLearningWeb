@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserStats, WeekModule } from '../lib/types';
-import { logout } from '../../api/auth';
+import { getMyProfile, logout } from '../../api/auth';
 import { getAccessToken } from '../../api/client';
 
 const navItems = [
@@ -30,16 +30,34 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
   const app = useApp();
   const user = userData ?? app.user;
   const roadmap = roadmapData ?? app.roadmap;
-  const { resetSessionState } = app;
+  const { resetSessionState, setUserFromAuth } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!getAccessToken()) {
+    const token = getAccessToken();
+    if (!token) {
       navigate('/login', { replace: true });
+      return;
     }
-  }, [navigate]);
+
+    let mounted = true;
+    const loadProfile = async () => {
+      try {
+        const profile = await getMyProfile();
+        if (!mounted) return;
+        setUserFromAuth(profile);
+      } catch {
+        // Profile hydration failures should not block navigation.
+      }
+    };
+
+    void loadProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, setUserFromAuth]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);

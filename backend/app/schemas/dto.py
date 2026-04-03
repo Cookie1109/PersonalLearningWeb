@@ -24,6 +24,13 @@ class UserProfileDTO(BaseModel):
     display_name: str
     level: int
     total_exp: int
+    current_streak: int = 0
+    total_study_days: int = 0
+
+
+class ActivityDayDTO(BaseModel):
+    date: str
+    count: int = Field(default=0, ge=0)
 
 
 class LoginResponseDTO(BaseModel):

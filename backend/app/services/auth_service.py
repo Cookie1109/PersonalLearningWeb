@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,8 +11,9 @@ from redis import Redis
 
 from app.core.exceptions import AppException
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models import User
-from app.schemas import UserProfileDTO
+from app.models import ExpLedger, User
+from app.schemas import ActivityDayDTO, UserProfileDTO
+from app.services.gamification_service import get_current_streak
 from app.services.refresh_token_store import RefreshTokenStore
 
 
@@ -64,14 +68,42 @@ def register_user(
     return user
 
 
-def build_user_profile(user: User) -> UserProfileDTO:
+def _get_total_study_days(*, db: Session, user_id: int) -> int:
+    total_study_days = db.scalar(
+        select(func.count(func.distinct(func.date(ExpLedger.awarded_at)))).where(ExpLedger.user_id == user_id)
+    )
+    return int(total_study_days or 0)
+
+
+def build_user_profile(*, db: Session, user: User) -> UserProfileDTO:
     return UserProfileDTO(
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
         level=user.level,
         total_exp=user.total_exp,
+        current_streak=get_current_streak(user),
+        total_study_days=_get_total_study_days(db=db, user_id=user.id),
     )
+
+
+def get_user_activity_last_365_days(*, db: Session, user_id: int) -> list[ActivityDayDTO]:
+    start_dt = datetime.now(UTC) - timedelta(days=364)
+    rows = db.execute(
+        select(func.date(ExpLedger.awarded_at), func.count(ExpLedger.id))
+        .where(ExpLedger.user_id == user_id)
+        .where(ExpLedger.awarded_at >= start_dt)
+        .group_by(func.date(ExpLedger.awarded_at))
+        .order_by(func.date(ExpLedger.awarded_at))
+    ).all()
+
+    activity: list[ActivityDayDTO] = []
+    for awarded_date, total in rows:
+        if awarded_date is None:
+            continue
+        activity.append(ActivityDayDTO(date=str(awarded_date), count=int(total or 0)))
+
+    return activity
 
 
 def issue_login_tokens(*, user: User, device_id: str | None, redis_client: Redis) -> tuple[str, int, str]:
