@@ -631,4 +631,4 @@ def test_generate_lesson_still_succeeds_when_youtube_lookup_fails(
     assert lesson.content_markdown is not None
     assert lesson.youtube_video_id is None
 
-//zzz
+# The above tests cover various scenarios of the lesson generation process, including successful generation, handling of LLM failures, and ensuring that YouTube video selection logic works as intended.
