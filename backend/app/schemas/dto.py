@@ -77,6 +77,13 @@ class LessonCompleteResponseDTO(BaseModel):
     message: str
 
 
+class FlashcardCompleteResponseDTO(BaseModel):
+    lesson_id: int
+    flashcard_completed: bool
+    already_completed: bool
+    message: str
+
+
 class LessonDTO(BaseModel):
     id: str
     title: str
@@ -109,6 +116,8 @@ class RoadmapLessonItemDTO(BaseModel):
     id: int
     title: str
     is_completed: bool
+    quiz_passed: bool = False
+    flashcard_completed: bool = False
 
 
 class RoadmapWeekItemDTO(BaseModel):
@@ -150,6 +159,8 @@ class LessonDetailDTO(BaseModel):
     roadmap_id: int
     roadmap_title: str
     is_completed: bool
+    quiz_passed: bool = False
+    flashcard_completed: bool = False
     content_markdown: str | None = None
     youtube_video_id: str | None = None
     is_draft: bool = True

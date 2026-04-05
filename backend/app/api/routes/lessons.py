@@ -10,13 +10,21 @@ from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.models import User
-from app.schemas import ErrorResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO, LessonGenerateResponseDTO, QuizResponseDTO
+from app.schemas import (
+    ErrorResponseDTO,
+    FlashcardCompleteResponseDTO,
+    LessonCompleteResponseDTO,
+    LessonDetailDTO,
+    LessonGenerateResponseDTO,
+    QuizResponseDTO,
+)
 from app.services.audit_service import queue_audit_log
 from app.services.idempotency_store import IdempotencyStore
 from app.services.lesson_service import (
     complete_lesson_for_user,
     generate_lesson_content_for_user,
     get_lesson_detail_for_user,
+    mark_flashcard_completed_for_user,
 )
 from app.services.quiz_service import generate_quiz_for_lesson_user, get_quiz_for_lesson_user
 
@@ -89,6 +97,20 @@ def get_lesson_quiz(
     db: Session = Depends(get_db),
 ) -> QuizResponseDTO:
     return get_quiz_for_lesson_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
+
+
+@router.post(
+    "/{lesson_id}/flashcards/complete",
+    response_model=FlashcardCompleteResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def complete_flashcards(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FlashcardCompleteResponseDTO:
+    return mark_flashcard_completed_for_user(db=db, user_id=current_user.id, lesson_id=lesson_id)
 
 
 @router.post(

@@ -1,6 +1,7 @@
 import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
 import axios from 'axios';
 import {
+  FlashcardCompleteResponseDTO,
   LessonCompleteResponseDTO,
   LessonDetailDTO,
   LessonContentDTO,
@@ -16,6 +17,8 @@ export interface MyRoadmapLesson {
   id: string;
   title: string;
   isCompleted: boolean;
+  quizPassed: boolean;
+  flashcardCompleted: boolean;
 }
 
 export interface MyRoadmapWeek {
@@ -39,6 +42,8 @@ export interface LessonDetail {
   roadmapId: number;
   roadmapTitle: string;
   isCompleted: boolean;
+  quizPassed: boolean;
+  flashcardCompleted: boolean;
   contentMarkdown: string | null;
   youtubeVideoId: string | null;
   isDraft: boolean;
@@ -82,6 +87,8 @@ function mapRoadmapItem(dto: RoadmapItemDTO): MyRoadmap {
         id: String(lesson.id),
         title: lesson.title,
         isCompleted: lesson.is_completed,
+        quizPassed: lesson.quiz_passed ?? false,
+        flashcardCompleted: lesson.flashcard_completed ?? false,
       })),
     })),
   };
@@ -96,6 +103,8 @@ function mapLessonDetail(dto: LessonDetailDTO): LessonDetail {
     roadmapId: dto.roadmap_id,
     roadmapTitle: dto.roadmap_title,
     isCompleted: dto.is_completed,
+    quizPassed: dto.quiz_passed ?? false,
+    flashcardCompleted: dto.flashcard_completed ?? false,
     contentMarkdown: dto.content_markdown ?? null,
     youtubeVideoId: dto.youtube_video_id ?? null,
     isDraft: dto.is_draft,
@@ -153,6 +162,20 @@ export async function completeLessonProgress(lessonId: string): Promise<LessonCo
       headers: {
         ...createAuthHeaders(),
         'Idempotency-Key': createIdempotencyKey(),
+      },
+    }
+  );
+
+  return response.data;
+}
+
+export async function completeFlashcardProgress(lessonId: string): Promise<FlashcardCompleteResponseDTO> {
+  const response = await apiClient.post<FlashcardCompleteResponseDTO>(
+    `/lessons/${lessonId}/flashcards/complete`,
+    {},
+    {
+      headers: {
+        ...createAuthHeaders(),
       },
     }
   );

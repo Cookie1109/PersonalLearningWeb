@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
-from app.models import ExpLedger, Lesson, Roadmap, User
-from app.schemas import LessonCompleteResponseDTO, LessonDetailDTO
+from app.models import ExpLedger, FlashcardProgress, Lesson, Quiz, QuizAttempt, Roadmap, User
+from app.schemas import FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
 from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
 
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
@@ -314,7 +314,58 @@ def _build_lesson_model_candidates(settings) -> list[str]:
     return candidates
 
 
-def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap | None) -> LessonDetailDTO:
+def get_lesson_sub_indicators_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    lesson_ids: list[int],
+) -> dict[int, tuple[bool, bool]]:
+    normalized_ids = sorted({int(lesson_id) for lesson_id in lesson_ids if lesson_id})
+    if not normalized_ids:
+        return {}
+
+    quiz_passed_ids = set(
+        db.scalars(
+            select(Quiz.lesson_id)
+            .join(QuizAttempt, QuizAttempt.quiz_id == Quiz.id)
+            .where(
+                and_(
+                    QuizAttempt.user_id == user_id,
+                    QuizAttempt.passed.is_(True),
+                    Quiz.lesson_id.in_(normalized_ids),
+                )
+            )
+            .distinct()
+        )
+    )
+
+    flashcard_completed_ids = set(
+        db.scalars(
+            select(FlashcardProgress.lesson_id).where(
+                and_(
+                    FlashcardProgress.user_id == user_id,
+                    FlashcardProgress.lesson_id.in_(normalized_ids),
+                )
+            )
+        )
+    )
+
+    return {
+        lesson_id: (
+            lesson_id in quiz_passed_ids,
+            lesson_id in flashcard_completed_ids,
+        )
+        for lesson_id in normalized_ids
+    }
+
+
+def _to_lesson_detail(
+    lesson: Lesson,
+    roadmap: Roadmap | None,
+    *,
+    quiz_passed: bool = False,
+    flashcard_completed: bool = False,
+) -> LessonDetailDTO:
     content = lesson.content_markdown.strip() if lesson.content_markdown else None
     if roadmap is not None:
         roadmap_id = roadmap.id
@@ -331,6 +382,8 @@ def _to_lesson_detail(lesson: Lesson, roadmap: Roadmap | None) -> LessonDetailDT
         roadmap_id=roadmap_id,
         roadmap_title=roadmap_title,
         is_completed=lesson.is_completed,
+        quiz_passed=quiz_passed,
+        flashcard_completed=flashcard_completed,
         content_markdown=content,
         youtube_video_id=lesson.youtube_video_id,
         is_draft=not bool(content),
@@ -353,7 +406,62 @@ def get_lesson_for_user(*, db: Session, user_id: int, lesson_id: int) -> tuple[L
 
 def get_lesson_detail_for_user(*, db: Session, user_id: int, lesson_id: int) -> LessonDetailDTO:
     lesson, roadmap = get_lesson_for_user(db=db, user_id=user_id, lesson_id=lesson_id)
-    return _to_lesson_detail(lesson, roadmap)
+    progress_map = get_lesson_sub_indicators_for_user(db=db, user_id=user_id, lesson_ids=[lesson.id])
+    quiz_passed, flashcard_completed = progress_map.get(lesson.id, (False, False))
+    return _to_lesson_detail(
+        lesson,
+        roadmap,
+        quiz_passed=quiz_passed,
+        flashcard_completed=flashcard_completed,
+    )
+
+
+def mark_flashcard_completed_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    lesson_id: int,
+) -> FlashcardCompleteResponseDTO:
+    lesson = db.scalar(
+        select(Lesson)
+        .join(Roadmap, Lesson.roadmap_id == Roadmap.id)
+        .where(and_(Lesson.id == lesson_id, Roadmap.user_id == user_id))
+    )
+    if lesson is None:
+        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+
+    existing_progress = db.scalar(
+        select(FlashcardProgress).where(
+            and_(
+                FlashcardProgress.user_id == user_id,
+                FlashcardProgress.lesson_id == lesson_id,
+            )
+        )
+    )
+    if existing_progress is not None:
+        return FlashcardCompleteResponseDTO(
+            lesson_id=lesson_id,
+            flashcard_completed=True,
+            already_completed=True,
+            message="Flashcard already completed",
+        )
+
+    try:
+        db.add(FlashcardProgress(user_id=user_id, lesson_id=lesson_id))
+        db.commit()
+        return FlashcardCompleteResponseDTO(
+            lesson_id=lesson_id,
+            flashcard_completed=True,
+            already_completed=False,
+            message="Thanh cong",
+        )
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=409,
+            message="Flashcard completion failed",
+            detail={"code": "FLASHCARD_COMPLETE_FAILED", "error": str(exc)},
+        ) from exc
 
 
 def get_lesson_for_generation(*, db: Session, user_id: int, lesson_id: int) -> tuple[Lesson, Roadmap | None]:
@@ -870,7 +978,14 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
             detail={"code": "LESSON_GENERATION_FAILED", "error": str(exc)},
         ) from exc
 
-    return _to_lesson_detail(lesson, roadmap)
+    progress_map = get_lesson_sub_indicators_for_user(db=db, user_id=user_id, lesson_ids=[lesson.id])
+    quiz_passed, flashcard_completed = progress_map.get(lesson.id, (False, False))
+    return _to_lesson_detail(
+        lesson,
+        roadmap,
+        quiz_passed=quiz_passed,
+        flashcard_completed=flashcard_completed,
+    )
 
 
 def complete_lesson_for_user(

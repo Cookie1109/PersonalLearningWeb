@@ -127,3 +127,34 @@ def test_complete_lesson_already_completed_does_not_farm_exp(
     assert payload["already_completed"] is True
     assert payload["exp_gained"] == 0
     assert payload["streak_bonus_exp"] == 0
+
+
+def test_complete_flashcard_is_idempotent(
+    client,
+    auth_headers,
+    db_session: Session,
+) -> None:
+    user, headers = auth_headers
+    lesson = _seed_lesson(db_session, user_id=user.id, title="Flashcard Lesson")
+
+    first = client.post(
+        f"/api/lessons/{lesson.id}/flashcards/complete",
+        json={},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert first_payload["lesson_id"] == lesson.id
+    assert first_payload["flashcard_completed"] is True
+    assert first_payload["already_completed"] is False
+
+    second = client.post(
+        f"/api/lessons/{lesson.id}/flashcards/complete",
+        json={},
+        headers=headers,
+    )
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert second_payload["lesson_id"] == lesson.id
+    assert second_payload["flashcard_completed"] is True
+    assert second_payload["already_completed"] is True

@@ -81,6 +81,8 @@ export interface RoadmapLessonItemDTO {
   id: number;
   title: string;
   is_completed: boolean;
+  quiz_passed: boolean;
+  flashcard_completed: boolean;
 }
 
 export interface RoadmapWeekItemDTO {
@@ -183,6 +185,13 @@ export interface LessonCompleteResponseDTO {
   message: string;
 }
 
+export interface FlashcardCompleteResponseDTO {
+  lesson_id: number;
+  flashcard_completed: boolean;
+  already_completed: boolean;
+  message: string;
+}
+
 export interface LessonDetailDTO {
   id: number;
   title: string;
@@ -191,6 +200,8 @@ export interface LessonDetailDTO {
   roadmap_id: number;
   roadmap_title: string;
   is_completed: boolean;
+  quiz_passed: boolean;
+  flashcard_completed: boolean;
   content_markdown?: string | null;
   youtube_video_id?: string | null;
   is_draft: boolean;

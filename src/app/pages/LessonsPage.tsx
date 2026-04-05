@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
 import {
+  BookOpen,
   BookMarked,
   CheckCircle2,
   ChevronDown,
+  CreditCard,
+  ListChecks,
   Loader2,
   Lock,
   PlayCircle,
@@ -205,28 +208,56 @@ export default function LessonsPage() {
                                   >
                                     <div className="p-2 sm:p-3 space-y-2">
                                       {week.lessons.map(lesson => (
-                                        <button
+                                        <div
                                           key={lesson.id}
-                                          onClick={() => navigate(`/learn/${lesson.id}`)}
                                           className={`w-full text-left rounded-lg border px-3 py-2.5 flex items-center gap-3 transition-colors ${lesson.isCompleted ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15' : 'border-zinc-600 bg-zinc-800 hover:bg-zinc-700/60'}`}
                                         >
-                                          {lesson.isCompleted ? (
-                                            <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
-                                          ) : (
-                                            <Lock size={16} className="text-zinc-500 flex-shrink-0" />
-                                          )}
+                                          <button
+                                            onClick={() => navigate(`/learn/${lesson.id}`)}
+                                            className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                                          >
+                                            {lesson.isCompleted ? (
+                                              <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                                            ) : (
+                                              <Lock size={16} className="text-zinc-500 flex-shrink-0" />
+                                            )}
 
-                                          <div className="flex-1 min-w-0">
-                                            <p className={`text-sm truncate ${lesson.isCompleted ? 'text-emerald-100' : 'text-zinc-200'}`} style={{ fontWeight: 600 }}>
-                                              {lesson.title}
-                                            </p>
-                                            <p className={`text-xs ${lesson.isCompleted ? 'text-emerald-300/80' : 'text-zinc-500'}`}>
-                                              {lesson.isCompleted ? 'Da hoan thanh' : 'Chua hoan thanh'}
-                                            </p>
+                                            <div className="flex-1 min-w-0">
+                                              <p className={`text-sm truncate ${lesson.isCompleted ? 'text-emerald-100' : 'text-zinc-200'}`} style={{ fontWeight: 600 }}>
+                                                {lesson.title}
+                                              </p>
+                                              <p className={`text-xs ${lesson.isCompleted ? 'text-emerald-300/80' : 'text-zinc-500'}`}>
+                                                {lesson.isCompleted ? 'Da hoan thanh' : 'Chua hoan thanh'} · Quiz {lesson.quizPassed ? 'dat' : 'chua dat'} · Flashcard {lesson.flashcardCompleted ? 'xong' : 'chua xong'}
+                                              </p>
+                                            </div>
+
+                                            <PlayCircle size={16} className="text-violet-400 flex-shrink-0" />
+                                          </button>
+
+                                          <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-700">
+                                            <button
+                                              onClick={() => navigate(`/learn/${lesson.id}?tab=theory`)}
+                                              title="Mo tab Ly thuyet"
+                                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800/80 text-zinc-300 hover:text-white hover:border-violet-400/60 hover:bg-violet-500/10 transition-colors"
+                                            >
+                                              <BookOpen size={14} />
+                                            </button>
+                                            <button
+                                              onClick={() => navigate(`/learn/${lesson.id}?tab=quiz`)}
+                                              title="Mo tab Quiz"
+                                              className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${lesson.quizPassed ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'border-zinc-600 bg-zinc-800/80 text-zinc-400 hover:text-zinc-100 hover:border-cyan-400/60 hover:bg-cyan-500/10'}`}
+                                            >
+                                              <ListChecks size={14} />
+                                            </button>
+                                            <button
+                                              onClick={() => navigate(`/learn/${lesson.id}?tab=flashcard`)}
+                                              title="Mo tab Flashcard"
+                                              className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${lesson.flashcardCompleted ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'border-zinc-600 bg-zinc-800/80 text-zinc-400 hover:text-zinc-100 hover:border-cyan-400/60 hover:bg-cyan-500/10'}`}
+                                            >
+                                              <CreditCard size={14} />
+                                            </button>
                                           </div>
-
-                                          <PlayCircle size={16} className="text-violet-400 flex-shrink-0" />
-                                        </button>
+                                        </div>
                                       ))}
                                     </div>
                                   </motion.div>

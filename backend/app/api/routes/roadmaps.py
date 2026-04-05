@@ -17,6 +17,7 @@ from app.schemas import (
     RoadmapLessonItemDTO,
     RoadmapWeekItemDTO,
 )
+from app.services.lesson_service import get_lesson_sub_indicators_for_user
 from app.services.roadmap_generation_service import generate_and_store_roadmap
 
 router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
@@ -70,14 +71,23 @@ def get_my_roadmaps(
                 .order_by(Lesson.week_number.asc(), Lesson.position.asc(), Lesson.id.asc())
             )
         )
+        lesson_ids = [lesson.id for lesson in lessons]
+        progress_map = get_lesson_sub_indicators_for_user(
+            db=db,
+            user_id=current_user.id,
+            lesson_ids=lesson_ids,
+        )
 
         weeks_map: dict[int, list[RoadmapLessonItemDTO]] = defaultdict(list)
         for lesson in lessons:
+            quiz_passed, flashcard_completed = progress_map.get(lesson.id, (False, False))
             weeks_map[lesson.week_number].append(
                 RoadmapLessonItemDTO(
                     id=lesson.id,
                     title=lesson.title,
                     is_completed=lesson.is_completed,
+                    quiz_passed=quiz_passed,
+                    flashcard_completed=flashcard_completed,
                 )
             )
 
