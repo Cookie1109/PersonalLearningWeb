@@ -30,6 +30,13 @@ interface QuizState {
   selectedAnswers: Record<string, string>;
 }
 
+interface QuizResultDisplayProps {
+  quizResult: QuizSubmitResponseDTO;
+  quizQuestions: QuizResponseDTO['questions'];
+  onRetry: () => void;
+  onBackToTheory: () => void;
+}
+
 function isLearningTab(value: string | null): value is LearningTab {
   return value === 'theory' || value === 'quiz' || value === 'flashcard';
 }
@@ -48,83 +55,684 @@ function _stripMarkdownArtifacts(raw: string): string {
     .trim();
 }
 
-function buildFlashcardsFromMarkdown(markdown: string | null, maxCards: number = 12): Flashcard[] {
+type FlashcardSeedKind = 'concept' | 'process' | 'parameter' | 'cause-effect' | 'fact' | 'cloze' | 'context';
+
+interface KnowledgeEntry {
+  section: string;
+  text: string;
+  isList: boolean;
+  order: number | null;
+}
+
+interface FlashcardSeed {
+  front: string;
+  back: string;
+  kind: FlashcardSeedKind;
+  section: string;
+  sourceText: string;
+}
+
+function _foldForMatch(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+}
+
+function _normalizeKnowledgeText(raw: string): string {
+  return _stripMarkdownArtifacts(raw)
+    .replace(/[\t ]+/g, ' ')
+    .replace(/\s+([,.;!?])/g, '$1')
+    .trim();
+}
+
+function _smartTrim(raw: string, maxLength: number): string {
+  const normalized = _normalizeKnowledgeText(raw);
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const searchStart = Math.floor(maxLength * 0.55);
+  let punctuationCut = -1;
+  for (let i = searchStart; i <= maxLength && i < normalized.length; i += 1) {
+    if ('.;!?'.includes(normalized[i])) {
+      punctuationCut = i + 1;
+    }
+  }
+
+  if (punctuationCut > 0) {
+    return normalized.slice(0, punctuationCut).trim();
+  }
+
+  const spaceCut = normalized.lastIndexOf(' ', maxLength);
+  if (spaceCut > Math.floor(maxLength * 0.6)) {
+    return `${normalized.slice(0, spaceCut).trim()}...`;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function _hasTechnicalSignal(foldedText: string): boolean {
+  return /\b(api|ide|editor|compiler|gcc|clang|msvc|database|index|sql|react|hook|state|component|function|module|debug|build|deploy|env|docker|cache|thread|algorithm|python|javascript|typescript|c\+\+|java|linux|windows|macos|http|https|token|port|pandas|dataframe)\b/i.test(foldedText);
+}
+
+function _isNoiseSentence(raw: string): boolean {
+  const text = _normalizeKnowledgeText(raw);
+  if (!text) {
+    return true;
+  }
+
+  const folded = _foldForMatch(text);
+  const lowSignalStarters = [
+    'trong bai hoc nay',
+    'chung ta se',
+    'muc tieu la',
+    'ban co the',
+    'hay nho rang',
+    'duoi day la',
+    'moi ban',
+  ];
+
+  if (lowSignalStarters.some(prefix => folded.startsWith(prefix)) && !_hasTechnicalSignal(folded)) {
+    return true;
+  }
+
+  if (text.length < 12) {
+    return true;
+  }
+
+  return false;
+}
+
+function _splitAtomicIdeas(raw: string): string[] {
+  const normalized = _normalizeKnowledgeText(raw);
+  if (!normalized) {
+    return [];
+  }
+
+  const sentenceParts = normalized
+    .split(/(?<=[.!?;])\s+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  const sourceParts = sentenceParts.length > 0 ? sentenceParts : [normalized];
+  const atomicParts: string[] = [];
+
+  for (const part of sourceParts) {
+    const secondaryParts = part
+      .split(/,\s+(?:sau do|tiep theo|roi|nhung|tuy nhien|vi vay)\s+/i)
+      .map(item => item.trim())
+      .filter(Boolean);
+
+    if (secondaryParts.length > 1) {
+      for (const item of secondaryParts) {
+        if (item.length >= 12 && !_isNoiseSentence(item)) {
+          atomicParts.push(item);
+        }
+      }
+    } else if (part.length >= 12 && !_isNoiseSentence(part)) {
+      atomicParts.push(part);
+    }
+  }
+
+  return atomicParts;
+}
+
+function _extractKnowledgeEntries(markdown: string): KnowledgeEntry[] {
+  const lines = markdown.split('\n');
+  const entries: KnowledgeEntry[] = [];
+  let currentSection = 'Tong quan';
+  let inCodeBlock = false;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) {
+      continue;
+    }
+
+    if (/^#{2,4}\s+/.test(trimmed)) {
+      currentSection = _normalizeKnowledgeText(trimmed) || currentSection;
+      continue;
+    }
+
+    if (/^>\s*/.test(trimmed) || /^!\[.*\]\(.*\)$/.test(trimmed)) {
+      continue;
+    }
+
+    if (/^\|[-:\s|]+\|$/.test(trimmed)) {
+      continue;
+    }
+
+    if (/^\|.*\|$/.test(trimmed)) {
+      const cells = trimmed
+        .split('|')
+        .map(cell => _normalizeKnowledgeText(cell))
+        .filter(Boolean);
+      if (cells.length >= 2) {
+        const merged = `${cells[0]}: ${cells.slice(1).join(' - ')}`;
+        if (!_isNoiseSentence(merged)) {
+          entries.push({ section: currentSection, text: merged, isList: false, order: null });
+        }
+      }
+      continue;
+    }
+
+    const orderedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*+]\s+(.+)$/);
+    const payload = orderedMatch?.[2] ?? bulletMatch?.[1] ?? trimmed;
+    const atomics = _splitAtomicIdeas(payload);
+
+    for (const atomic of atomics) {
+      const normalizedAtomic = _normalizeKnowledgeText(atomic);
+      if (_isNoiseSentence(normalizedAtomic)) {
+        continue;
+      }
+      entries.push({
+        section: currentSection,
+        text: normalizedAtomic,
+        isList: Boolean(orderedMatch || bulletMatch),
+        order: orderedMatch ? Number(orderedMatch[1]) : null,
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  return entries.filter(entry => {
+    const key = `${_foldForMatch(entry.section)}|${_foldForMatch(entry.text)}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function _splitByFoldedToken(text: string, token: string): [string, string] | null {
+  const folded = _foldForMatch(text);
+  const index = folded.indexOf(token);
+  if (index <= 0) {
+    return null;
+  }
+
+  const left = _normalizeKnowledgeText(text.slice(0, index));
+  const right = _normalizeKnowledgeText(text.slice(index + token.length));
+  if (!left || !right) {
+    return null;
+  }
+
+  return [left, right];
+}
+
+function _detectDefinition(text: string): { term: string; meaning: string } | null {
+  const tokens = [' la ', ' duoc goi la ', ' duoc dung de ', ' bao gom '];
+  for (const token of tokens) {
+    const parts = _splitByFoldedToken(text, token);
+    if (!parts) {
+      continue;
+    }
+    const [term, meaning] = parts;
+    if (term.length >= 2 && term.length <= 64 && meaning.length >= 10) {
+      return { term, meaning };
+    }
+  }
+
+  return null;
+}
+
+function _detectParameter(text: string): { key: string; value: string } | null {
+  const pairMatch = text.match(/^([^:=]{2,48})\s*[:=]\s*(.{8,})$/);
+  if (!pairMatch) {
+    return null;
+  }
+
+  const key = _normalizeKnowledgeText(pairMatch[1]);
+  const value = _normalizeKnowledgeText(pairMatch[2]);
+  if (!key || !value) {
+    return null;
+  }
+
+  const keyWords = key.split(/\s+/).filter(Boolean);
+  if (keyWords.length > 8) {
+    return null;
+  }
+
+  return { key, value };
+}
+
+function _detectCauseEffect(text: string): { cause: string; effect: string } | null {
+  const folded = _foldForMatch(text);
+
+  if (folded.startsWith('neu ')) {
+    const parts = _splitByFoldedToken(text, ' thi ');
+    if (parts) {
+      const cause = parts[0].replace(/^(neu|Nếu|Neu)\s+/i, '').trim();
+      const effect = parts[1].trim();
+      if (cause.length >= 6 && effect.length >= 6) {
+        return { cause, effect };
+      }
+    }
+  }
+
+  if (folded.startsWith('khi ')) {
+    const withThen = _splitByFoldedToken(text, ' thi ') ?? _splitByFoldedToken(text, ' se ');
+    if (withThen) {
+      const cause = withThen[0].replace(/^(khi|Khi)\s+/i, '').trim();
+      const effect = withThen[1].trim();
+      if (cause.length >= 6 && effect.length >= 6) {
+        return { cause, effect };
+      }
+    }
+  }
+
+  const causalTokens = [' dan den ', ' gay ', ' lam '];
+  for (const token of causalTokens) {
+    const parts = _splitByFoldedToken(text, token);
+    if (!parts) {
+      continue;
+    }
+    const [cause, effect] = parts;
+    if (cause.length >= 6 && effect.length >= 6) {
+      return { cause, effect };
+    }
+  }
+
+  return null;
+}
+
+function _extractTopic(text: string, fallback: string): string {
+  const normalized = _normalizeKnowledgeText(text).replace(/[.?!].*$/, '').trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const compact = normalized.split(':')[0].trim();
+  if (compact.length >= 4 && compact.length <= 64) {
+    return compact;
+  }
+
+  const words = normalized.split(/\s+/).slice(0, 6).join(' ').trim();
+  return words.length >= 4 ? words : fallback;
+}
+
+function _buildSeed(
+  kind: FlashcardSeedKind,
+  frontRaw: string,
+  backRaw: string,
+  section: string,
+  sourceText: string,
+): FlashcardSeed | null {
+  const front = _smartTrim(frontRaw, 120);
+  const back = _smartTrim(backRaw, 220);
+  const minBackLength = kind === 'cloze' ? 2 : 10;
+  if (!front || !back || front.length < 10 || back.length < minBackLength) {
+    return null;
+  }
+
+  return {
+    front,
+    back,
+    kind,
+    section,
+    sourceText,
+  };
+}
+
+function _escapeRegExp(raw: string): string {
+  return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _pickClozeToken(raw: string): string | null {
+  const normalized = _normalizeKnowledgeText(raw);
+  const technicalHint = normalized.match(/\b(api|ide|compiler|gcc|clang|msvc|database|index|sql|react|hook|state|debug|build|endpoint|request|response|token|cache|thread|docker|module|function|class|object)\b/i);
+  if (technicalHint?.[0]) {
+    return technicalHint[0];
+  }
+
+  const quoted = raw.match(/["“'`](.{2,30}?)["”'`]/);
+  if (quoted?.[1]) {
+    return quoted[1].trim();
+  }
+
+  const acronym = raw.match(/\b[A-Z][A-Z0-9+.#-]{1,}\b/);
+  if (acronym?.[0]) {
+    return acronym[0];
+  }
+
+  const callable = raw.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\(\)/);
+  if (callable?.[0]) {
+    return callable[0];
+  }
+
+  const stopWords = new Set([
+    'trong', 'nhung', 'duoc', 'dung', 'chinh', 'nguoi', 'thong', 'trinh',
+    'hoac', 'voi', 'khi', 'thi', 'neu', 'cac', 'mot', 'bai', 'hoc',
+  ]);
+  const words = normalized.split(/\s+/).filter(Boolean);
+  for (const word of words) {
+    const cleaned = word.replace(/^[^a-zA-Z0-9+.#-]+|[^a-zA-Z0-9+.#-]+$/g, '');
+    const folded = _foldForMatch(cleaned);
+    if (cleaned.length >= 5 && !stopWords.has(folded)) {
+      return cleaned;
+    }
+  }
+
+  return null;
+}
+
+function _buildClozeSeed(seed: FlashcardSeed): FlashcardSeed | null {
+  const token = _pickClozeToken(seed.back) ?? _pickClozeToken(seed.sourceText) ?? _pickClozeToken(seed.front);
+  if (!token) {
+    return null;
+  }
+
+  const tokenRegex = new RegExp(_escapeRegExp(token), 'i');
+  const baseText = tokenRegex.test(seed.back) ? seed.back : seed.sourceText;
+  const masked = baseText.replace(tokenRegex, '____');
+  if (masked === baseText || masked.length < 12) {
+    return null;
+  }
+
+  return _buildSeed('cloze', `Dien vao cho trong: ${masked}`, token, seed.section, seed.sourceText);
+}
+
+function _buildContextSeed(seeds: FlashcardSeed[], entries: KnowledgeEntry[]): FlashcardSeed | null {
+  const corpus = entries.map(entry => `${entry.section} ${entry.text}`).join(' ');
+  const foldedCorpus = _foldForMatch(corpus);
+
+  const ruleMatches: Array<{ pattern: RegExp; front: string; back: string }> = [
+    {
+      pattern: /\b(compiler|gcc|clang|msvc|bien dich|build)\b/,
+      front: 'Tinh huong IT: Khi nao ban can chay compiler trong project C++?',
+      back: 'Khi can bien ma nguon thanh ma may va bat loi cu phap/type truoc khi chay chuong trinh.',
+    },
+    {
+      pattern: /\b(ide|editor|vs code|vscode|debug)\b/,
+      front: 'Tinh huong IT: IDE giup gi khi ban debug mot loi kho?',
+      back: 'IDE cho phep dat breakpoint, theo doi bien, va trace tung buoc de khoanh vung nguyen nhan nhanh hon.',
+    },
+    {
+      pattern: /\b(index|database|sql)\b/,
+      front: 'Tinh huong IT: Khi nao viec danh index co the lam giam hieu nang?',
+      back: 'Khi bang ghi/cap nhat lien tuc hoac cot co do chon loc thap, chi phi cap nhat index lon hon loi ich truy van.',
+    },
+    {
+      pattern: /\b(api|http|request|response|endpoint)\b/,
+      front: 'Tinh huong IT: Khi tich hop API, can kiem tra gi de tranh loi runtime?',
+      back: 'Kiem tra hop dong input/output, ma loi HTTP, timeout va retry de he thong on dinh trong thuc te.',
+    },
+  ];
+
+  for (const rule of ruleMatches) {
+    if (rule.pattern.test(foldedCorpus)) {
+      return _buildSeed('context', rule.front, rule.back, 'Tinh huong IT', rule.back);
+    }
+  }
+
+  const fallbackSeed = seeds.find(seed => seed.kind === 'concept' || seed.kind === 'process') ?? seeds[0];
+  if (!fallbackSeed) {
+    return null;
+  }
+
+  const topic = _extractTopic(fallbackSeed.section, 'kien thuc nay');
+  return _buildSeed(
+    'context',
+    `Tinh huong IT: Trong du an that, ban ap dung "${topic}" khi nao?`,
+    fallbackSeed.back,
+    fallbackSeed.section,
+    fallbackSeed.sourceText,
+  );
+}
+
+function _seedKey(seed: FlashcardSeed): string {
+  return `${_foldForMatch(seed.front)}|${_foldForMatch(seed.back)}`;
+}
+
+export function buildFlashcardsFromMarkdown(markdown: string | null, maxCards: number = 8): Flashcard[] {
   if (!markdown || !markdown.trim()) {
     return [];
   }
 
-  const lines = markdown.split('\n');
-  const cards: Flashcard[] = [];
-  let index = 0;
+  const entries = _extractKnowledgeEntries(markdown);
+  if (entries.length === 0) {
+    return [];
+  }
 
-  for (let i = 0; i < lines.length && cards.length < maxCards; i += 1) {
-    const current = lines[i].trim();
-    if (!/^#{2,4}\s+/.test(current)) {
+  const conceptSeeds: FlashcardSeed[] = [];
+  const processSeeds: FlashcardSeed[] = [];
+  const parameterSeeds: FlashcardSeed[] = [];
+  const causeEffectSeeds: FlashcardSeed[] = [];
+  const factSeeds: FlashcardSeed[] = [];
+
+  for (const entry of entries) {
+    const parameter = _detectParameter(entry.text);
+    if (parameter) {
+      const seed = _buildSeed(
+        'parameter',
+        `Thong so "${parameter.key}" trong "${entry.section}" dung de lam gi?`,
+        parameter.value,
+        entry.section,
+        entry.text,
+      );
+      if (seed) {
+        parameterSeeds.push(seed);
+      }
       continue;
     }
 
-    const front = _stripMarkdownArtifacts(current);
-    if (!front) {
+    const definition = _detectDefinition(entry.text);
+    if (definition) {
+      const seed = _buildSeed(
+        'concept',
+        `Khai niem "${definition.term}" la gi?`,
+        definition.meaning,
+        entry.section,
+        entry.text,
+      );
+      if (seed) {
+        conceptSeeds.push(seed);
+      }
       continue;
     }
 
-    const details: string[] = [];
-    let j = i + 1;
-    while (j < lines.length) {
-      const line = lines[j].trim();
-      if (/^#{2,4}\s+/.test(line)) {
+    const causeEffect = _detectCauseEffect(entry.text);
+    if (causeEffect) {
+      const seed = _buildSeed(
+        'cause-effect',
+        `Neu ${causeEffect.cause}, dieu gi xay ra?`,
+        causeEffect.effect,
+        entry.section,
+        entry.text,
+      );
+      if (seed) {
+        causeEffectSeeds.push(seed);
+      }
+      continue;
+    }
+
+    if (entry.isList) {
+      const stepLabel = entry.order ? `buoc ${entry.order}` : 'mot buoc quan trong';
+      const seed = _buildSeed(
+        'process',
+        `Trong "${entry.section}", ${stepLabel} can lam gi?`,
+        entry.text,
+        entry.section,
+        entry.text,
+      );
+      if (seed) {
+        processSeeds.push(seed);
+      }
+      continue;
+    }
+
+    const topic = _extractTopic(entry.section === 'Tong quan' ? entry.text : entry.section, 'noi dung nay');
+    const seed = _buildSeed(
+      'fact',
+      `Y chinh can nho ve "${topic}" la gi?`,
+      entry.text,
+      entry.section,
+      entry.text,
+    );
+    if (seed) {
+      factSeeds.push(seed);
+    }
+  }
+
+  const selected: FlashcardSeed[] = [];
+  const selectedKeys = new Set<string>();
+  const maxBaseCards = Math.max(1, maxCards - 2);
+
+  const tryAddSeed = (seed: FlashcardSeed): boolean => {
+    const key = _seedKey(seed);
+    if (selectedKeys.has(key)) {
+      return false;
+    }
+    selected.push(seed);
+    selectedKeys.add(key);
+    return true;
+  };
+
+  const addFromBucket = (bucket: FlashcardSeed[], limit: number) => {
+    let count = 0;
+    for (const seed of bucket) {
+      if (selected.length >= maxBaseCards || count >= limit) {
         break;
       }
-      if (!line || line.startsWith('```')) {
-        j += 1;
-        continue;
+      if (tryAddSeed(seed)) {
+        count += 1;
       }
-      if (line.startsWith('|') && line.endsWith('|')) {
-        j += 1;
-        continue;
-      }
-
-      const normalized = _stripMarkdownArtifacts(line);
-      if (normalized) {
-        details.push(normalized);
-      }
-      j += 1;
     }
+  };
 
-    const back = details.join(' ').trim();
-    if (back) {
-      cards.push({
-        id: `md-card-${index}`,
-        front,
-        back,
-      });
-      index += 1;
+  addFromBucket(conceptSeeds, 3);
+  addFromBucket(processSeeds, 2);
+  addFromBucket(parameterSeeds, 2);
+  addFromBucket(causeEffectSeeds, 2);
+  addFromBucket(factSeeds, maxBaseCards);
+
+  if (selected.length < maxBaseCards) {
+    const overflowPool = [...conceptSeeds, ...processSeeds, ...parameterSeeds, ...causeEffectSeeds, ...factSeeds];
+    for (const seed of overflowPool) {
+      if (selected.length >= maxBaseCards) {
+        break;
+      }
+      tryAddSeed(seed);
     }
-
-    i = j - 1;
   }
 
-  if (cards.length > 0) {
-    return cards.slice(0, maxCards);
+  if (selected.length < maxCards) {
+    const clozeCandidates = [
+      ...selected,
+      ...conceptSeeds,
+      ...processSeeds,
+      ...parameterSeeds,
+      ...causeEffectSeeds,
+      ...factSeeds,
+    ];
+
+    for (const seed of clozeCandidates) {
+      if (seed.kind === 'concept' || seed.kind === 'process' || seed.kind === 'parameter') {
+        const clozeSeed = _buildClozeSeed(seed);
+        if (clozeSeed && tryAddSeed(clozeSeed)) {
+          break;
+        }
+      }
+    }
   }
 
-  const paragraphCards = markdown
-    .split(/\n{2,}/)
-    .map(chunk => _stripMarkdownArtifacts(chunk))
-    .filter(chunk => chunk.length > 20)
-    .slice(0, maxCards)
-    .map((chunk, cardIndex) => {
-      const sentences = chunk.split(/(?<=[.!?])\s+/).filter(Boolean);
-      const front = (sentences[0] || chunk).slice(0, 120).trim();
-      const back = (sentences.slice(1).join(' ') || chunk).trim();
-      return {
-        id: `p-card-${cardIndex}`,
-        front,
-        back,
-      };
-    });
+  if (selected.length < maxCards) {
+    const contextSeed = _buildContextSeed(selected, entries);
+    if (contextSeed) {
+      tryAddSeed(contextSeed);
+    }
+  }
 
-  return paragraphCards;
+  if (selected.length === 0) {
+    return [];
+  }
+
+  return selected.slice(0, maxCards).map((seed, index) => ({
+    id: `focus-card-${index}`,
+    front: seed.front,
+    back: seed.back,
+  }));
+}
+
+export function QuizResultDisplay({
+  quizResult,
+  quizQuestions,
+  onRetry,
+  onBackToTheory,
+}: QuizResultDisplayProps) {
+  const correctCount = quizResult.results.filter(item => item.is_correct).length;
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
+      <div className="text-center">
+        <p className="text-xs uppercase tracking-wide text-zinc-500">Ket qua quiz</p>
+        <p className={`text-5xl mt-2 ${quizResult.is_passed ? 'text-emerald-400' : 'text-amber-400'}`} style={{ fontWeight: 800 }}>
+          {quizResult.score}%
+        </p>
+        <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} cau dung</p>
+        {quizResult.is_passed ? (
+          <p className="text-emerald-300 text-sm mt-2">Ban da dat quiz. Icon Quiz se sang ngay lap tuc.</p>
+        ) : (
+          <p className="text-amber-300 text-sm mt-2">Chua dat nguong. Hay on lai ly thuyet va thu lai.</p>
+        )}
+      </div>
+
+      {quizResult.reward_granted && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          Chuc mung! Ban nhan {quizResult.exp_gained} EXP khi vuot quiz lan dau.
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {quizResult.results.map((answer, index) => (
+          <div key={answer.question_id} className="space-y-2">
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${answer.is_correct ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'}`}
+            >
+              Cau {index + 1}: {answer.is_correct ? 'Dung' : 'Sai'}
+            </div>
+            {!answer.is_correct && answer.explanation && (
+              <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
+                  <Lightbulb size={13} />Giai thich
+                </div>
+                <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={onRetry}
+          className="flex-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2.5 text-sm"
+          style={{ fontWeight: 600 }}
+        >
+          Lam lai quiz
+        </button>
+        <button
+          onClick={onBackToTheory}
+          className="flex-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 text-sm"
+          style={{ fontWeight: 600 }}
+        >
+          Quay lai ly thuyet
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function MarkdownContent({ content }: { content: string }) {
@@ -193,8 +801,9 @@ export default function LearningWorkspace() {
   const [flashcardError, setFlashcardError] = useState<string | null>(null);
 
   // Build optional navigation metadata from in-memory roadmap context.
-  const allLessons = roadmap.flatMap(w =>
-    w.lessons.map(l => ({ ...l, weekTitle: w.title, weekId: w.id }))
+  const allLessons = useMemo(
+    () => roadmap.flatMap(w => w.lessons.map(l => ({ ...l, weekTitle: w.title, weekId: w.id }))),
+    [roadmap]
   );
   const currentIndex = allLessons.findIndex(l => l.id === lessonId);
   const currentLesson = currentIndex >= 0 ? allLessons[currentIndex] : null;
@@ -227,11 +836,8 @@ export default function LearningWorkspace() {
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
-    if (isLearningTab(requestedTab)) {
-      setActiveTab(requestedTab);
-      return;
-    }
-    setActiveTab('theory');
+    const nextTab: LearningTab = isLearningTab(requestedTab) ? requestedTab : 'theory';
+    setActiveTab(prev => (prev === nextTab ? prev : nextTab));
   }, [searchParams]);
   const youtubeEmbedUrl = lessonDetail?.youtubeVideoId
     ? `https://www.youtube.com/embed/${encodeURIComponent(lessonDetail.youtubeVideoId)}?rel=0`
@@ -305,7 +911,14 @@ export default function LearningWorkspace() {
       setQuizSubmitError(null);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setQuizLoadError(error.response?.data?.message ?? 'Khong the tai quiz luc nay.');
+        const errorCode = error.response?.data?.detail?.code;
+        if (errorCode === 'LLM_API_KEY_MISSING') {
+          setQuizLoadError('Quiz AI chua duoc cau hinh. Vui long thiet lap GEMINI_API_KEY trong backend/.env.');
+        } else if (errorCode === 'LLM_AUTH_FAILED') {
+          setQuizLoadError('Khoa API AI khong hop le. Vui long kiem tra GEMINI_API_KEY.');
+        } else {
+          setQuizLoadError(error.response?.data?.message ?? 'Khong the tai quiz luc nay.');
+        }
       } else if (error instanceof Error) {
         setQuizLoadError(error.message);
       } else {
@@ -317,11 +930,11 @@ export default function LearningWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== 'quiz' || !lessonId || quizData || isQuizLoading) {
+    if (activeTab !== 'quiz' || !lessonId || quizData || isQuizLoading || quizLoadError) {
       return;
     }
     void loadQuiz(lessonId);
-  }, [activeTab, lessonId, quizData, isQuizLoading, loadQuiz]);
+  }, [activeTab, lessonId, quizData, isQuizLoading, quizLoadError, loadQuiz]);
 
   const retryGeneration = async () => {
     if (!lessonId) return;
@@ -639,65 +1252,13 @@ export default function LearningWorkspace() {
     }
 
     if (quizResult) {
-      const correctCount = quizResult.results.filter(item => item.is_correct).length;
       return (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
-          <div className="text-center">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Ket qua quiz</p>
-            <p className={`text-5xl mt-2 ${quizResult.is_passed ? 'text-emerald-400' : 'text-amber-400'}`} style={{ fontWeight: 800 }}>
-              {quizResult.score}%
-            </p>
-            <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} cau dung</p>
-            {quizResult.is_passed ? (
-              <p className="text-emerald-300 text-sm mt-2">Ban da dat quiz. Icon Quiz se sang ngay lap tuc.</p>
-            ) : (
-              <p className="text-amber-300 text-sm mt-2">Chua dat nguong. Hay on lai ly thuyet va thu lai.</p>
-            )}
-          </div>
-
-          {quizResult.reward_granted && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-              Chuc mung! Ban nhan {quizResult.exp_gained} EXP khi vuot quiz lan dau.
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {quizResult.results.map((answer, index) => (
-              <div key={answer.question_id} className="space-y-2">
-                <div
-                  className={`rounded-lg border px-3 py-2 text-sm ${answer.is_correct ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'}`}
-                >
-                  Cau {index + 1}: {answer.is_correct ? 'Dung' : 'Sai'}
-                </div>
-                {!answer.is_correct && answer.explanation && (
-                  <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
-                      <Lightbulb size={13} />Giai thich
-                    </div>
-                    <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleRestartQuiz}
-              className="flex-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2.5 text-sm"
-              style={{ fontWeight: 600 }}
-            >
-              Lam lai quiz
-            </button>
-            <button
-              onClick={() => setLearningTab('theory')}
-              className="flex-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 text-sm"
-              style={{ fontWeight: 600 }}
-            >
-              Quay lai ly thuyet
-            </button>
-          </div>
-        </div>
+        <QuizResultDisplay
+          quizResult={quizResult}
+          quizQuestions={quizQuestions}
+          onRetry={handleRestartQuiz}
+          onBackToTheory={() => setLearningTab('theory')}
+        />
       );
     }
 

@@ -21,6 +21,35 @@ class GeneratedQuizQuestion:
     explanation: str
 
 
+def _normalize_model_name(raw_model: str) -> str:
+    model = (raw_model or "").strip()
+    if model.startswith("models/"):
+        model = model.split("/", 1)[1]
+
+    legacy_map = {
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
+    }
+    return legacy_map.get(model, model)
+
+
+def _build_quiz_model_candidates(settings) -> list[str]:
+    configured_quiz_model = (settings.gemini_quiz_model or "").strip() or "gemini-2.5-flash"
+    configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
+
+    candidates: list[str] = []
+    for candidate in (
+        configured_quiz_model,
+        _normalize_model_name(configured_quiz_model),
+        configured_flash_model,
+        _normalize_model_name(configured_flash_model),
+    ):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    return candidates
+
+
 def build_quiz_prompt(*, lesson_title: str, lesson_markdown: str) -> str:
     return (
         "Bạn là một chuyên gia giáo dục. Dựa vào nội dung bài học sau, hãy tạo ra đúng 3 câu hỏi trắc nghiệm. "
@@ -137,8 +166,8 @@ def generate_quiz_questions(*, lesson_title: str, lesson_markdown: str) -> tuple
             detail={"code": "LLM_API_KEY_MISSING"},
         )
 
-    model_name = (settings.gemini_quiz_model or "").strip() or "gemini-1.5-flash"
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    model_candidates = _build_quiz_model_candidates(settings)
+    timeout_seconds = max(30.0, float(settings.gemini_timeout_seconds))
 
     request_payload = {
         "contents": [
@@ -157,52 +186,74 @@ def generate_quiz_questions(*, lesson_title: str, lesson_markdown: str) -> tuple
         },
     }
 
-    try:
-        with httpx.Client(timeout=max(30.0, float(settings.gemini_timeout_seconds))) as client:
-            response = client.post(endpoint, params={"key": api_key}, json=request_payload)
-    except httpx.TimeoutException as exc:
-        raise AppException(status_code=503, message="AI service timeout", detail={"code": "LLM_TIMEOUT"}) from exc
-    except httpx.RequestError as exc:
-        raise AppException(status_code=503, message="AI service network error", detail={"code": "LLM_NETWORK_ERROR"}) from exc
+    with httpx.Client(timeout=timeout_seconds) as client:
+        for index, model_name in enumerate(model_candidates):
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            has_fallback = index < len(model_candidates) - 1
 
-    if response.status_code in (401, 403):
-        raise AppException(
-            status_code=503,
-            message="AI service authentication failed",
-            detail={"code": "LLM_AUTH_FAILED"},
-        )
+            try:
+                response = client.post(endpoint, params={"key": api_key}, json=request_payload)
+            except httpx.TimeoutException as exc:
+                if has_fallback:
+                    continue
+                raise AppException(status_code=503, message="AI service timeout", detail={"code": "LLM_TIMEOUT"}) from exc
+            except httpx.RequestError as exc:
+                if has_fallback:
+                    continue
+                raise AppException(status_code=503, message="AI service network error", detail={"code": "LLM_NETWORK_ERROR"}) from exc
 
-    if response.status_code >= 400:
-        raise AppException(
-            status_code=503,
-            message="AI service unavailable",
-            detail={"code": "LLM_SERVICE_ERROR", "status_code": str(response.status_code)},
-        )
+            if response.status_code in (401, 403):
+                raise AppException(
+                    status_code=503,
+                    message="AI service authentication failed",
+                    detail={"code": "LLM_AUTH_FAILED"},
+                )
 
-    try:
-        response_json = response.json()
-    except ValueError as exc:
-        raise AppException(
-            status_code=503,
-            message="AI service returned invalid response",
-            detail={"code": "LLM_INVALID_RESPONSE"},
-        ) from exc
+            if response.status_code >= 400:
+                if has_fallback and response.status_code in (404, 429, 500, 503):
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service unavailable",
+                    detail={"code": "LLM_SERVICE_ERROR", "status_code": str(response.status_code)},
+                )
 
-    generated_text = _extract_gemini_text(response_json)
-    if not generated_text:
-        raise AppException(
-            status_code=503,
-            message="AI service returned empty response",
-            detail={"code": "LLM_EMPTY_RESPONSE"},
-        )
+            try:
+                response_json = response.json()
+            except ValueError as exc:
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned invalid response",
+                    detail={"code": "LLM_INVALID_RESPONSE"},
+                ) from exc
 
-    try:
-        questions = parse_generated_quiz(generated_text)
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise AppException(
-            status_code=503,
-            message="AI service returned invalid quiz format",
-            detail={"code": "LLM_INVALID_QUIZ_FORMAT", "error": str(exc)},
-        ) from exc
+            generated_text = _extract_gemini_text(response_json)
+            if not generated_text:
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned empty response",
+                    detail={"code": "LLM_EMPTY_RESPONSE"},
+                )
 
-    return model_name, questions
+            try:
+                questions = parse_generated_quiz(generated_text)
+            except (ValueError, json.JSONDecodeError) as exc:
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned invalid quiz format",
+                    detail={"code": "LLM_INVALID_QUIZ_FORMAT", "error": str(exc)},
+                ) from exc
+
+            return model_name, questions
+
+    raise AppException(
+        status_code=503,
+        message="AI service unavailable",
+        detail={"code": "LLM_SERVICE_ERROR"},
+    )

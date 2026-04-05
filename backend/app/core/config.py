@@ -46,7 +46,7 @@ class Settings(BaseSettings):
         alias="GEMINI_MODEL",
         validation_alias=AliasChoices("GEMINI_MODEL", "GEMINI_FLASH_MODEL"),
     )
-    gemini_quiz_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_QUIZ_MODEL")
+    gemini_quiz_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_QUIZ_MODEL")
     gemini_pro_model: str = Field(default="gemini-1.5-pro", alias="GEMINI_PRO_MODEL")
     gemini_timeout_seconds: float = Field(default=120.0, alias="GEMINI_TIMEOUT_SECONDS")
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
