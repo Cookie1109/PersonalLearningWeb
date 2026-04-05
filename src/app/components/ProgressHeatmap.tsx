@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { ActivityDay } from '../lib/types';
 
 interface Props {
@@ -24,6 +24,8 @@ function getBorderColor(count: number): string {
 }
 
 export default function ProgressHeatmap({ data }: Props) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const weeks = useMemo(() => {
     const today = new Date();
     const startDate = new Date(today);
@@ -77,6 +79,17 @@ export default function ProgressHeatmap({ data }: Props) {
   const totalActivity = data.reduce((sum, d) => sum + d.count, 0);
   const activeDays = data.filter(d => d.count > 0).length;
 
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const frame = requestAnimationFrame(() => {
+      container.scrollLeft = container.scrollWidth;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [weeks.length, data.length]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -94,7 +107,7 @@ export default function ProgressHeatmap({ data }: Props) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div ref={scrollContainerRef} className="overflow-x-auto">
         <div className="inline-flex gap-1">
           {/* Day labels */}
           <div className="flex flex-col gap-1 pt-5 pr-1">
