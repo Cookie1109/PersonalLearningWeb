@@ -41,7 +41,6 @@ from .dto import (
     RoadmapWeekItemDTO,
     UserProfileDTO,
     WeekModuleDTO,
-    YouTubeVideoDTO,
 )
 
 __all__ = [
@@ -87,5 +86,4 @@ __all__ = [
     "RoadmapWeekItemDTO",
     "UserProfileDTO",
     "WeekModuleDTO",
-    "YouTubeVideoDTO",
 ]

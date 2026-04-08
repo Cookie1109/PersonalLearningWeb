@@ -52,12 +52,13 @@ def _build_quiz_model_candidates(settings) -> list[str]:
 
 def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
     return (
-        "Ban la tro ly hoc tap. Hay tao dung 3 cau hoi trac nghiem CHI dua tren tai lieu goc ben duoi. "
-        "TUYET DOI KHONG duoc dua kien thuc ben ngoai tai lieu goc. "
-        "Moi cau hoi, dap an, va explanation phai truy vet duoc tu tai lieu goc. "
-        "Neu tai lieu goc khong du thong tin de tao cau hoi chat luong, van tra ve JSON hop le nhung cau hoi phai ngan gon va trung lap toi thieu. "
-        "BẮT BUỘC phần explanation (giai thich) phai neu ro can cu trong tai lieu goc. "
-        "Trả về định dạng JSON mảng tuyệt đối nghiêm ngặt: "
+        "Ban la tro ly hoc tap. Hay tao DUNG 3 cau hoi trac nghiem CHI dua tren tai lieu goc ben duoi. "
+        "Tai lieu goc la nguon su that DUY NHAT. TUYET DOI KHONG dua kien thuc ben ngoai tai lieu. "
+        "Moi cau hoi, dap an va explanation phai truy vet duoc tu tai lieu goc; khong duoc suy doan. "
+        "Neu tai lieu goc thieu thong tin, van tao cau hoi o muc do co ban dua tren noi dung da co, "
+        "khong chen su kien/khai niem moi khong xuat hien trong tai lieu. "
+        "BAt BUOC: explanation phai neu can cu cu the tu tai lieu goc (trich y ngan gon). "
+        "Tra ve dinh dang JSON mang tuyet doi nghiem ngat: "
         "[{ \"question\": \"...\", \"options\": [\"A\", \"B\", \"C\", \"D\"], \"correct_index\": 0, \"explanation\": \"...\" }]. "
         "Khong kem bat ky van ban nao khac ngoai JSON.\n\n"
         f"Tieu de tai lieu: {lesson_title.strip()}\n\n"

@@ -193,7 +193,6 @@ class LessonContentDTO(BaseModel):
     theory: str
     examples: list[LessonExampleDTO]
     key_points: list[str]
-    youtube_query: str
 
 
 class LessonDetailDTO(BaseModel):
@@ -214,16 +213,6 @@ class LessonDetailDTO(BaseModel):
 
 class LessonGenerateResponseDTO(BaseModel):
     lesson: LessonDetailDTO
-
-
-class YouTubeVideoDTO(BaseModel):
-    id: str
-    title: str
-    channel: str
-    thumbnail: str
-    duration: str
-    views: str
-    url: str
 
 
 class QuizOptionDTO(BaseModel):

@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github-dark.css';
 import {
   CheckCircle2, BookOpen,
   Loader2, Zap,
@@ -743,15 +745,16 @@ export function QuizResultDisplay({
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-violet-300 prose-headings:text-white prose-code:text-cyan-300">
+    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-violet-300 prose-headings:text-white prose-code:text-cyan-300 prose-a:text-cyan-300 prose-a:no-underline hover:prose-a:underline">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
         components={{
           h2: ({ children }) => <h2 className="text-xl text-white mt-6 mb-3" style={{ fontWeight: 700 }}>{children}</h2>,
           h3: ({ children }) => <h3 className="text-base text-zinc-200 mt-4 mb-2" style={{ fontWeight: 600 }}>{children}</h3>,
           p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed my-2">{children}</p>,
           li: ({ children }) => <li className="text-zinc-300 text-sm my-1">{children}</li>,
-          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs">{children}</pre>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed">{children}</pre>,
           code: ({ inline, children, ...props }) => {
             if (inline) {
               return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
@@ -766,6 +769,7 @@ function MarkdownContent({ content }: { content: string }) {
           thead: ({ children }) => <thead className="bg-zinc-800/80">{children}</thead>,
           th: ({ children }) => <th className="border border-zinc-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-zinc-300">{children}</th>,
           td: ({ children }) => <td className="border border-zinc-800 px-3 py-2 align-top text-sm">{children}</td>,
+          blockquote: ({ children }) => <blockquote className="my-4 border-l-4 border-zinc-600 pl-4 text-zinc-300 italic">{children}</blockquote>,
         }}
       >
         {content}
@@ -832,9 +836,6 @@ export default function LearningWorkspace() {
     const nextTab: LearningTab = isLearningTab(requestedTab) ? requestedTab : 'theory';
     setActiveTab(prev => (prev === nextTab ? prev : nextTab));
   }, [searchParams]);
-  const youtubeEmbedUrl = lessonDetail?.youtubeVideoId
-    ? `https://www.youtube.com/embed/${encodeURIComponent(lessonDetail.youtubeVideoId)}?rel=0`
-    : null;
 
   const loadLesson = useCallback(async (targetLessonId: string) => {
     setIsLoading(true);
@@ -1203,52 +1204,17 @@ export default function LearningWorkspace() {
     if (!loadError && lessonDetail?.contentMarkdown) {
       return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-          {youtubeEmbedUrl ? (
-            <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-              <div className="xl:col-span-2">
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-zinc-800">
-                    <h3 className="text-sm text-zinc-100" style={{ fontWeight: 600 }}>Video goi y</h3>
-                    <p className="text-xs text-zinc-500 mt-1">Duoc tim tu YouTube theo noi dung bai hoc</p>
-                  </div>
-                  <div className="aspect-video bg-black">
-                    <iframe
-                      src={youtubeEmbedUrl}
-                      title={`YouTube video for ${lessonDetail.title}`}
-                      className="w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      allowFullScreen
-                    />
-                  </div>
-                </div>
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                <BookOpen size={13} className="text-blue-400" />
               </div>
-
-              <div className="xl:col-span-3">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                    <BookOpen size={13} className="text-blue-400" />
-                  </div>
-                  <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
-                </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                  <MarkdownContent content={lessonDetail.contentMarkdown} />
-                </div>
-              </div>
+              <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
             </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                  <BookOpen size={13} className="text-blue-400" />
-                </div>
-                <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
-              </div>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-                <MarkdownContent content={lessonDetail.contentMarkdown} />
-              </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+              <MarkdownContent content={lessonDetail.contentMarkdown} />
             </div>
-          )}
+          </div>
         </motion.div>
       );
     }
@@ -1464,7 +1430,28 @@ export default function LearningWorkspace() {
               >
                 {message.role === 'assistant' ? (
                   <div className="prose prose-invert max-w-none prose-p:my-1 prose-p:text-zinc-100 prose-li:text-zinc-200 prose-strong:text-cyan-300">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeHighlight]}
+                      components={{
+                        pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-950/80 p-2.5 text-xs leading-relaxed">{children}</pre>,
+                        code: ({ inline, children, ...props }) => {
+                          if (inline) {
+                            return <code className="rounded bg-cyan-400/10 px-1 py-0.5 text-xs text-cyan-200">{children}</code>;
+                          }
+                          return <code className="text-zinc-100" {...props}>{children}</code>;
+                        },
+                        table: ({ children }) => (
+                          <div className="my-2 overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900/70">
+                            <table className="min-w-full border-collapse text-xs text-zinc-200">{children}</table>
+                          </div>
+                        ),
+                        th: ({ children }) => <th className="border border-zinc-700 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-zinc-300">{children}</th>,
+                        td: ({ children }) => <td className="border border-zinc-800 px-2 py-1 align-top text-xs">{children}</td>,
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
                   </div>
                 ) : (
                   <p>{message.content}</p>

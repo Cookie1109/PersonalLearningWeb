@@ -178,7 +178,6 @@ print(high_score)`,
       },
     ],
     keyPoints: ['Series là mảng 1D có nhãn', 'DataFrame là bảng 2D gồm nhiều Series', '.loc truy cập theo nhãn, .iloc theo số', 'Boolean indexing để lọc dữ liệu'],
-    youtubeQuery: 'pandas python tutorial dataframe series beginners',
   },
   'l1-1': {
     title: 'Biến & Kiểu Dữ Liệu Python',
@@ -226,7 +225,6 @@ pi = float("3.14")   # "3.14" → 3.14`,
       },
     ],
     keyPoints: ['Python tự động nhận diện kiểu dữ liệu', 'int, float, str, bool là 4 kiểu cơ bản', 'type() để kiểm tra kiểu', 'int(), str(), float() để chuyển đổi'],
-    youtubeQuery: 'python variables data types beginners tutorial',
   },
 };
 

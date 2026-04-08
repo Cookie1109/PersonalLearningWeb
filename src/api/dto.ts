@@ -158,17 +158,6 @@ export interface LessonContentDTO {
   theory: string;
   examples: LessonExampleDTO[];
   key_points: string[];
-  youtube_query: string;
-}
-
-export interface YouTubeVideoDTO {
-  id: string;
-  title: string;
-  channel: string;
-  thumbnail: string;
-  duration: string;
-  views: string;
-  url: string;
 }
 
 export interface QuizOptionDTO {

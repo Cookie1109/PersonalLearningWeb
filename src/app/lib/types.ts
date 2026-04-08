@@ -50,7 +50,6 @@ export interface LessonContent {
   theory: LessonContentDTO['theory'];
   examples: { title: string; code?: string; description: string }[];
   keyPoints: string[];
-  youtubeQuery: string;
 }
 
 export type QuizPayload = QuizResponseDTO;
