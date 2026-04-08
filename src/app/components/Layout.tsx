@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, BookOpen, Trophy,
   Zap, Flame, ChevronRight, Menu, Sparkles, Target,
-  Settings, Bell, Star, LogOut, MessageSquare, FilePlus2
+  Settings, Bell, Star, LogOut, MessageSquare, FilePlus2, LibraryBig
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserStats } from '../lib/types';
@@ -14,6 +14,7 @@ import { getAccessToken } from '../../api/client';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tổng Quan', end: true },
   { to: '/create', icon: FilePlus2, label: 'Tạo Workspace' },
+  { to: '/library', icon: LibraryBig, label: 'Thư viện' },
   { to: '/learn', icon: BookOpen, label: 'Không Gian Học' },
   { to: '/chat', icon: MessageSquare, label: 'DocsShare Assistant' },
 ];

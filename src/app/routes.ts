@@ -6,6 +6,7 @@ import LearningWorkspace from './pages/LearningWorkspace';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatPage from './pages/ChatPage';
+import Library from './pages/Library';
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: 'create', Component: DocumentCreate },
+      { path: 'library', Component: Library },
       { path: 'learn', Component: LearningWorkspace },
       { path: 'learn/:lessonId', Component: LearningWorkspace },
       { path: 'chat', Component: ChatPage },
