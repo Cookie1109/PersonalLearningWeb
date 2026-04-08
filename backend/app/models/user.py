@@ -28,6 +28,7 @@ class User(Base):
     )
 
     roadmaps = relationship("Roadmap", back_populates="user", cascade="all, delete-orphan")
+    lessons = relationship("Lesson", back_populates="user", cascade="all, delete-orphan")
     exp_entries = relationship("ExpLedger", back_populates="user", cascade="all, delete-orphan")
     quiz_attempts = relationship("QuizAttempt", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user")

@@ -195,10 +195,12 @@ def seed_quiz(db_session: Session, auth_headers):
     db_session.refresh(roadmap)
 
     lesson = Lesson(
+        user_id=user.id,
         roadmap_id=roadmap.id,
         week_number=1,
         position=1,
         title="Quiz Fundamentals",
+        source_content="Quiz fundamentals source content for testing.",
     )
     db_session.add(lesson)
     db_session.commit()

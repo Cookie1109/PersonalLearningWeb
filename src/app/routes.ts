@@ -1,10 +1,8 @@
 import { createBrowserRouter } from 'react-router';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import RoadmapGenerator from './pages/RoadmapGenerator';
+import DocumentCreate from './pages/DocumentCreate';
 import LearningWorkspace from './pages/LearningWorkspace';
-import QuizPage from './pages/QuizPage';
-import LessonsPage from './pages/LessonsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ChatPage from './pages/ChatPage';
@@ -23,12 +21,9 @@ export const router = createBrowserRouter([
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
-      { path: 'roadmap', Component: RoadmapGenerator },
-      { path: 'roadmap-generator', Component: RoadmapGenerator },
-      { path: 'lessons', Component: LessonsPage },
+      { path: 'create', Component: DocumentCreate },
       { path: 'learn', Component: LearningWorkspace },
       { path: 'learn/:lessonId', Component: LearningWorkspace },
-      { path: 'quiz', Component: QuizPage },
       { path: 'chat', Component: ChatPage },
     ],
   },

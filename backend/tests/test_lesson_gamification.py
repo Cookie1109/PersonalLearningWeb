@@ -19,10 +19,12 @@ def _seed_lesson(db_session: Session, *, user_id: int, title: str = "Lesson") ->
     db_session.refresh(roadmap)
 
     lesson = Lesson(
+        user_id=user_id,
         roadmap_id=roadmap.id,
         week_number=1,
         position=1,
         title=title,
+        source_content=f"Source content for {title}",
         is_completed=False,
     )
     db_session.add(lesson)

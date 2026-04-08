@@ -1,70 +1,48 @@
 from __future__ import annotations
 
-import json
-from unittest.mock import patch
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Lesson, Roadmap
+from app.models import Lesson
 
 
-def test_generate_roadmap_creates_draft_lessons_from_mocked_llm(
+def test_create_document_creates_owned_lesson(
     client,
     db_session: Session,
     auth_headers,
+    monkeypatch,
 ) -> None:
     user, headers = auth_headers
 
-    mocked_llm_output = json.dumps(
-        [
-            {
-                "week": 1,
-                "title": "Python Foundation",
-                "lessons": [
-                    "Setup Environment",
-                    "Variables and Data Types",
-                ],
-            },
-            {
-                "week": 2,
-                "title": "Core Control Flow",
-                "lessons": [
-                    "Conditions",
-                    "Loops",
-                ],
-            },
-        ]
+    import app.services.lesson_service as lesson_service
+
+    monkeypatch.setattr(
+        lesson_service,
+        "generate_grounded_markdown",
+        lambda *, prompt: "## Python Foundation\n\n- Variables\n- Loops",
     )
 
-    with patch(
-        "app.services.roadmap_generation_service.request_roadmap_from_llm",
-        return_value=mocked_llm_output,
-    ):
-        response = client.post(
-            "/api/roadmaps/generate",
-            json={"goal": "Hoc Python co ban"},
-            headers=headers,
-        )
+    response = client.post(
+        "/api/documents",
+        json={
+            "title": "Python Foundation",
+            "source_content": "Variables store values and loops repeat actions.",
+        },
+        headers=headers,
+    )
 
     assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Python Foundation"
+    assert payload["message"] == "Document created"
 
-    active_roadmap = db_session.scalar(
-        select(Roadmap).where(
-            Roadmap.user_id == user.id,
-            Roadmap.is_active.is_(True),
+    created_lesson = db_session.scalar(
+        select(Lesson).where(
+            Lesson.id == payload["document_id"],
+            Lesson.user_id == user.id,
         )
     )
-    assert active_roadmap is not None
-
-    lessons = list(
-        db_session.scalars(
-            select(Lesson)
-            .where(Lesson.roadmap_id == active_roadmap.id)
-            .order_by(Lesson.week_number, Lesson.position)
-        )
-    )
-
-    assert len(lessons) == 4
-    assert all(lesson.is_completed is False for lesson in lessons)
-    assert all(lesson.content_markdown is None for lesson in lessons)
+    assert created_lesson is not None
+    assert created_lesson.roadmap_id is None
+    assert created_lesson.title == "Python Foundation"
+    assert created_lesson.source_content.startswith("Variables store values")

@@ -9,14 +9,16 @@ from app.db.base import Base
 class Lesson(Base):
     __tablename__ = "lessons"
     __table_args__ = (
-        UniqueConstraint("roadmap_id", "week_number", "position", name="uq_lessons_roadmap_week_position"),
+        UniqueConstraint("user_id", "title", name="uq_lessons_user_title"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    roadmap_id: Mapped[int] = mapped_column(ForeignKey("roadmaps.id", ondelete="CASCADE"), index=True, nullable=False)
-    week_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    roadmap_id: Mapped[int | None] = mapped_column(ForeignKey("roadmaps.id", ondelete="SET NULL"), index=True, nullable=True)
+    week_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     content_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     youtube_video_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -30,6 +32,7 @@ class Lesson(Base):
         nullable=False,
     )
 
+    user = relationship("User", back_populates="lessons")
     roadmap = relationship("Roadmap", back_populates="lessons")
     exp_entries = relationship("ExpLedger", back_populates="lesson")
     quiz = relationship("Quiz", back_populates="lesson", uselist=False, cascade="all, delete-orphan")

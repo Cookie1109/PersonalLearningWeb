@@ -59,6 +59,36 @@ export interface GenericStatusDTO {
   message: string;
 }
 
+export interface DocumentCreateRequestDTO {
+  title: string;
+  source_content: string;
+}
+
+export interface DocumentCreateResponseDTO {
+  document_id: number;
+  title: string;
+  message: string;
+}
+
+export interface DocumentSummaryDTO {
+  id: number;
+  title: string;
+  is_completed: boolean;
+  quiz_passed: boolean;
+  flashcard_completed: boolean;
+  created_at: string;
+}
+
+export interface ParserExtractUrlRequestDTO {
+  url: string;
+}
+
+export interface ParserExtractResponseDTO {
+  extracted_text: string;
+  source_type: 'url' | 'pdf' | 'docx' | 'image';
+  mime_type?: string | null;
+}
+
 export interface WeekModuleDTO {
   id: string;
   week_number: number;
@@ -197,11 +227,12 @@ export interface LessonDetailDTO {
   title: string;
   week_number: number;
   position: number;
-  roadmap_id: number;
-  roadmap_title: string;
+  roadmap_id?: number | null;
+  roadmap_title?: string | null;
   is_completed: boolean;
   quiz_passed: boolean;
   flashcard_completed: boolean;
+  source_content?: string | null;
   content_markdown?: string | null;
   youtube_video_id?: string | null;
   is_draft: boolean;

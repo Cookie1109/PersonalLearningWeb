@@ -259,7 +259,7 @@ export default function ChatPage() {
               </p>
               <button
                 type="button"
-                onClick={() => navigate(`/roadmap?goal=${encodeURIComponent(latestAssistantSuggestion)}`)}
+                onClick={() => navigate(`/create?title=${encodeURIComponent(latestAssistantSuggestion)}`)}
                 className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-400 text-zinc-950 px-3 py-2 text-sm hover:bg-amber-300 transition-colors"
                 style={{ fontWeight: 700 }}
               >

@@ -5,9 +5,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  CheckCircle2, ChevronLeft, ChevronRight, BookOpen,
-  Hammer, Rocket, Loader2, Zap, Clock,
-  MessageSquare, List, CreditCard, ListChecks, Lightbulb
+  CheckCircle2, BookOpen,
+  Loader2, Zap,
+  MessageSquare, CreditCard, ListChecks, Lightbulb
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -772,7 +772,7 @@ export default function LearningWorkspace() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { roadmap, completeLesson, applyServerExp, syncServerGamification } = useApp();
+  const { completeLesson, applyServerExp, syncServerGamification } = useApp();
 
   const [lessonDetail, setLessonDetail] = useState<LessonDetail | null>(null);
   const [activeTab, setActiveTab] = useState<LearningTab>('theory');
@@ -780,7 +780,6 @@ export default function LearningWorkspace() {
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(true);
-  const [showOutline, setShowOutline] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -800,28 +799,12 @@ export default function LearningWorkspace() {
   const [isMarkingFlashcardComplete, setIsMarkingFlashcardComplete] = useState(false);
   const [flashcardError, setFlashcardError] = useState<string | null>(null);
 
-  // Build optional navigation metadata from in-memory roadmap context.
-  const allLessons = useMemo(
-    () => roadmap.flatMap(w => w.lessons.map(l => ({ ...l, weekTitle: w.title, weekId: w.id }))),
-    [roadmap]
-  );
-  const currentIndex = allLessons.findIndex(l => l.id === lessonId);
-  const currentLesson = currentIndex >= 0 ? allLessons[currentIndex] : null;
-  const prevLesson = currentIndex > 0 ? allLessons[currentIndex - 1] : null;
-  const nextLesson = currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
   const flashcards = useMemo(
     () => buildFlashcardsFromMarkdown(lessonDetail?.contentMarkdown ?? null),
     [lessonDetail?.contentMarkdown]
   );
   const quizQuestions = quizData?.questions ?? [];
   const currentQuizQuestion = quizQuestions[quizState.currentIndex];
-
-  const lessonUrlForTab = useCallback((targetLessonId: string, targetTab: LearningTab = activeTab) => {
-    if (targetTab === 'theory') {
-      return `/learn/${targetLessonId}`;
-    }
-    return `/learn/${targetLessonId}?tab=${targetTab}`;
-  }, [activeTab]);
 
   const setLearningTab = useCallback((tab: LearningTab) => {
     setActiveTab(tab);
@@ -852,8 +835,7 @@ export default function LearningWorkspace() {
     try {
       const detail = await getLessonDetail(targetLessonId);
       setLessonDetail(detail);
-      const cachedLesson = allLessons.find(lesson => lesson.id === targetLessonId);
-      setIsCompleted(detail.isCompleted || Boolean(cachedLesson?.completed));
+      setIsCompleted(detail.isCompleted);
 
       const missingContent = !detail.contentMarkdown || !detail.contentMarkdown.trim() || detail.isDraft;
       if (missingContent) {
@@ -884,7 +866,7 @@ export default function LearningWorkspace() {
     } finally {
       setIsLoading(false);
     }
-  }, [allLessons]);
+  }, []);
 
   useEffect(() => {
     if (!lessonId) return;
@@ -1100,9 +1082,9 @@ export default function LearningWorkspace() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <BookOpen size={48} className="text-zinc-700" />
-        <p className="text-zinc-400">Chọn một bài học để bắt đầu</p>
-        <button onClick={() => navigate('/lessons')} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm">
-          Den danh sach bai hoc
+        <p className="text-zinc-400">Chua co tai lieu nao duoc chon</p>
+        <button onClick={() => navigate('/create')} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm">
+          Tao tai lieu moi
         </button>
       </div>
     );
@@ -1380,109 +1362,33 @@ export default function LearningWorkspace() {
 
   return (
     <div className="flex h-full">
-      {/* Lesson outline sidebar */}
-      <AnimatePresence>
-        {showOutline && (
-          <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 260, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            className="flex-shrink-0 bg-zinc-900 border-r border-zinc-800 overflow-y-auto"
-          >
-            <div className="p-4">
-              <h3 className="text-sm text-white mb-3" style={{ fontWeight: 600 }}>Danh sách bài học</h3>
-              {roadmap.length === 0 ? (
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  Khong co du lieu outline trong phien hien tai. Ban van co the hoc bai bang noi dung duoc tai tu server.
-                </p>
-              ) : (
-                roadmap.map(week => (
-                  <div key={week.id} className="mb-4">
-                    <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider" style={{ fontWeight: 600 }}>Tuần {week.weekNumber}: {week.title}</p>
-                    {week.lessons.map(lesson => (
-                      <button
-                        key={lesson.id}
-                        onClick={() => navigate(lessonUrlForTab(lesson.id, activeTab))}
-                        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg mb-1 text-sm transition-colors ${
-                          lesson.id === lessonId
-                            ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                        }`}
-                      >
-                        {lesson.completed ? (
-                          <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
-                        ) : (
-                          <div className="w-3.5 h-3.5 rounded-full border border-zinc-600 flex-shrink-0" />
-                        )}
-                        <span className="truncate">{lesson.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                ))
-              )}
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Main content */}
-      <div className={`flex-1 flex overflow-hidden ${showChat ? '' : ''}`}>
-        {/* Lesson content */}
+      <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-y-auto">
-          {/* Top bar */}
           <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-zinc-950/90 backdrop-blur-sm border-b border-zinc-800">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowOutline(!showOutline)}
-                className={`p-2 rounded-lg transition-colors ${showOutline ? 'bg-zinc-800 text-zinc-300' : 'text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800'}`}
-                title="Danh sách bài học"
-              >
-                <List size={16} />
-              </button>
-              <div className="text-xs text-zinc-500">
-                <span className="text-violet-400">
-                  {lessonDetail ? `Tuan ${lessonDetail.weekNumber}` : (currentLesson?.weekTitle ?? 'Bai hoc')}
-                </span>
-                <span className="mx-1">›</span>
-                <span>{lessonDetail?.title ?? currentLesson?.title ?? 'Dang tai...'}</span>
-              </div>
+            <div className="text-xs text-zinc-500">
+              <span className="text-violet-400">Learning Workspace</span>
+              <span className="mx-1">›</span>
+              <span>{lessonDetail?.title ?? 'Dang tai...'}</span>
             </div>
-            <div className="flex items-center gap-2">
-              {currentLesson && (
-                <>
-                  <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full ${
-                    currentLesson.type === 'theory' ? 'bg-blue-500/20 text-blue-400' :
-                    currentLesson.type === 'practice' ? 'bg-emerald-500/20 text-emerald-400' :
-                    'bg-orange-500/20 text-orange-400'
-                  }`}>
-                    {currentLesson.type === 'theory' ? <BookOpen size={11} /> : currentLesson.type === 'practice' ? <Hammer size={11} /> : <Rocket size={11} />}
-                    {currentLesson.type === 'theory' ? 'Ly thuyet' : currentLesson.type === 'practice' ? 'Thuc hanh' : 'Du an'}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-zinc-500">
-                    <Clock size={12} />{currentLesson.duration}
-                  </div>
-                </>
-              )}
-              <button
-                onClick={() => setShowChat(!showChat)}
-                className={`p-2 rounded-lg transition-colors ${showChat ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
-                title="AI Tutor"
-              >
-                <MessageSquare size={16} />
-              </button>
-            </div>
+            <button
+              onClick={() => setShowChat(!showChat)}
+              className={`p-2 rounded-lg transition-colors ${showChat ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
+              title="AI Tutor"
+            >
+              <MessageSquare size={16} />
+            </button>
           </div>
 
           <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
             {/* Lesson title */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
               <h1 className="text-3xl text-white" style={{ fontWeight: 700 }}>
-                {lessonDetail?.title ?? currentLesson?.title ?? 'Bai hoc'}
+                {lessonDetail?.title ?? 'Bai hoc'}
               </h1>
               <p className="text-zinc-500 text-sm mt-1">
                 {lessonDetail
-                  ? `Lo trinh: ${lessonDetail.roadmapTitle}`
-                  : (currentLesson?.description ?? 'Dang tai thong tin bai hoc...')}
+                  ? 'Tai lieu dang duoc hoc theo che do NotebookLM Mini.'
+                  : 'Dang tai thong tin bai hoc...'}
               </p>
             </motion.div>
 
@@ -1531,16 +1437,9 @@ export default function LearningWorkspace() {
               {!loadError && activeTab === 'flashcard' && renderFlashcardPanel()}
           </div>
 
-          {/* Navigation & Complete */}
+          {/* Complete */}
           <div className="sticky bottom-0 bg-zinc-950/95 backdrop-blur-sm border-t border-zinc-800 px-6 py-4">
-            <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
-              <button
-                onClick={() => prevLesson && navigate(lessonUrlForTab(prevLesson.id, activeTab))}
-                disabled={!prevLesson}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-zinc-400 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                <ChevronLeft size={16} />Bài trước
-              </button>
+            <div className="max-w-3xl mx-auto flex items-center justify-end gap-4">
 
               <button
                 onClick={handleComplete}
@@ -1557,14 +1456,6 @@ export default function LearningWorkspace() {
                 ) : (
                   <><Zap size={16} />{isCompleting ? 'Đang ghi nhận...' : 'Hoàn thành bài học'}</>
                 )}
-              </button>
-
-              <button
-                onClick={() => nextLesson && navigate(lessonUrlForTab(nextLesson.id, activeTab))}
-                disabled={!nextLesson}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-zinc-400 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              >
-                Bài sau<ChevronRight size={16} />
               </button>
             </div>
             {completeError && (

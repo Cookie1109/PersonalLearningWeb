@@ -4,7 +4,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import AppException
-from app.models import ExpLedger, Lesson, Question, Quiz, QuizAttempt, Roadmap, User
+from app.models import ExpLedger, Lesson, Question, Quiz, QuizAttempt, User
 from app.schemas import QuizOptionDTO, QuizPublicQuestionDTO, QuizResponseDTO, QuizSubmitAnswerDTO, QuizSubmitResponseDTO, QuizSubmitResultDTO
 from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp
 from app.services.quiz_generation_service import generate_quiz_questions
@@ -13,11 +13,7 @@ OPTION_KEYS = ("A", "B", "C", "D")
 
 
 def _get_lesson_for_user(*, db: Session, user_id: int, lesson_id: int, lock: bool = False) -> Lesson:
-    stmt = (
-        select(Lesson)
-        .join(Roadmap, Lesson.roadmap_id == Roadmap.id)
-        .where(and_(Lesson.id == lesson_id, Roadmap.user_id == user_id))
-    )
+    stmt = select(Lesson).where(and_(Lesson.id == lesson_id, Lesson.user_id == user_id))
     if lock:
         stmt = stmt.with_for_update()
 
@@ -100,17 +96,17 @@ def generate_quiz_for_lesson_user(*, db: Session, user_id: int, lesson_id: int) 
     if quiz is not None and quiz.questions:
         return _to_quiz_response(quiz)
 
-    markdown = (lesson.content_markdown or "").strip()
-    if not markdown:
+    source_content = (lesson.source_content or "").strip()
+    if not source_content:
         raise AppException(
             status_code=409,
-            message="Lesson content is empty",
-            detail={"code": "LESSON_CONTENT_EMPTY"},
+            message="Document source content is empty",
+            detail={"code": "LESSON_SOURCE_EMPTY"},
         )
 
     model_name, generated_questions = generate_quiz_questions(
         lesson_title=lesson.title,
-        lesson_markdown=markdown,
+        source_content=source_content,
     )
 
     try:
@@ -178,10 +174,10 @@ def submit_quiz_for_user(
         .where(Quiz.id == quiz_id_int)
         .options(
             selectinload(Quiz.questions),
-            joinedload(Quiz.lesson).joinedload(Lesson.roadmap),
+            joinedload(Quiz.lesson),
         )
     )
-    if quiz is None or quiz.lesson is None or quiz.lesson.roadmap is None or quiz.lesson.roadmap.user_id != user_id:
+    if quiz is None or quiz.lesson is None or quiz.lesson.user_id != user_id:
         raise AppException(status_code=404, message="Quiz not found", detail={"code": "QUIZ_NOT_FOUND"})
     if not quiz.questions:
         raise AppException(status_code=404, message="Quiz not found", detail={"code": "QUIZ_NOT_FOUND"})

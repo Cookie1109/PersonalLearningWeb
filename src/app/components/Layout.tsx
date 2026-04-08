@@ -2,34 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  LayoutDashboard, Map, BookOpen, Brain, Trophy,
+  LayoutDashboard, BookOpen, Trophy,
   Zap, Flame, ChevronRight, Menu, Sparkles, Target,
-  Settings, Bell, Star, BookMarked, LogOut, MessageSquare
+  Settings, Bell, Star, LogOut, MessageSquare, FilePlus2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { UserStats, WeekModule } from '../lib/types';
+import { UserStats } from '../lib/types';
 import { getMyProfile, logout } from '../../api/auth';
 import { getAccessToken } from '../../api/client';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tổng Quan', end: true },
-  { to: '/roadmap', icon: Map, label: 'Lộ Trình AI' },
-  { to: '/lessons', icon: BookMarked, label: 'Bài Học Của Tôi' },
+  { to: '/create', icon: FilePlus2, label: 'Tạo Workspace' },
   { to: '/learn', icon: BookOpen, label: 'Không Gian Học' },
-  { to: '/quiz', icon: Brain, label: 'Kiểm Tra & Flashcard' },
   { to: '/chat', icon: MessageSquare, label: 'DocsShare Assistant' },
 ];
 
 export interface LayoutProps {
   userData?: UserStats;
-  roadmapData?: WeekModule[];
   activeRoadmapLabel?: string;
 }
 
-export default function Layout({ userData, roadmapData, activeRoadmapLabel }: LayoutProps) {
+export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const app = useApp();
   const user = userData ?? app.user;
-  const roadmap = roadmapData ?? app.roadmap;
   const { resetSessionState, setUserFromAuth } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -72,11 +68,9 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
     }
   };
 
-  const totalLessons = roadmap.flatMap(w => w.lessons).length;
-  const completedCount = roadmap.flatMap(w => w.lessons).filter(l => l.completed).length;
-  const progress = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+  const progress = Math.min(100, Math.max(0, user.totalDays));
   const expProgress = Math.round((user.exp / user.expToNextLevel) * 100);
-  const roadmapLabel = activeRoadmapLabel ?? (roadmap.length > 0 ? 'Python cho Data Analysis · 4 tuần' : 'Chưa có lộ trình');
+  const roadmapLabel = activeRoadmapLabel ?? 'NotebookLM Mini Workspace';
 
   return (
     <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
@@ -216,7 +210,7 @@ export default function Layout({ userData, roadmapData, activeRoadmapLabel }: La
         {/* Top bar */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/roadmap')} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm text-zinc-300">
+            <button onClick={() => navigate('/create')} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm text-zinc-300">
               <Target size={14} className="text-violet-400" />
               <span className="max-w-xs truncate">{roadmapLabel}</span>
             </button>

@@ -1,99 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import {
-  BookOpen, Flame, Trophy, Zap, Target, ChevronRight,
-  TrendingUp, Clock, Star, Play, CheckCircle2, Brain,
-  Send, Sparkles
-} from 'lucide-react';
+import { Clock, FilePlus2, Flame, Sparkles, Star, TrendingUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import ProgressHeatmap from '../components/ProgressHeatmap';
 import { fetchMyActivity } from '../../api/auth';
 
-const EXP_REWARDS = [
-  { icon: BookOpen, label: 'Hoàn thành bài học', exp: '+50 EXP', color: 'text-violet-400', bg: 'bg-violet-500/10' },
-  { icon: Brain, label: 'Làm đúng Quiz', exp: '+30 EXP', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-  { icon: Flame, label: 'Duy trì Streak', exp: '+20 EXP', color: 'text-orange-400', bg: 'bg-orange-500/10' },
-  { icon: Trophy, label: 'Hoàn thành tuần', exp: '+200 EXP', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-];
-
-const QUICK_SUGGESTIONS = [
-  'Ôn tập Python cơ bản',
-  'Thực hành DataFrame với Pandas',
-  'Học Matplotlib vẽ biểu đồ',
-  'Machine Learning với scikit-learn',
-  'SQL cho Data Analysis',
-];
-
-function QuickAddLesson() {
-  const navigate = useNavigate();
-  const [value, setValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleAdd = (title?: string) => {
-    const t = (title ?? value).trim();
-    if (!t) return;
-    navigate(`/roadmap-generator?goal=${encodeURIComponent(t)}`);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.08 }}
-      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
-    >
-      {/* Label */}
-      <p className="text-xs text-zinc-500 mb-3" style={{ fontWeight: 500 }}>
-        Nhap muc tieu va nhan Enter de chuyen sang trang tao lo trinh AI
-      </p>
-
-      {/* Input row */}
-      <div className="flex gap-2">
-        {/* Text input */}
-        <div className="flex-1 flex items-center bg-zinc-800 border border-zinc-700 rounded-xl focus-within:border-violet-500/50 transition-colors overflow-hidden">
-          <input
-            ref={inputRef}
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAdd();
-              }
-            }}
-            placeholder="Ban muon hoc gi? Nhan Enter de tao lo trinh..."
-            className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 px-4 py-2.5 outline-none"
-          />
-          <button
-            onClick={() => handleAdd()}
-            disabled={!value.trim()}
-            className="w-10 h-10 flex items-center justify-center text-violet-400 hover:text-white hover:bg-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all rounded-r-xl flex-shrink-0"
-          >
-            <Send size={15} />
-          </button>
-        </div>
-      </div>
-
-      {/* Quick suggestions */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        <span className="text-xs text-zinc-600 self-center">Gợi ý:</span>
-        {QUICK_SUGGESTIONS.map(s => (
-          <button
-            key={s}
-            onClick={() => handleAdd(s)}
-            className="text-xs px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-500 hover:text-violet-300 hover:border-violet-500/40 transition-all"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
 export default function Dashboard() {
-  const { user, roadmap, activityData, syncActivityData } = useApp();
+  const { user, activityData, syncActivityData } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -105,7 +19,7 @@ export default function Dashboard() {
         if (!isMounted) return;
         syncActivityData(activity);
       } catch {
-        // Keep UI responsive with current local state if activity API is unavailable.
+        // Keep current UI state if activity endpoint is temporarily unavailable.
       }
     };
 
@@ -115,63 +29,43 @@ export default function Dashboard() {
     };
   }, [syncActivityData]);
 
-  const allLessons = roadmap.flatMap(w => w.lessons);
-  const completedLessons = allLessons.filter(l => l.completed).length;
-  const totalLessons = allLessons.length;
-  const overallProgress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-
-  const nextLesson = roadmap.flatMap(w =>
-    w.lessons.map(l => ({ ...l, weekTitle: w.title, weekId: w.id }))
-  ).find(l => !l.completed);
-
   const expProgress = Math.round((user.exp / user.expToNextLevel) * 100);
 
-  const weeklyStats = roadmap.map(week => ({
-    ...week,
-    completedCount: week.lessons.filter(l => l.completed).length,
-    totalCount: week.lessons.length,
-    pct: week.lessons.length > 0 ? Math.round((week.lessons.filter(l => l.completed).length / week.lessons.length) * 100) : 0,
-  }));
-
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-      {/* Welcome header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl text-white" style={{ fontWeight: 700 }}>
-              Chào buổi sáng, {user.name}! 👋
-            </h1>
-            <p className="text-zinc-400 mt-1">Hôm nay bạn muốn học gì?</p>
-          </div>
-          {nextLesson && (
-            <button
-              onClick={() => navigate(`/learn/${nextLesson.id}`)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition-colors text-sm"
-              style={{ fontWeight: 600 }}
-            >
-              <Play size={15} />
-              Tiếp tục học
-            </button>
-          )}
-        </div>
+    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-3xl text-white" style={{ fontWeight: 700 }}>Xin chao, {user.name}</h1>
+        <p className="text-zinc-400 mt-1">Paste tai lieu goc va hoc ngay theo mo hinh NotebookLM Mini.</p>
+      </motion.div>
 
-        {/* Quick Add Lesson box — right below the greeting */}
-        <div className="mt-4">
-          <QuickAddLesson />
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs text-cyan-300 uppercase tracking-wide" style={{ fontWeight: 700 }}>0-click flow</p>
+            <h2 className="text-xl text-white mt-1" style={{ fontWeight: 700 }}>Tao Document va vao Workspace ngay</h2>
+            <p className="text-sm text-zinc-300 mt-2">Chi can nhap tieu de va noi dung tai lieu goc. He thong se tao Theory, Quiz, Flashcard trong mot Workspace duy nhat.</p>
+          </div>
+          <button
+            onClick={() => navigate('/create')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm transition-colors flex-shrink-0"
+            style={{ fontWeight: 600 }}
+          >
+            <FilePlus2 size={16} />Tao Workspace
+          </button>
         </div>
       </motion.div>
 
-      {/* Stats row */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: Flame, label: 'Streak', value: `${user.streak} ngày`, sub: 'Chuỗi học liên tục', bg: 'bg-orange-500/10', border: 'border-orange-500/20', iconColor: 'text-orange-400' },
-          { icon: Clock, label: 'Thời gian', value: `${user.totalDays} ngày`, sub: 'Tổng ngày học tập', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', iconColor: 'text-cyan-400' },
-        ].map(({ icon: Icon, label, value, sub, bg, border, iconColor }) => (
-          <div key={label} className={`${bg} border ${border} rounded-2xl p-5`}>
-            <div className="flex items-start justify-between mb-3">
-              <Icon size={20} className={iconColor} />
-              <span className="text-xs text-zinc-600 uppercase tracking-wider" style={{ fontWeight: 600 }}>{label}</span>
+          { icon: Flame, label: 'Streak', value: `${user.streak} ngay`, sub: 'Chuoi hoc lien tuc', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
+          { icon: Clock, label: 'Ngay hoc', value: `${user.totalDays}`, sub: 'Tong so ngay hoc', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+          { icon: Star, label: 'Cap do', value: `Lv.${user.level}`, sub: `${user.exp}/${user.expToNextLevel} EXP`, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
+          { icon: Sparkles, label: 'Tien do EXP', value: `${expProgress}%`, sub: 'Muc tieu cap tiep theo', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+        ].map(({ icon: Icon, label, value, sub, color, bg }) => (
+          <div key={label} className={`rounded-2xl border p-4 ${bg}`}>
+            <div className="flex items-center justify-between mb-2">
+              <Icon size={18} className={color} />
+              <span className="text-xs text-zinc-500 uppercase tracking-wide" style={{ fontWeight: 600 }}>{label}</span>
             </div>
             <p className="text-2xl text-white" style={{ fontWeight: 700 }}>{value}</p>
             <p className="text-xs text-zinc-500 mt-1">{sub}</p>
@@ -179,202 +73,13 @@ export default function Dashboard() {
         ))}
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Main content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Continue learning card */}
-          {nextLesson && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="bg-violet-500/10 border border-violet-500/30 rounded-2xl p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-                    <span className="text-xs text-violet-400 uppercase tracking-wider" style={{ fontWeight: 600 }}>Bài tiếp theo</span>
-                  </div>
-                  <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>{nextLesson.title}</h3>
-                  <p className="text-sm text-zinc-400 mt-1">{nextLesson.weekTitle} · {nextLesson.duration}</p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className={`text-xs px-2 py-1 rounded-full ${
-                      nextLesson.type === 'theory' ? 'bg-blue-500/20 text-blue-400' :
-                      nextLesson.type === 'practice' ? 'bg-emerald-500/20 text-emerald-400' :
-                      'bg-orange-500/20 text-orange-400'
-                    }`}>
-                      {nextLesson.type === 'theory' ? '📖 Lý thuyết' : nextLesson.type === 'practice' ? '💻 Thực hành' : '🚀 Dự án'}
-                    </div>
-                    <span className="text-xs text-zinc-500">{nextLesson.duration}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/learn/${nextLesson.id}`)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition-colors text-sm flex-shrink-0"
-                  style={{ fontWeight: 600 }}
-                >
-                  <Play size={14} />Bắt đầu
-                </button>
-              </div>
-
-              {/* Progress bar */}
-              <div className="mt-4">
-                <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
-                  <span>Tiến độ lộ trình</span>
-                  <span>{overallProgress}%</span>
-                </div>
-                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${overallProgress}%` }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                    className="h-full bg-violet-500 rounded-full"
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Weekly roadmap progress */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <Target size={18} className="text-violet-400" />
-                <h2 className="text-white" style={{ fontWeight: 600 }}>Lộ Trình Học Tập</h2>
-              </div>
-              <button onClick={() => navigate('/roadmap')} className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors">
-                Xem chi tiết<ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {weeklyStats.map((week, i) => (
-                <motion.div
-                  key={week.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 + i * 0.08 }}
-                  className="flex items-center gap-4"
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs flex-shrink-0 ${
-                    week.completed ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    week.pct > 0 ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' :
-                    'bg-zinc-800 text-zinc-500 border border-zinc-700'
-                  }`} style={{ fontWeight: 700 }}>
-                    {week.completed ? <CheckCircle2 size={14} /> : week.weekNumber}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-zinc-300 truncate" style={{ fontWeight: week.pct > 0 ? 500 : 400 }}>{week.title}</p>
-                      <span className="text-xs text-zinc-500 ml-2 flex-shrink-0">{week.completedCount}/{week.totalCount}</span>
-                    </div>
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${week.pct}%` }}
-                        transition={{ duration: 0.8, delay: 0.5 + i * 0.1 }}
-                        className={`h-full rounded-full ${week.completed ? 'bg-emerald-500' : 'bg-violet-500'}`}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            {/* Link to all lessons */}
-            <button
-              onClick={() => navigate('/lessons')}
-              className="mt-5 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-zinc-800/60 border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600 transition-all text-sm"
-            >
-              <Sparkles size={14} className="text-violet-400" />
-              Xem toàn bộ bài học của tôi
-              <ChevronRight size={14} />
-            </button>
-          </div>
-
-          {/* Activity Heatmap */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <TrendingUp size={18} className="text-cyan-400" />
-              <h2 className="text-white" style={{ fontWeight: 600 }}>Hoạt Động Học Tập</h2>
-            </div>
-            <ProgressHeatmap data={activityData} />
-          </div>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18 }} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <TrendingUp size={18} className="text-cyan-400" />
+          <h3 className="text-white" style={{ fontWeight: 600 }}>Hoat dong hoc tap</h3>
         </div>
-
-        {/* Right sidebar */}
-        <div className="space-y-5">
-          {/* Level card */}
-          <div className="bg-zinc-900 border border-violet-500/20 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Star size={16} className="text-yellow-400" />
-                <span className="text-sm text-white" style={{ fontWeight: 600 }}>Cấp Độ</span>
-              </div>
-              <span className="text-xs text-zinc-500">Lv.{user.level}</span>
-            </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center">
-                <span className="text-xl" style={{ fontWeight: 800 }}>{user.level}</span>
-              </div>
-              <div>
-                <p className="text-white text-sm" style={{ fontWeight: 600 }}>
-                  {user.level < 5 ? 'Người Mới' : user.level < 10 ? 'Học Giả' : user.level < 20 ? 'Chuyên Gia' : 'Bậc Thầy'}
-                </p>
-                <p className="text-xs text-zinc-500">{user.exp}/{user.expToNextLevel} EXP → Cấp {user.level + 1}</p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${expProgress}%` }}
-                  transition={{ duration: 1, delay: 0.3 }}
-                  className="h-full bg-violet-500 rounded-full"
-                />
-              </div>
-              <p className="text-xs text-zinc-600 text-right">{user.expToNextLevel - user.exp} EXP nữa để lên cấp</p>
-            </div>
-          </div>
-
-          {/* EXP Rewards */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap size={16} className="text-yellow-400" />
-              <h3 className="text-sm text-white" style={{ fontWeight: 600 }}>Bảng EXP</h3>
-            </div>
-            <div className="space-y-2.5">
-              {EXP_REWARDS.map(({ icon: Icon, label, exp, color, bg }) => (
-                <div key={label} className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
-                    <Icon size={14} className={color} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-zinc-300">{label}</p>
-                  </div>
-                  <span className="text-xs text-zinc-400" style={{ fontWeight: 600 }}>{exp}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-sm text-white mb-4" style={{ fontWeight: 600 }}>Hành động nhanh</h3>
-            <div className="space-y-2">
-              {[
-                { label: '🗺️ Tạo lộ trình mới', to: '/roadmap', color: 'hover:border-violet-500/50 hover:text-violet-300' },
-                { label: '📖 Tiếp tục học', to: nextLesson ? `/learn/${nextLesson.id}` : '/learn', color: 'hover:border-cyan-500/50 hover:text-cyan-300' },
-                { label: '🧠 Làm quiz & flashcard', to: '/quiz', color: 'hover:border-emerald-500/50 hover:text-emerald-300' },
-                { label: '📚 Xem tất cả bài học', to: '/lessons', color: 'hover:border-violet-500/50 hover:text-violet-300' },
-              ].map(({ label, to, color }) => (
-                <button
-                  key={label}
-                  onClick={() => navigate(to)}
-                  className={`w-full text-left text-sm px-4 py-2.5 rounded-xl bg-zinc-800/50 border border-zinc-700 text-zinc-400 transition-all ${color}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+        <ProgressHeatmap data={activityData} />
+      </motion.div>
     </div>
   );
 }

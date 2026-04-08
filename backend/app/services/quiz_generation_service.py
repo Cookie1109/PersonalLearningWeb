@@ -50,16 +50,19 @@ def _build_quiz_model_candidates(settings) -> list[str]:
     return candidates
 
 
-def build_quiz_prompt(*, lesson_title: str, lesson_markdown: str) -> str:
+def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
     return (
-        "Bạn là một chuyên gia giáo dục. Dựa vào nội dung bài học sau, hãy tạo ra đúng 3 câu hỏi trắc nghiệm. "
-        "BẮT BUỘC phần explanation (giải thích) phải cực kỳ chi tiết, phân tích rõ tại sao đáp án đó đúng và các đáp án khác sai. "
+        "Ban la tro ly hoc tap. Hay tao dung 3 cau hoi trac nghiem CHI dua tren tai lieu goc ben duoi. "
+        "TUYET DOI KHONG duoc dua kien thuc ben ngoai tai lieu goc. "
+        "Moi cau hoi, dap an, va explanation phai truy vet duoc tu tai lieu goc. "
+        "Neu tai lieu goc khong du thong tin de tao cau hoi chat luong, van tra ve JSON hop le nhung cau hoi phai ngan gon va trung lap toi thieu. "
+        "BẮT BUỘC phần explanation (giai thich) phai neu ro can cu trong tai lieu goc. "
         "Trả về định dạng JSON mảng tuyệt đối nghiêm ngặt: "
         "[{ \"question\": \"...\", \"options\": [\"A\", \"B\", \"C\", \"D\"], \"correct_index\": 0, \"explanation\": \"...\" }]. "
-        "Không kèm bất kỳ văn bản nào khác ngoài JSON.\n\n"
-        f"Tiêu đề bài học: {lesson_title.strip()}\n\n"
-        "Nội dung bài học (Markdown):\n"
-        f"{lesson_markdown.strip()}"
+        "Khong kem bat ky van ban nao khac ngoai JSON.\n\n"
+        f"Tieu de tai lieu: {lesson_title.strip()}\n\n"
+        "Tai lieu goc (nguon su that duy nhat):\n"
+        f"{source_content.strip()[:40000]}"
     )
 
 
@@ -156,7 +159,7 @@ def parse_generated_quiz(raw_text: str) -> list[GeneratedQuizQuestion]:
     return normalized
 
 
-def generate_quiz_questions(*, lesson_title: str, lesson_markdown: str) -> tuple[str, list[GeneratedQuizQuestion]]:
+def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[str, list[GeneratedQuizQuestion]]:
     settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
     if not api_key:
@@ -175,7 +178,7 @@ def generate_quiz_questions(*, lesson_title: str, lesson_markdown: str) -> tuple
                 "role": "user",
                 "parts": [
                     {
-                        "text": build_quiz_prompt(lesson_title=lesson_title, lesson_markdown=lesson_markdown),
+                        "text": build_quiz_prompt(lesson_title=lesson_title, source_content=source_content),
                     }
                 ],
             }

@@ -25,10 +25,12 @@ def _seed_lesson(
     db_session.refresh(roadmap)
 
     lesson = Lesson(
+        user_id=user_id,
         roadmap_id=roadmap.id,
         week_number=1,
         position=1,
         title=title,
+        source_content=(content_markdown or ""),
         content_markdown=content_markdown,
         is_completed=False,
     )
@@ -52,7 +54,7 @@ def test_generate_quiz_creates_questions_and_get_endpoint_hides_answer_key(
     monkeypatch.setattr(
         quiz_service,
         "generate_quiz_questions",
-        lambda *, lesson_title, lesson_markdown: (
+        lambda *, lesson_title, source_content: (
             "gemini-1.5-flash",
             [
                 GeneratedQuizQuestion(
@@ -111,8 +113,8 @@ def test_generate_quiz_creates_questions_and_get_endpoint_hides_answer_key(
 
 def test_generate_quiz_requires_lesson_content(client, db_session: Session, auth_headers) -> None:
     user, headers = auth_headers
-    lesson = _seed_lesson(db_session, user_id=user.id, title="Empty Lesson", content_markdown=None)
+    lesson = _seed_lesson(db_session, user_id=user.id, title="Empty Lesson", content_markdown="")
 
     response = client.post(f"/api/lessons/{lesson.id}/quiz/generate", json={}, headers=headers)
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "LESSON_CONTENT_EMPTY"
+    assert response.json()["detail"]["code"] == "LESSON_SOURCE_EMPTY"

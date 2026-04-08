@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models import ExpLedger, FlashcardProgress, Lesson, Quiz, QuizAttempt, Roadmap, User
-from app.schemas import FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
+from app.schemas import DocumentSummaryDTO, FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
 from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
 
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
@@ -140,7 +140,7 @@ def build_youtube_search_query(*, lesson: Lesson, roadmap: Roadmap | None = None
 
 
 def _detect_context_keywords(*, lesson: Lesson, roadmap: Roadmap | None) -> list[str]:
-    source_parts = [lesson.title or ""]
+    source_parts = [lesson.title or "", (lesson.source_content or "")[:2000]]
     if roadmap is not None:
         source_parts.append(roadmap.title or "")
         source_parts.append(roadmap.goal or "")
@@ -314,6 +314,116 @@ def _build_lesson_model_candidates(settings) -> list[str]:
     return candidates
 
 
+def _fallback_theory_markdown(*, title: str, source_content: str) -> str:
+    cleaned = source_content.strip()
+    if not cleaned:
+        return f"## {title}\n\nTai lieu goc dang trong."
+
+    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", cleaned) if chunk.strip()]
+    if not chunks:
+        chunks = [cleaned]
+
+    lines = [f"## {title}", "", "### Tom tat tu tai lieu goc", ""]
+    for chunk in chunks[:10]:
+        lines.append(f"- {chunk[:400]}")
+
+    return "\n".join(lines).strip()
+
+
+def build_document_theory_prompt(*, title: str, source_content: str) -> str:
+    bounded_source = source_content.strip()[:40000]
+
+    return (
+        "Ban la mot tro ly hoc tap theo mo hinh NotebookLM mini. "
+        "Nhiem vu cua ban: chi duoc phep tai cau truc va trinh bay lai tai lieu goc duoi dang Markdown de de hoc hon. "
+        "TUYET DOI KHONG bo sung kien thuc ben ngoai tai lieu goc. "
+        "Neu tai lieu goc khong co thong tin thi khong duoc suy dien. "
+        "Yeu cau dau ra: markdown thuan (khong code fence), co heading ro rang, bullet ngan gon, nguyen van y nghia tu tai lieu goc. "
+        "Cau truc bat buoc: 1) Muc tieu tai lieu, 2) Khai niem then chot, 3) Quy trinh/thao tac (neu co), 4) Thong so/ghi chu quan trong (neu co), 5) Tong ket ngan. "
+        "Khong viet them vi du ngoai tai lieu.\n\n"
+        f"Tieu de tai lieu: {title.strip()}\n\n"
+        "Tai lieu goc (nguon su that duy nhat):\n"
+        f"{bounded_source}"
+    )
+
+
+def create_document_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    title: str,
+    source_content: str,
+) -> Lesson:
+    normalized_title = _collapse_whitespace(title.strip())[:255]
+    normalized_source = source_content.strip()
+    if not normalized_source:
+        raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
+
+    theory_markdown = ""
+    try:
+        theory_markdown = generate_grounded_markdown(
+            prompt=build_document_theory_prompt(title=normalized_title, source_content=normalized_source)
+        ).strip()
+    except AppException as exc:
+        logger.warning("document.create_theory_llm_failed title=%s error=%s", normalized_title, str(exc))
+
+    if not theory_markdown:
+        theory_markdown = _fallback_theory_markdown(title=normalized_title, source_content=normalized_source)
+
+    try:
+        lesson = Lesson(
+            user_id=user_id,
+            roadmap_id=None,
+            week_number=1,
+            position=1,
+            title=normalized_title,
+            source_content=normalized_source,
+            content_markdown=theory_markdown,
+            youtube_video_id=None,
+            version=1,
+            is_completed=False,
+        )
+        db.add(lesson)
+        db.commit()
+        db.refresh(lesson)
+        return lesson
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=409,
+            message="Document creation failed",
+            detail={"code": "DOCUMENT_CREATE_FAILED", "error": str(exc)},
+        ) from exc
+
+
+def list_documents_for_user(*, db: Session, user_id: int) -> list[DocumentSummaryDTO]:
+    lessons = list(
+        db.scalars(
+            select(Lesson)
+            .where(Lesson.user_id == user_id)
+            .order_by(Lesson.created_at.desc(), Lesson.id.desc())
+        )
+    )
+
+    progress_map = get_lesson_sub_indicators_for_user(
+        db=db,
+        user_id=user_id,
+        lesson_ids=[lesson.id for lesson in lessons],
+    )
+
+    return [
+        DocumentSummaryDTO(
+            id=lesson.id,
+            title=lesson.title,
+            is_completed=lesson.is_completed,
+            quiz_passed=progress_map.get(lesson.id, (False, False))[0],
+            flashcard_completed=progress_map.get(lesson.id, (False, False))[1],
+            created_at=lesson.created_at,
+        )
+        for lesson in lessons
+    ]
+
+
 def get_lesson_sub_indicators_for_user(
     *,
     db: Session,
@@ -371,8 +481,8 @@ def _to_lesson_detail(
         roadmap_id = roadmap.id
         roadmap_title = roadmap.title or roadmap.goal
     else:
-        roadmap_id = int(lesson.roadmap_id or 0)
-        roadmap_title = "Bai hoc tu do"
+        roadmap_id = None
+        roadmap_title = None
 
     return LessonDetailDTO(
         id=lesson.id,
@@ -384,23 +494,40 @@ def _to_lesson_detail(
         is_completed=lesson.is_completed,
         quiz_passed=quiz_passed,
         flashcard_completed=flashcard_completed,
+        source_content=lesson.source_content,
         content_markdown=content,
         youtube_video_id=lesson.youtube_video_id,
         is_draft=not bool(content),
     )
 
 
-def get_lesson_for_user(*, db: Session, user_id: int, lesson_id: int) -> tuple[Lesson, Roadmap]:
-    result = db.execute(
-        select(Lesson, Roadmap)
-        .join(Roadmap, Lesson.roadmap_id == Roadmap.id)
-        .where(and_(Lesson.id == lesson_id, Roadmap.user_id == user_id))
-    ).first()
+def _get_owned_lesson(*, db: Session, user_id: int, lesson_id: int, lock: bool = False) -> Lesson:
+    stmt = select(Lesson).where(and_(Lesson.id == lesson_id, Lesson.user_id == user_id))
+    if lock:
+        stmt = stmt.with_for_update()
 
-    if result is None:
+    lesson = db.scalar(stmt)
+
+    if lesson is None:
         raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
 
-    lesson, roadmap = result
+    return lesson
+
+
+def _get_optional_roadmap_context(*, db: Session, lesson: Lesson) -> Roadmap | None:
+    if lesson.roadmap_id is None:
+        return None
+
+    return db.get(Roadmap, lesson.roadmap_id)
+
+
+def get_lesson_for_user(*, db: Session, user_id: int, lesson_id: int) -> tuple[Lesson, Roadmap | None]:
+    lesson = _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id)
+    roadmap = _get_optional_roadmap_context(db=db, lesson=lesson)
+
+    if roadmap is not None and roadmap.user_id != user_id:
+        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+
     return lesson, roadmap
 
 
@@ -422,13 +549,7 @@ def mark_flashcard_completed_for_user(
     user_id: int,
     lesson_id: int,
 ) -> FlashcardCompleteResponseDTO:
-    lesson = db.scalar(
-        select(Lesson)
-        .join(Roadmap, Lesson.roadmap_id == Roadmap.id)
-        .where(and_(Lesson.id == lesson_id, Roadmap.user_id == user_id))
-    )
-    if lesson is None:
-        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+    _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id)
 
     existing_progress = db.scalar(
         select(FlashcardProgress).where(
@@ -465,9 +586,7 @@ def mark_flashcard_completed_for_user(
 
 
 def get_lesson_for_generation(*, db: Session, user_id: int, lesson_id: int) -> tuple[Lesson, Roadmap | None]:
-    lesson = db.get(Lesson, lesson_id)
-    if lesson is None:
-        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+    lesson = _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id)
 
     if lesson.roadmap_id is None:
         logger.warning("lesson.roadmap_context_missing lesson_id=%s reason=no_roadmap_id", lesson.id)
@@ -831,6 +950,94 @@ def generate_lesson_markdown(*, prompt: str) -> str:
     )
 
 
+def generate_grounded_markdown(*, prompt: str) -> str:
+    settings = get_settings()
+    api_key = (settings.gemini_api_key or "").strip()
+    if not api_key:
+        raise AppException(
+            status_code=503,
+            message="AI service is not configured",
+            detail={"code": "LLM_API_KEY_MISSING"},
+        )
+
+    model_candidates = _build_lesson_model_candidates(settings)
+    timeout_seconds = max(120.0, float(settings.gemini_timeout_seconds))
+
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 6144,
+        },
+    }
+
+    with httpx.Client(timeout=timeout_seconds) as client:
+        for index, model_name in enumerate(model_candidates):
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            has_fallback = index < len(model_candidates) - 1
+
+            try:
+                response = client.post(endpoint, params={"key": api_key}, json=payload)
+            except httpx.TimeoutException as exc:
+                if has_fallback:
+                    continue
+                raise AppException(status_code=503, message="AI service timeout", detail={"code": "LLM_TIMEOUT"}) from exc
+            except httpx.RequestError as exc:
+                if has_fallback:
+                    continue
+                raise AppException(status_code=503, message="AI service network error", detail={"code": "LLM_NETWORK_ERROR"}) from exc
+
+            if response.status_code in (401, 403):
+                raise AppException(
+                    status_code=503,
+                    message="AI service authentication failed",
+                    detail={"code": "LLM_AUTH_FAILED"},
+                )
+
+            if response.status_code >= 400:
+                if has_fallback and response.status_code in (404, 429, 500, 503):
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service unavailable",
+                    detail={"code": "LLM_SERVICE_ERROR"},
+                )
+
+            try:
+                response_payload = response.json()
+            except ValueError as exc:
+                if has_fallback:
+                    continue
+                raise AppException(
+                    status_code=503,
+                    message="AI service returned invalid response",
+                    detail={"code": "LLM_INVALID_RESPONSE"},
+                ) from exc
+
+            generation_text = _extract_gemini_text(response_payload).strip()
+            if generation_text:
+                return generation_text
+
+            if has_fallback:
+                continue
+            raise AppException(
+                status_code=503,
+                message="AI service returned empty response",
+                detail={"code": "LLM_EMPTY_RESPONSE"},
+            )
+
+    raise AppException(
+        status_code=503,
+        message="AI service unavailable",
+        detail={"code": "LLM_SERVICE_ERROR"},
+    )
+
+
 def fetch_youtube_video_id(*, query: str, lesson: Lesson | None = None, roadmap: Roadmap | None = None) -> str | None:
     settings = get_settings()
     api_key = (settings.youtube_api_key or "").strip()
@@ -926,47 +1133,28 @@ def fetch_youtube_video_id(*, query: str, lesson: Lesson | None = None, roadmap:
 def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: int) -> LessonDetailDTO:
     lesson, roadmap = get_lesson_for_generation(db=db, user_id=user_id, lesson_id=lesson_id)
 
-    prompt = build_lesson_generation_prompt(lesson=lesson, roadmap=roadmap)
-    llm_output = generate_lesson_markdown(prompt=prompt)
-    youtube_query = enrich_youtube_query_with_context(
-        query=build_youtube_search_query(lesson=lesson, roadmap=roadmap),
-        lesson=lesson,
-        roadmap=roadmap,
-    )
+    source_content = (lesson.source_content or "").strip()
+    if not source_content:
+        raise AppException(
+            status_code=409,
+            message="Document source content is empty",
+            detail={"code": "LESSON_SOURCE_EMPTY"},
+        )
 
+    markdown = ""
     try:
-        markdown, ai_youtube_query = parse_lesson_generation_output(llm_output)
-        youtube_query = enrich_youtube_query_with_context(
-            query=ai_youtube_query,
-            lesson=lesson,
-            roadmap=roadmap,
-        )
-    except Exception as exc:
-        logger.warning(
-            "lesson.llm_output_parse_failed lesson_id=%s title=%s error=%s",
-            lesson.id,
-            lesson.title,
-            str(exc),
-        )
-        markdown = llm_output.strip()
+        markdown = generate_grounded_markdown(
+            prompt=build_document_theory_prompt(title=lesson.title, source_content=source_content)
+        ).strip()
+    except AppException as exc:
+        logger.warning("lesson.grounded_theory_generation_failed lesson_id=%s error=%s", lesson.id, str(exc))
 
-    youtube_video_id: str | None = None
-    try:
-        searched_video_id = fetch_youtube_video_id(query=youtube_query, lesson=lesson, roadmap=roadmap)
-        if searched_video_id:
-            youtube_video_id = searched_video_id
-    except Exception as exc:
-        logger.warning(
-            "lesson.youtube_lookup_failed lesson_id=%s title=%s query=%s error=%s",
-            lesson.id,
-            lesson.title,
-            youtube_query,
-            str(exc),
-        )
+    if not markdown:
+        markdown = _fallback_theory_markdown(title=lesson.title, source_content=source_content)
 
     try:
         lesson.content_markdown = markdown
-        lesson.youtube_video_id = youtube_video_id
+        lesson.youtube_video_id = None
         lesson.version = (lesson.version or 1) + 1
         db.commit()
         db.refresh(lesson)
@@ -995,13 +1183,7 @@ def complete_lesson_for_user(
     lesson_id: int,
     reward_exp: int,
 ) -> LessonCompleteResponseDTO:
-    lesson = db.scalar(
-        select(Lesson)
-        .join(Roadmap, Lesson.roadmap_id == Roadmap.id)
-        .where(and_(Lesson.id == lesson_id, Roadmap.user_id == user_id))
-    )
-    if lesson is None:
-        raise AppException(status_code=404, message="Lesson not found", detail={"code": "LESSON_NOT_FOUND"})
+    lesson = _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id)
 
     try:
         locked_user = db.scalar(select(User).where(User.id == user_id).with_for_update())

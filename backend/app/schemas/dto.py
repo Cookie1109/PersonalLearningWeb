@@ -66,6 +66,36 @@ class GenericStatusDTO(BaseModel):
     message: str
 
 
+class DocumentCreateRequestDTO(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    source_content: str = Field(..., min_length=30, max_length=120000)
+
+
+class DocumentCreateResponseDTO(BaseModel):
+    document_id: int
+    title: str
+    message: str
+
+
+class DocumentSummaryDTO(BaseModel):
+    id: int
+    title: str
+    is_completed: bool
+    quiz_passed: bool = False
+    flashcard_completed: bool = False
+    created_at: datetime
+
+
+class ParserExtractUrlRequestDTO(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+
+
+class ParserExtractResponseDTO(BaseModel):
+    extracted_text: str
+    source_type: Literal["url", "pdf", "docx", "image"]
+    mime_type: str | None = None
+
+
 class LessonCompleteResponseDTO(BaseModel):
     lesson_id: int
     exp_gained: int = Field(..., ge=0)
@@ -154,13 +184,14 @@ class LessonContentDTO(BaseModel):
 class LessonDetailDTO(BaseModel):
     id: int
     title: str
-    week_number: int
-    position: int
-    roadmap_id: int
-    roadmap_title: str
+    week_number: int = 1
+    position: int = 1
+    roadmap_id: int | None = None
+    roadmap_title: str | None = None
     is_completed: bool
     quiz_passed: bool = False
     flashcard_completed: bool = False
+    source_content: str | None = None
     content_markdown: str | None = None
     youtube_video_id: str | None = None
     is_draft: bool = True
