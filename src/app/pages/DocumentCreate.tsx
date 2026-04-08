@@ -9,6 +9,10 @@ type InputMode = 'text' | 'url' | 'file' | 'image';
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
+function buildDefaultDocumentTitle(): string {
+  return `Tai lieu moi - ${new Date().toLocaleDateString('vi-VN')}`;
+}
+
 export default function DocumentCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -99,7 +103,7 @@ export default function DocumentCreate() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting || isTitleInvalid || !normalizedTitle) {
+    if (isSubmitting || isTitleInvalid) {
       return;
     }
 
@@ -127,17 +131,24 @@ export default function DocumentCreate() {
 
     try {
       let contentForCreate = normalizedContent;
+      let extractedTitleFromSource = '';
       if (!isTextMode) {
         const extractionResult = inputMode === 'url'
           ? await extractTextFromParser({ mode: 'url', url: normalizedUrl })
           : await extractTextFromParser({ mode: 'file', file: selectedFile as File });
 
         contentForCreate = ensureExtractedContent(extractionResult.extracted_text);
+        extractedTitleFromSource = extractionResult.extracted_title?.trim() ?? '';
       }
+
+      const preferredTitle = (normalizedTitle || extractedTitleFromSource).trim();
+      const titleForCreate = preferredTitle.length >= 3
+        ? preferredTitle.slice(0, 255)
+        : buildDefaultDocumentTitle();
 
       setSubmitPhase('creating');
       const result = await createDocument({
-        title: normalizedTitle,
+        title: titleForCreate,
         source_content: contentForCreate,
       });
       navigate(`/learn/${result.document_id}`, { replace: true });
@@ -179,14 +190,14 @@ export default function DocumentCreate() {
       >
         <div>
           <label htmlFor="document-title" className="block text-sm text-zinc-300 mb-2" style={{ fontWeight: 600 }}>
-            Tieu de tai lieu
+            Tieu de tai lieu (tuy chon)
           </label>
           <input
             id="document-title"
             value={title}
             onChange={event => setTitle(event.target.value)}
             disabled={isSubmitting}
-            placeholder="Vi du: Data Structures Midterm Notes"
+            placeholder="De trong de he thong tu dong dat tieu de"
             className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-cyan-500/60"
           />
           {isTitleInvalid && (
@@ -326,7 +337,7 @@ export default function DocumentCreate() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting || isTitleInvalid || (isTextMode && isContentInvalid) || !normalizedTitle || !hasInputForMode}
+            disabled={isSubmitting || isTitleInvalid || (isTextMode && isContentInvalid) || !hasInputForMode}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm transition-colors"
             style={{ fontWeight: 600 }}
           >

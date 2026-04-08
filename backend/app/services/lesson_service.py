@@ -347,6 +347,31 @@ def build_document_theory_prompt(*, title: str, source_content: str) -> str:
     )
 
 
+def _build_unique_document_title(*, db: Session, user_id: int, preferred_title: str) -> str:
+    base_title = _collapse_whitespace(preferred_title.strip())[:255]
+    if not base_title:
+        base_title = f"Tai lieu moi - {datetime.now(UTC).strftime('%d/%m/%Y')}"
+
+    candidate = base_title
+    counter = 2
+    while True:
+        existing_id = db.scalar(
+            select(Lesson.id).where(
+                and_(
+                    Lesson.user_id == user_id,
+                    Lesson.title == candidate,
+                )
+            )
+        )
+        if existing_id is None:
+            return candidate
+
+        suffix = f" ({counter})"
+        trimmed_base = base_title[: max(1, 255 - len(suffix))].rstrip()
+        candidate = f"{trimmed_base}{suffix}"
+        counter += 1
+
+
 def create_document_for_user(
     *,
     db: Session,
@@ -354,7 +379,7 @@ def create_document_for_user(
     title: str,
     source_content: str,
 ) -> Lesson:
-    normalized_title = _collapse_whitespace(title.strip())[:255]
+    normalized_title = _build_unique_document_title(db=db, user_id=user_id, preferred_title=title)
     normalized_source = source_content.strip()
     if not normalized_source:
         raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
@@ -366,6 +391,8 @@ def create_document_for_user(
         ).strip()
     except AppException as exc:
         logger.warning("document.create_theory_llm_failed title=%s error=%s", normalized_title, str(exc))
+    except Exception as exc:
+        logger.warning("document.create_theory_llm_unexpected_error title=%s error=%s", normalized_title, str(exc))
 
     if not theory_markdown:
         theory_markdown = _fallback_theory_markdown(title=normalized_title, source_content=normalized_source)

@@ -53,10 +53,11 @@ async def extract_text(
                 detail={"code": "PARSER_INVALID_JSON"},
             ) from exc
 
-        extracted_text = parser_service.extract_text_from_url(url=payload.url)
+        extracted_text, extracted_title = parser_service.extract_text_from_url(url=payload.url)
         return ParserExtractResponseDTO(
             extracted_text=extracted_text,
             source_type="url",
+            extracted_title=extracted_title,
             mime_type="text/html",
         )
 
@@ -65,10 +66,11 @@ async def extract_text(
 
         url_value = form.get("url")
         if isinstance(url_value, str) and url_value.strip():
-            extracted_text = parser_service.extract_text_from_url(url=url_value.strip())
+            extracted_text, extracted_title = parser_service.extract_text_from_url(url=url_value.strip())
             return ParserExtractResponseDTO(
                 extracted_text=extracted_text,
                 source_type="url",
+                extracted_title=extracted_title,
                 mime_type="text/html",
             )
 
@@ -82,7 +84,7 @@ async def extract_text(
 
         try:
             file_bytes = await upload.read()
-            extracted_text, source_type, mime_type = parser_service.extract_text_from_uploaded_file(
+            extracted_text, source_type, mime_type, extracted_title = parser_service.extract_text_from_uploaded_file(
                 file_name=upload.filename,
                 content_type=upload.content_type,
                 file_bytes=file_bytes,
@@ -93,6 +95,7 @@ async def extract_text(
         return ParserExtractResponseDTO(
             extracted_text=extracted_text,
             source_type=source_type,
+            extracted_title=extracted_title,
             mime_type=mime_type,
         )
 

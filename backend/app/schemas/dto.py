@@ -107,6 +107,7 @@ class ParserExtractUrlRequestDTO(BaseModel):
 class ParserExtractResponseDTO(BaseModel):
     extracted_text: str
     source_type: Literal["url", "pdf", "docx", "image"]
+    extracted_title: str | None = None
     mime_type: str | None = None
 
 

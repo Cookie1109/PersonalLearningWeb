@@ -29,6 +29,7 @@ ParserSourceType = Literal["url", "pdf", "docx", "image"]
 MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024
 MAX_URL_DOWNLOAD_BYTES = 5 * 1024 * 1024
 MAX_EXTRACTED_TEXT_LENGTH = 120000
+MAX_EXTRACTED_TITLE_LENGTH = 180
 
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -84,6 +85,42 @@ def _normalize_extracted_text(value: str) -> str:
     if len(normalized) > MAX_EXTRACTED_TEXT_LENGTH:
         return normalized[:MAX_EXTRACTED_TEXT_LENGTH].strip()
     return normalized
+
+
+def _normalize_extracted_title(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    normalized = _collapse_whitespace(value)
+    normalized = normalized.strip("-_|:\u2014\u2013 ")
+    if not normalized:
+        return None
+
+    if len(normalized) > MAX_EXTRACTED_TITLE_LENGTH:
+        normalized = normalized[:MAX_EXTRACTED_TITLE_LENGTH].rstrip()
+    return normalized or None
+
+
+def _build_title_from_text_excerpt(text: str, *, max_chars: int = 40) -> str | None:
+    normalized = _collapse_whitespace((text or "").replace("\n", " "))
+    if not normalized:
+        return None
+    if len(normalized) <= max_chars:
+        return _normalize_extracted_title(normalized)
+    return _normalize_extracted_title(f"{normalized[:max_chars].rstrip()}...")
+
+
+def _extract_title_from_html(html_text: str) -> str | None:
+    if not html_text.strip():
+        return None
+    soup = BeautifulSoup(html_text, "html.parser")
+    raw_title = soup.title.string if soup.title and soup.title.string else (soup.title.get_text(" ", strip=True) if soup.title else "")
+    return _normalize_extracted_title(raw_title)
+
+
+def _extract_title_from_file_name(file_name: str | None) -> str | None:
+    stem = Path(file_name or "").stem
+    return _normalize_extracted_title(stem)
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -225,7 +262,7 @@ def _extract_text_from_html(html_text: str) -> str:
     return normalized
 
 
-def extract_text_from_url(*, url: str) -> str:
+def extract_text_from_url(*, url: str) -> tuple[str, str | None]:
     normalized_url = _validate_url(url)
 
     try:
@@ -278,9 +315,12 @@ def extract_text_from_url(*, url: str) -> str:
                     message="No readable text found from URL",
                     detail={"code": "PARSER_TEXT_EMPTY"},
                 )
-            return normalized
+            return normalized, _build_title_from_text_excerpt(normalized)
 
-        return _extract_text_from_html(response.text or "")
+        html_text = response.text or ""
+        extracted_text = _extract_text_from_html(html_text)
+        extracted_title = _extract_title_from_html(html_text) or _build_title_from_text_excerpt(extracted_text)
+        return extracted_text, extracted_title
     except AppException:
         raise
     except Exception as exc:
@@ -490,7 +530,7 @@ def extract_text_from_uploaded_file(
     file_name: str | None,
     content_type: str | None,
     file_bytes: bytes,
-) -> tuple[str, ParserSourceType, str | None]:
+) -> tuple[str, ParserSourceType, str | None, str | None]:
     if not file_bytes:
         raise AppException(
             status_code=400,
@@ -507,12 +547,15 @@ def extract_text_from_uploaded_file(
 
     source_type = _detect_uploaded_source_type(file_name=file_name, content_type=content_type)
     normalized_content_type = (content_type or "").split(";")[0].strip().lower() or None
+    extracted_title = _extract_title_from_file_name(file_name)
 
     if source_type == "pdf":
-        return extract_text_from_pdf_bytes(file_bytes=file_bytes), "pdf", normalized_content_type
+        return extract_text_from_pdf_bytes(file_bytes=file_bytes), "pdf", normalized_content_type, extracted_title
 
     if source_type == "docx":
-        return extract_text_from_docx_bytes(file_bytes=file_bytes), "docx", normalized_content_type
+        return extract_text_from_docx_bytes(file_bytes=file_bytes), "docx", normalized_content_type, extracted_title
 
     mime_type = normalized_content_type if normalized_content_type in SUPPORTED_IMAGE_MIME_TYPES else "image/jpeg"
-    return extract_text_from_image_bytes_via_gemini(file_bytes=file_bytes, mime_type=mime_type), "image", mime_type
+    extracted_text = extract_text_from_image_bytes_via_gemini(file_bytes=file_bytes, mime_type=mime_type)
+    image_title = extracted_title or _build_title_from_text_excerpt(extracted_text)
+    return extracted_text, "image", mime_type, image_title

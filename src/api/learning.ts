@@ -180,7 +180,12 @@ export async function createDocument(payload: DocumentCreateRequestDTO): Promise
     }
 
     if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.message ?? 'Khong the tao tai lieu luc nay.');
+      const backendMessage = error.response?.data?.message as string | undefined;
+      const backendDetailError = error.response?.data?.detail?.error as string | undefined;
+      if (backendMessage === 'Internal Server Error' && backendDetailError) {
+        throw new Error(`Internal Server Error: ${backendDetailError}`);
+      }
+      throw new Error(backendMessage ?? 'Khong the tao tai lieu luc nay.');
     }
 
     throw error;

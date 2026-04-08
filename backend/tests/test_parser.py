@@ -9,7 +9,7 @@ def test_extract_text_from_url_json_success(client, auth_headers, monkeypatch) -
     monkeypatch.setattr(
         parser_service,
         "extract_text_from_url",
-        lambda *, url: f"Extracted from {url}",
+        lambda *, url: (f"Extracted from {url}", "Example title"),
     )
 
     response = client.post(
@@ -22,6 +22,7 @@ def test_extract_text_from_url_json_success(client, auth_headers, monkeypatch) -
     payload = response.json()
     assert payload["source_type"] == "url"
     assert payload["extracted_text"] == "Extracted from https://example.com/article"
+    assert payload["extracted_title"] == "Example title"
 
 
 def test_extract_text_from_file_success(client, auth_headers, monkeypatch) -> None:
@@ -32,7 +33,7 @@ def test_extract_text_from_file_success(client, auth_headers, monkeypatch) -> No
     monkeypatch.setattr(
         parser_service,
         "extract_text_from_uploaded_file",
-        lambda *, file_name, content_type, file_bytes: ("Parsed PDF content", "pdf", "application/pdf"),
+        lambda *, file_name, content_type, file_bytes: ("Parsed PDF content", "pdf", "application/pdf", "sample"),
     )
 
     response = client.post(
@@ -46,6 +47,7 @@ def test_extract_text_from_file_success(client, auth_headers, monkeypatch) -> No
     assert payload["source_type"] == "pdf"
     assert payload["mime_type"] == "application/pdf"
     assert payload["extracted_text"] == "Parsed PDF content"
+    assert payload["extracted_title"] == "sample"
 
 
 def test_extract_text_requires_url_when_json(client, auth_headers) -> None:

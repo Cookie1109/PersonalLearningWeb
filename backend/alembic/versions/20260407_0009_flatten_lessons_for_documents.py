@@ -48,7 +48,8 @@ def upgrade() -> None:
         op.add_column("lessons", sa.Column("user_id", sa.Integer(), nullable=True))
 
     if not _has_column(inspector, "lessons", "source_content"):
-        op.add_column("lessons", sa.Column("source_content", sa.Text(), nullable=False, server_default=""))
+        # MySQL (especially older variants) does not allow defaults on TEXT columns.
+        op.add_column("lessons", sa.Column("source_content", sa.Text(), nullable=True))
 
     inspector = sa.inspect(bind)
     if not _has_fk(inspector, "lessons", "fk_lessons_user_id_users"):
@@ -96,6 +97,12 @@ def upgrade() -> None:
         op.alter_column("lessons", "user_id", existing_type=sa.Integer(), nullable=False)
     except Exception:
         # If there are legacy orphan lessons, clean-slate migration will reset data next revision.
+        pass
+
+    try:
+        op.alter_column("lessons", "source_content", existing_type=sa.Text(), nullable=False)
+    except Exception:
+        # Keep migration resilient across dialect differences.
         pass
 
     inspector = sa.inspect(bind)

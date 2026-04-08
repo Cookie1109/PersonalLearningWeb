@@ -100,6 +100,7 @@ export interface ParserExtractUrlRequestDTO {
 export interface ParserExtractResponseDTO {
   extracted_text: string;
   source_type: 'url' | 'pdf' | 'docx' | 'image';
+  extracted_title?: string | null;
   mime_type?: string | null;
 }
 

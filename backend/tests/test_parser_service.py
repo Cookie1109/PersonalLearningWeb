@@ -52,6 +52,7 @@ def test_extract_text_from_url_does_not_crash_and_returns_clean_content(monkeypa
             self.headers = {"content-type": "text/html; charset=utf-8"}
             self.text = """
             <html>
+              <head><title>My test title</title></head>
               <body>
                 <header>Header noise</header>
                 <article>
@@ -72,9 +73,31 @@ def test_extract_text_from_url_does_not_crash_and_returns_clean_content(monkeypa
 
     monkeypatch.setattr(parser_service.requests, "get", _fake_get)
 
-    extracted = parser_service.extract_text_from_url(url="https://example.com/blog-post")
+    extracted, extracted_title = parser_service.extract_text_from_url(url="https://example.com/blog-post")
 
     assert "Parsing URL Content" in extracted
     assert "Main body should survive cleanup." in extracted
     assert "Header noise" not in extracted
     assert "Footer noise" not in extracted
+    assert extracted_title == "My test title"
+
+
+def test_extract_text_from_uploaded_file_uses_filename_as_title(monkeypatch) -> None:
+    import app.services.parser_service as parser_service
+
+    monkeypatch.setattr(
+        parser_service,
+        "extract_text_from_docx_bytes",
+        lambda *, file_bytes: "Core doc content",
+    )
+
+    extracted, source_type, mime_type, extracted_title = parser_service.extract_text_from_uploaded_file(
+        file_name="Python Async Notes.docx",
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        file_bytes=b"fake-docx",
+    )
+
+    assert source_type == "docx"
+    assert mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert extracted == "Core doc content"
+    assert extracted_title == "Python Async Notes"
