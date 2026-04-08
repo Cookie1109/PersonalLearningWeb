@@ -79,6 +79,20 @@ export interface DocumentSummaryDTO {
   created_at: string;
 }
 
+export interface DocumentChatHistoryItemDTO {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface DocumentChatRequestDTO {
+  message: string;
+  history: DocumentChatHistoryItemDTO[];
+}
+
+export interface DocumentChatResponseDTO {
+  reply: string;
+}
+
 export interface ParserExtractUrlRequestDTO {
   url: string;
 }

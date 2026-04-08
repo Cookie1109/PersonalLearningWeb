@@ -1,7 +1,8 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Camera, FileImage, FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
+import { FileImage, FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { toast } from 'sonner';
 import { createDocument, extractTextFromParser } from '../../api/learning';
 
 type InputMode = 'text' | 'url' | 'file' | 'image';
@@ -13,23 +14,27 @@ export default function DocumentCreate() {
   const [searchParams] = useSearchParams();
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
   const imageFileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const [title, setTitle] = useState('');
   const [sourceContent, setSourceContent] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('text');
   const [sourceUrl, setSourceUrl] = useState('');
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [extractError, setExtractError] = useState<string | null>(null);
-  const [extractSuccess, setExtractSuccess] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<'idle' | 'extracting' | 'creating'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalizedTitle = title.trim();
   const normalizedContent = sourceContent.trim();
+  const normalizedUrl = sourceUrl.trim();
+  const isTextMode = inputMode === 'text';
   const isTitleInvalid = normalizedTitle.length > 0 && normalizedTitle.length < 3;
   const isContentInvalid = normalizedContent.length > 0 && normalizedContent.length < 30;
+  const hasInputForMode = isTextMode
+    ? normalizedContent.length > 0
+    : inputMode === 'url'
+      ? normalizedUrl.length > 0
+      : Boolean(selectedFile);
 
   useEffect(() => {
     const suggestedTitle = searchParams.get('title')?.trim();
@@ -38,121 +43,116 @@ export default function DocumentCreate() {
     }
   }, [searchParams, title]);
 
-  const resetExtractFeedback = () => {
-    setExtractError(null);
-    setExtractSuccess(null);
-  };
-
   const handleModeSwitch = (mode: InputMode) => {
     setInputMode(mode);
-    resetExtractFeedback();
+    setSubmitError(null);
+    if (mode === 'url') {
+      setSelectedFile(null);
+    }
+    if (mode === 'file' || mode === 'image') {
+      setSourceUrl('');
+    }
   };
 
-  const applyExtractedText = (text: string, sourceType: string) => {
+  const ensureExtractedContent = (text: string) => {
     const normalized = text.trim();
     if (!normalized) {
       throw new Error('Khong trich xuat duoc van ban ro rang. Vui long thu nguon khac.');
     }
-
-    setSourceContent(normalized);
-    setExtractSuccess(`Da trich xuat noi dung tu ${sourceType}. Ban co the xem va chinh sua ben duoi.`);
+    return normalized;
   };
 
-  const handleExtractFromUrl = async () => {
-    const normalizedUrl = sourceUrl.trim();
-    if (!normalizedUrl) {
-      setExtractError('Vui long nhap URL truoc khi trich xuat.');
-      return;
-    }
-
-    resetExtractFeedback();
-    setIsExtracting(true);
-
-    try {
-      const result = await extractTextFromParser({ mode: 'url', url: normalizedUrl });
-      applyExtractedText(result.extracted_text, 'link');
-    } catch (error) {
-      if (error instanceof Error) {
-        setExtractError(error.message);
-      } else {
-        setExtractError('Khong the trich xuat noi dung tu link luc nay.');
-      }
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  const extractFromFile = async (file: File) => {
+  const selectInputFile = (file: File | undefined) => {
     if (!file) {
       return;
     }
 
     if (file.size <= 0) {
-      setExtractError('File rong hoac khong hop le. Vui long chon file khac.');
+      const message = 'File rong hoac khong hop le. Vui long chon file khac.';
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      setExtractError('File qua lon. Vui long chon file nho hon 15MB.');
+      const message = 'File qua lon. Vui long chon file nho hon 15MB.';
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
 
-    resetExtractFeedback();
-    setIsExtracting(true);
-    setSelectedFileName(file.name);
-
-    try {
-      const result = await extractTextFromParser({ mode: 'file', file });
-      const sourceLabel = result.source_type === 'image' ? 'anh' : 'tai lieu';
-      applyExtractedText(result.extracted_text, sourceLabel);
-    } catch (error) {
-      if (error instanceof Error) {
-        setExtractError(error.message);
-      } else {
-        setExtractError('Khong the trich xuat noi dung tu file luc nay.');
-      }
-    } finally {
-      setIsExtracting(false);
-    }
+    setSubmitError(null);
+    setSelectedFile(file);
   };
 
   const handleDocFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
-    void extractFromFile(file);
+    selectInputFile(file);
   };
 
   const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
-    void extractFromFile(file);
+    selectInputFile(file);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting || isExtracting || isTitleInvalid || isContentInvalid || !normalizedTitle || !normalizedContent) {
+    if (isSubmitting || isTitleInvalid || !normalizedTitle) {
+      return;
+    }
+
+    if (isTextMode && (isContentInvalid || !normalizedContent)) {
+      return;
+    }
+
+    if (inputMode === 'url' && !normalizedUrl) {
+      const message = 'Vui long nhap URL truoc khi tao Workspace.';
+      setSubmitError(message);
+      toast.error(message);
+      return;
+    }
+
+    if ((inputMode === 'file' || inputMode === 'image') && !selectedFile) {
+      const message = 'Vui long chon file truoc khi tao Workspace.';
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
 
     setSubmitError(null);
     setIsSubmitting(true);
+    setSubmitPhase('extracting');
 
     try {
+      let contentForCreate = normalizedContent;
+      if (!isTextMode) {
+        const extractionResult = inputMode === 'url'
+          ? await extractTextFromParser({ mode: 'url', url: normalizedUrl })
+          : await extractTextFromParser({ mode: 'file', file: selectedFile as File });
+
+        contentForCreate = ensureExtractedContent(extractionResult.extracted_text);
+      }
+
+      setSubmitPhase('creating');
       const result = await createDocument({
         title: normalizedTitle,
-        source_content: normalizedContent,
+        source_content: contentForCreate,
       });
       navigate(`/learn/${result.document_id}`, { replace: true });
     } catch (error) {
       if (error instanceof Error) {
         setSubmitError(error.message);
+        toast.error(error.message);
       } else {
-        setSubmitError('Khong the tao Workspace luc nay.');
+        const message = 'Khong the tao Workspace luc nay.';
+        setSubmitError(message);
+        toast.error(message);
       }
     } finally {
       setIsSubmitting(false);
+      setSubmitPhase('idle');
     }
   };
 
@@ -195,8 +195,8 @@ export default function DocumentCreate() {
         </div>
 
         <div>
-          <label htmlFor="source-content" className="block text-sm text-zinc-300 mb-2" style={{ fontWeight: 600 }}>
-            Noi dung tai lieu goc
+          <label className="block text-sm text-zinc-300 mb-2" style={{ fontWeight: 600 }}>
+            Nguon tai lieu
           </label>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
@@ -231,26 +231,15 @@ export default function DocumentCreate() {
               <label htmlFor="source-url" className="block text-xs text-zinc-400 mb-2">
                 Dan URL bai viet de he thong trich xuat noi dung
               </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  id="source-url"
-                  type="url"
-                  value={sourceUrl}
-                  onChange={event => setSourceUrl(event.target.value)}
-                  disabled={isSubmitting || isExtracting}
-                  placeholder="https://example.com/article"
-                  className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-500/60"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleExtractFromUrl()}
-                  disabled={isSubmitting || isExtracting || !sourceUrl.trim()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-white"
-                  style={{ fontWeight: 600 }}
-                >
-                  {isExtracting ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}Trich xuat
-                </button>
-              </div>
+              <input
+                id="source-url"
+                type="url"
+                value={sourceUrl}
+                onChange={event => setSourceUrl(event.target.value)}
+                disabled={isSubmitting}
+                placeholder="https://example.com/article"
+                className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-500/60"
+              />
             </div>
           )}
 
@@ -267,7 +256,7 @@ export default function DocumentCreate() {
               <button
                 type="button"
                 onClick={() => docFileInputRef.current?.click()}
-                disabled={isSubmitting || isExtracting}
+                disabled={isSubmitting}
                 className="inline-flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-zinc-100"
                 style={{ fontWeight: 600 }}
               >
@@ -278,7 +267,7 @@ export default function DocumentCreate() {
 
           {inputMode === 'image' && (
             <div className="mb-3 rounded-xl border border-zinc-700 bg-zinc-800/70 p-3">
-              <p className="text-xs text-zinc-400 mb-2">Tai anh JPG/PNG/WEBP hoac chup anh tren dien thoai de OCR.</p>
+              <p className="text-xs text-zinc-400 mb-2">Tai anh JPG/PNG/WEBP de OCR.</p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   ref={imageFileInputRef}
@@ -290,68 +279,42 @@ export default function DocumentCreate() {
                 <button
                   type="button"
                   onClick={() => imageFileInputRef.current?.click()}
-                  disabled={isSubmitting || isExtracting}
+                  disabled={isSubmitting}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-zinc-100"
                   style={{ fontWeight: 600 }}
                 >
                   <FileImage size={14} />Tai anh len
                 </button>
-
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleImageFileChange}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  disabled={isSubmitting || isExtracting}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-zinc-100"
-                  style={{ fontWeight: 600 }}
-                >
-                  <Camera size={14} />Chup anh
-                </button>
               </div>
             </div>
           )}
 
-          {isExtracting && (
+            {selectedFile && !isTextMode && (
+              <p className="mb-3 text-xs text-zinc-500">Da chon: {selectedFile.name}</p>
+            )}
+
+            {isSubmitting && submitPhase === 'extracting' && !isTextMode && (
             <div className="mb-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200 inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />Dang trich xuat noi dung...
+                <Loader2 size={14} className="animate-spin" />AI dang phan tich tai lieu...
             </div>
           )}
 
-          {selectedFileName && (
-            <p className="mb-2 text-xs text-zinc-500">Nguon gan nhat: {selectedFileName}</p>
-          )}
-
-          {extractError && (
-            <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-              {extractError}
-            </div>
-          )}
-
-          {extractSuccess && (
-            <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-              {extractSuccess}
-            </div>
-          )}
-
-          <textarea
-            id="source-content"
-            value={sourceContent}
-            onChange={event => setSourceContent(event.target.value)}
-            disabled={isSubmitting || isExtracting}
-            rows={16}
-            placeholder="Dan noi dung de cuong/slide/tai lieu vao day..."
-            className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-3 text-zinc-100 text-sm leading-relaxed placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 resize-y min-h-[320px]"
-          />
-          {isContentInvalid && (
-            <p className="mt-2 text-xs text-amber-300">Noi dung tai lieu can toi thieu 30 ky tu.</p>
-          )}
+            {isTextMode && (
+              <>
+                <textarea
+                  id="source-content"
+                  value={sourceContent}
+                  onChange={event => setSourceContent(event.target.value)}
+                  disabled={isSubmitting}
+                  rows={16}
+                  placeholder="Dan noi dung de cuong/slide/tai lieu vao day..."
+                  className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-3 text-zinc-100 text-sm leading-relaxed placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 resize-y min-h-[320px]"
+                />
+                {isContentInvalid && (
+                  <p className="mt-2 text-xs text-amber-300">Noi dung tai lieu can toi thieu 30 ky tu.</p>
+                )}
+              </>
+            )}
         </div>
 
         {submitError && (
@@ -363,12 +326,16 @@ export default function DocumentCreate() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSubmitting || isExtracting || isTitleInvalid || isContentInvalid || !normalizedTitle || !normalizedContent}
+            disabled={isSubmitting || isTitleInvalid || (isTextMode && isContentInvalid) || !normalizedTitle || !hasInputForMode}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm transition-colors"
             style={{ fontWeight: 600 }}
           >
             {isSubmitting ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            {isSubmitting ? 'Dang tao Workspace...' : 'Tao Workspace'}
+            {isSubmitting && submitPhase === 'extracting'
+              ? 'AI dang phan tich tai lieu...'
+              : isSubmitting
+                ? 'Dang tao Workspace...'
+                : 'Tao Workspace'}
           </button>
         </div>
       </motion.form>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -7,23 +7,29 @@ import remarkGfm from 'remark-gfm';
 import {
   CheckCircle2, BookOpen,
   Loader2, Zap,
-  MessageSquare, CreditCard, ListChecks, Lightbulb
+  MessageSquare, CreditCard, ListChecks, Lightbulb, Send
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
+  chatWithDocument,
   completeFlashcardProgress,
   completeLessonProgress,
+  DocumentChatHistoryItem,
   generateLesson,
   getLessonDetail,
   LessonDetail,
 } from '../../api/learning';
-import ChatTutor from '../components/ChatTutor';
 import FlashCardDeck from '../components/FlashCard';
 import { Flashcard } from '../lib/types';
 import { QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
 import { fetchQuizByLesson, submitQuiz } from '../../api/quiz';
 
-type LearningTab = 'theory' | 'quiz' | 'flashcard';
+type LearningTab = 'theory' | 'quiz' | 'flashcard' | 'qa';
+
+interface QAMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 interface QuizState {
   currentIndex: number;
@@ -38,7 +44,7 @@ interface QuizResultDisplayProps {
 }
 
 function isLearningTab(value: string | null): value is LearningTab {
-  return value === 'theory' || value === 'quiz' || value === 'flashcard';
+  return value === 'theory' || value === 'quiz' || value === 'flashcard' || value === 'qa';
 }
 
 function _stripMarkdownArtifacts(raw: string): string {
@@ -779,7 +785,6 @@ export default function LearningWorkspace() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -798,6 +803,11 @@ export default function LearningWorkspace() {
 
   const [isMarkingFlashcardComplete, setIsMarkingFlashcardComplete] = useState(false);
   const [flashcardError, setFlashcardError] = useState<string | null>(null);
+  const [qaMessages, setQaMessages] = useState<QAMessage[]>([]);
+  const [qaInput, setQaInput] = useState('');
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [isQASending, setIsQASending] = useState(false);
+  const qaScrollRef = useRef<HTMLDivElement | null>(null);
 
   const flashcards = useMemo(
     () => buildFlashcardsFromMarkdown(lessonDetail?.contentMarkdown ?? null),
@@ -879,8 +889,29 @@ export default function LearningWorkspace() {
     setQuizResult(null);
     setIsMarkingFlashcardComplete(false);
     setFlashcardError(null);
+    setQaMessages([]);
+    setQaInput('');
+    setQaError(null);
+    setIsQASending(false);
     void loadLesson(lessonId);
   }, [lessonId, loadLesson]);
+
+  useEffect(() => {
+    if (activeTab !== 'qa') {
+      return;
+    }
+
+    const container = qaScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [activeTab, qaMessages, isQASending]);
 
   const loadQuiz = useCallback(async (targetLessonId: string) => {
     setIsQuizLoading(true);
@@ -1037,6 +1068,50 @@ export default function LearningWorkspace() {
       }
     } finally {
       setIsMarkingFlashcardComplete(false);
+    }
+  };
+
+  const handleSendQAMessage = async () => {
+    if (!lessonId || isQASending) {
+      return;
+    }
+
+    const trimmedMessage = qaInput.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
+    const historySnapshot: DocumentChatHistoryItem[] = qaMessages
+      .slice(-20)
+      .map(item => ({ role: item.role, content: item.content }));
+
+    const nextUserMessage: QAMessage = {
+      role: 'user',
+      content: trimmedMessage,
+    };
+
+    setQaMessages(prev => [...prev, nextUserMessage]);
+    setQaInput('');
+    setQaError(null);
+    setIsQASending(true);
+
+    try {
+      const reply = await chatWithDocument(lessonId, trimmedMessage, historySnapshot);
+      setQaMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: reply,
+        },
+      ]);
+    } catch (error) {
+      if (error instanceof Error) {
+        setQaError(error.message);
+      } else {
+        setQaError('Khong the gui cau hoi luc nay.');
+      }
+    } finally {
+      setIsQASending(false);
     }
   };
 
@@ -1360,6 +1435,86 @@ export default function LearningWorkspace() {
     );
   };
 
+  const renderQAPanel = () => {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 h-[560px] flex flex-col">
+        <div
+          ref={qaScrollRef}
+          className="flex-1 overflow-y-auto pr-1 space-y-3"
+        >
+          {qaMessages.length === 0 && !isQASending && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-zinc-200 text-sm" style={{ fontWeight: 600 }}>Hoi dap truc tiep voi tai lieu</p>
+                <p className="text-zinc-500 text-xs mt-1">Dat cau hoi va AI se chi tra loi dua tren noi dung tai lieu nay.</p>
+              </div>
+            </div>
+          )}
+
+          {qaMessages.map((message, index) => (
+            <div
+              key={`qa-${index}`}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed border ${message.role === 'user'
+                  ? 'bg-cyan-600/20 border-cyan-500/40 text-cyan-100'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                }`}
+              >
+                {message.role === 'assistant' ? (
+                  <div className="prose prose-invert max-w-none prose-p:my-1 prose-p:text-zinc-100 prose-li:text-zinc-200 prose-strong:text-cyan-300">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p>{message.content}</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {isQASending && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl px-3.5 py-2.5 text-sm border bg-zinc-800 border-zinc-700 text-zinc-200 inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />AI dang tra loi...
+              </div>
+            </div>
+          )}
+        </div>
+
+        {qaError && (
+          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {qaError}
+          </div>
+        )}
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSendQAMessage();
+          }}
+          className="mt-3 flex items-center gap-2"
+        >
+          <input
+            value={qaInput}
+            onChange={(event) => setQaInput(event.target.value)}
+            disabled={isQASending}
+            placeholder="Dat cau hoi ve tai lieu nay..."
+            className="flex-1 rounded-xl bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={isQASending || !qaInput.trim()}
+            className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm text-white"
+            style={{ fontWeight: 600 }}
+          >
+            <Send size={14} />Gui
+          </button>
+        </form>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-full">
       <div className="flex-1 flex overflow-hidden">
@@ -1370,13 +1525,7 @@ export default function LearningWorkspace() {
               <span className="mx-1">›</span>
               <span>{lessonDetail?.title ?? 'Dang tai...'}</span>
             </div>
-            <button
-              onClick={() => setShowChat(!showChat)}
-              className={`p-2 rounded-lg transition-colors ${showChat ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'}`}
-              title="AI Tutor"
-            >
-              <MessageSquare size={16} />
-            </button>
+            <span className="text-[11px] text-zinc-500">NotebookLM Mini</span>
           </div>
 
           <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
@@ -1405,7 +1554,7 @@ export default function LearningWorkspace() {
             )}
 
               {!loadError && lessonDetail && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1.5 sm:p-2 grid grid-cols-3 gap-1.5">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1.5 sm:p-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <button
                     onClick={() => setLearningTab('theory')}
                     className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'theory' ? 'bg-violet-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
@@ -1429,12 +1578,20 @@ export default function LearningWorkspace() {
                     <CreditCard size={15} />Flashcard
                     {lessonDetail.flashcardCompleted && <CheckCircle2 size={14} className="text-cyan-300" />}
                   </button>
+                  <button
+                    onClick={() => setLearningTab('qa')}
+                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'qa' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    <MessageSquare size={15} />Hoi dap
+                  </button>
                 </div>
               )}
 
               {!loadError && activeTab === 'theory' && renderTheoryPanel()}
               {!loadError && activeTab === 'quiz' && renderQuizPanel()}
               {!loadError && activeTab === 'flashcard' && renderFlashcardPanel()}
+              {!loadError && activeTab === 'qa' && renderQAPanel()}
           </div>
 
           {/* Complete */}
@@ -1465,21 +1622,6 @@ export default function LearningWorkspace() {
             )}
           </div>
         </div>
-
-        {/* AI Chat */}
-        <AnimatePresence>
-          {showChat && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 360, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex-shrink-0 border-l border-zinc-800 p-4 overflow-hidden"
-            >
-              <ChatTutor />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Completion badge */}

@@ -14,6 +14,11 @@ from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from PyPDF2 import PdfReader
 
+try:
+    from readability import Document as ReadabilityDocument
+except Exception:  # pragma: no cover - runtime fallback when optional dependency is unavailable
+    ReadabilityDocument = None
+
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 
@@ -36,15 +41,46 @@ SUPPORTED_DOCX_MIME_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/msword",
 }
+NOISE_HTML_TAGS = ("nav", "header", "footer", "aside", "script", "style", "form", "noscript", "iframe", "svg")
+PRIMARY_CONTENT_SELECTORS = (
+    "article",
+    "main",
+    "div.post-body",
+    "div.entry-content",
+    "div.content",
+)
 
 
 def _collapse_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _sanitize_extracted_line(value: str) -> str:
+    normalized = _collapse_whitespace(value)
+    if not normalized:
+        return ""
+
+    normalized = re.sub(r"[<>]+", " ", normalized)
+    normalized = _collapse_whitespace(normalized)
+    if re.fullmatch(r"[-=_*~`|•·]+", normalized):
+        return ""
+
+    return normalized
+
+
 def _normalize_extracted_text(value: str) -> str:
-    lines = [_collapse_whitespace(line) for line in value.splitlines()]
-    normalized = "\n".join([line for line in lines if line]).strip()
+    lines: list[str] = []
+    previous = ""
+    for raw_line in value.splitlines():
+        cleaned = _sanitize_extracted_line(raw_line)
+        if not cleaned:
+            continue
+        if cleaned == previous:
+            continue
+        lines.append(cleaned)
+        previous = cleaned
+
+    normalized = "\n".join(lines).strip()
     if len(normalized) > MAX_EXTRACTED_TEXT_LENGTH:
         return normalized[:MAX_EXTRACTED_TEXT_LENGTH].strip()
     return normalized
@@ -107,6 +143,48 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+def _remove_noise_nodes(soup: BeautifulSoup) -> None:
+    for tag_name in NOISE_HTML_TAGS:
+        for node in soup.find_all(tag_name):
+            node.decompose()
+
+
+def _extract_best_container_text(soup: BeautifulSoup) -> str:
+    for selector in PRIMARY_CONTENT_SELECTORS:
+        containers = soup.select(selector)
+        if not containers:
+            continue
+
+        best_container = max(containers, key=lambda item: len(item.get_text(" ", strip=True)), default=None)
+        if best_container is None:
+            continue
+
+        candidate_text = _normalize_extracted_text(best_container.get_text("\n", strip=True))
+        if candidate_text:
+            return candidate_text
+
+    fallback_container = soup.body or soup
+    return _normalize_extracted_text(fallback_container.get_text("\n", strip=True))
+
+
+def _extract_readability_text(html_text: str) -> str:
+    if ReadabilityDocument is None:
+        return ""
+
+    try:
+        summary_html = ReadabilityDocument(html_text).summary(html_partial=True)
+    except Exception as exc:
+        logger.debug("parser.readability_extract_failed error=%s", str(exc))
+        return ""
+
+    if not summary_html:
+        return ""
+
+    summary_soup = BeautifulSoup(summary_html, "html.parser")
+    _remove_noise_nodes(summary_soup)
+    return _normalize_extracted_text(summary_soup.get_text("\n", strip=True))
+
+
 def _validate_url(url: str) -> str:
     normalized_url = url.strip()
     parsed = urlparse(normalized_url)
@@ -128,14 +206,14 @@ def _validate_url(url: str) -> str:
 
 
 def _extract_text_from_html(html_text: str) -> str:
+    readability_text = _extract_readability_text(html_text)
+
     soup = BeautifulSoup(html_text, "html.parser")
+    _remove_noise_nodes(soup)
+    heuristic_text = _extract_best_container_text(soup)
 
-    for tag in soup(["script", "style", "noscript", "iframe", "svg"]):
-        tag.decompose()
-
-    container = soup.find("article") or soup.find("main") or soup.body or soup
-    extracted = container.get_text("\n", strip=True)
-    normalized = _normalize_extracted_text(extracted)
+    candidates = [value for value in (readability_text, heuristic_text) if value]
+    normalized = max(candidates, key=len) if candidates else ""
 
     if not normalized:
         raise AppException(

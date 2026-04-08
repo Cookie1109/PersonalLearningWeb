@@ -86,6 +86,20 @@ class DocumentSummaryDTO(BaseModel):
     created_at: datetime
 
 
+class DocumentChatHistoryItemDTO(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class DocumentChatRequestDTO(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    history: list[DocumentChatHistoryItemDTO] = Field(default_factory=list)
+
+
+class DocumentChatResponseDTO(BaseModel):
+    reply: str
+
+
 class ParserExtractUrlRequestDTO(BaseModel):
     url: str = Field(..., min_length=8, max_length=2048)
 

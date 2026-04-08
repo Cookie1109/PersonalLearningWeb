@@ -37,6 +37,9 @@ SYSTEM_PROMPT = (
     "If the user expresses intent to learn a new topic, append this exact tag format on a NEW final line only after a complete answer: "
     "[SUGGEST_ROADMAP: Topic Name]. Never cut the sentence right before this tag."
 )
+DOCUMENT_CHAT_HISTORY_MAX_MESSAGES = 20
+DOCUMENT_CHAT_HISTORY_MAX_CHARS = 18000
+DOCUMENT_CHAT_SOURCE_MAX_CHARS = 45000
 
 
 def _last_user_message(messages: list[dict[str, str]]) -> str:
@@ -44,6 +47,75 @@ def _last_user_message(messages: list[dict[str, str]]) -> str:
         if message.get("role") == "user":
             return message.get("content", "").strip()
     return ""
+
+
+def _normalize_document_chat_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for item in history:
+        role = item.get("role")
+        content = (item.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            continue
+        normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def _truncate_document_chat_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    if not history:
+        return []
+
+    tail = history[-DOCUMENT_CHAT_HISTORY_MAX_MESSAGES :]
+    kept: list[dict[str, str]] = []
+    total_chars = 0
+    for item in reversed(tail):
+        item_len = len(item["content"])
+        if kept and total_chars + item_len > DOCUMENT_CHAT_HISTORY_MAX_CHARS:
+            break
+        kept.append(item)
+        total_chars += item_len
+
+    kept.reverse()
+    return kept
+
+
+def build_document_chat_system_prompt(*, source_content: str) -> str:
+    bounded_source = (source_content or "").strip()[:DOCUMENT_CHAT_SOURCE_MAX_CHARS]
+    return (
+        "Ban la gia su AI cho che do NotebookLM Mini. "
+        "Nhiem vu cua ban la tra loi cau hoi CHI dua tren tai lieu nguon duoc cung cap ben duoi. "
+        "TUYET DOI KHONG bo sung kien thuc ben ngoai tai lieu. "
+        "Neu tai lieu khong co thong tin de tra loi, phai noi dung nguyen van: 'Tai lieu khong de cap den van de nay'. "
+        "Tra loi ngan gon, ro rang, uu tien giai thich theo bullet neu can.\n\n"
+        "Tai lieu nguon:\n"
+        f"{bounded_source}"
+    )
+
+
+def generate_document_chat_reply(*, source_content: str, message: str, history: list[dict[str, str]] | None = None) -> str:
+    source = (source_content or "").strip()
+    if not source:
+        raise AppException(
+            status_code=409,
+            message="Document source content is empty",
+            detail={"code": "LESSON_SOURCE_EMPTY"},
+        )
+
+    user_message = (message or "").strip()
+    if not user_message:
+        raise AppException(
+            status_code=400,
+            message="Question message is required",
+            detail={"code": "CHAT_MESSAGE_REQUIRED"},
+        )
+
+    normalized_history = _normalize_document_chat_history(history or [])
+    bounded_history = _truncate_document_chat_history(normalized_history)
+    conversation = [*bounded_history, {"role": "user", "content": user_message}]
+
+    return generate_chat_reply(
+        messages=conversation,
+        system_prompt=build_document_chat_system_prompt(source_content=source),
+    )
 
 
 def _to_gemini_contents(messages: list[dict[str, str]]) -> list[dict[str, Any]]:

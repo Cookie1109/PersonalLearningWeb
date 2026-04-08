@@ -1,6 +1,8 @@
 import { apiClient, createAuthHeaders, createIdempotencyKey } from './client';
 import axios from 'axios';
 import {
+  DocumentChatRequestDTO,
+  DocumentChatResponseDTO,
   DocumentCreateRequestDTO,
   DocumentCreateResponseDTO,
   DocumentSummaryDTO,
@@ -62,6 +64,11 @@ export interface MyDocument {
   quizPassed: boolean;
   flashcardCompleted: boolean;
   createdAt: string;
+}
+
+export interface DocumentChatHistoryItem {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 type ParserInput =
@@ -188,6 +195,71 @@ export async function getMyDocuments(): Promise<MyDocument[]> {
   });
 
   return (response.data ?? []).map(mapDocumentSummary);
+}
+
+function normalizeDocumentChatError(error: unknown): Error {
+  if (!axios.isAxiosError(error)) {
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error('Khong the ket noi hoi dap voi tai lieu luc nay.');
+  }
+
+  const code = error.response?.data?.detail?.code as string | undefined;
+  const status = error.response?.status;
+
+  if (status === 404 || code === 'DOCUMENT_NOT_FOUND') {
+    return new Error('Tai lieu khong ton tai hoac ban khong co quyen truy cap.');
+  }
+
+  if (code === 'CHAT_MESSAGE_REQUIRED') {
+    return new Error('Cau hoi khong duoc de trong.');
+  }
+
+  if (code === 'LLM_TIMEOUT' || code === 'LLM_NETWORK_ERROR' || code === 'LLM_SERVICE_ERROR') {
+    return new Error('AI dang ban. Vui long thu lai sau it phut.');
+  }
+
+  if (code === 'LLM_AUTH_FAILED' || code === 'LLM_API_KEY_MISSING') {
+    return new Error('AI service chua duoc cau hinh dung.');
+  }
+
+  return new Error(error.response?.data?.message ?? 'Khong the tra loi cau hoi luc nay.');
+}
+
+export async function chatWithDocument(
+  documentId: string | number,
+  message: string,
+  history: DocumentChatHistoryItem[]
+): Promise<string> {
+  const normalizedMessage = message.trim();
+  if (!normalizedMessage) {
+    throw new Error('Cau hoi khong duoc de trong.');
+  }
+
+  const payload: DocumentChatRequestDTO = {
+    message: normalizedMessage,
+    history: (history ?? [])
+      .filter(item => item && (item.role === 'user' || item.role === 'assistant') && item.content?.trim())
+      .slice(-20)
+      .map(item => ({ role: item.role, content: item.content.trim() })),
+  };
+
+  try {
+    const response = await apiClient.post<DocumentChatResponseDTO>(
+      `/documents/${encodeURIComponent(String(documentId))}/chat`,
+      payload,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data.reply;
+  } catch (error) {
+    throw normalizeDocumentChatError(error);
+  }
 }
 
 function normalizeParserError(error: unknown): Error {
