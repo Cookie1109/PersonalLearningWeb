@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
   # PersonalLearning
 
   ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
@@ -114,3 +115,4 @@
   - Hỗ trợ **export bài học/quiz ra PDF** để học offline.
   - Mở rộng **đa ngôn ngữ (VI/EN)** cho giao diện và prompt sinh nội dung.
   
+=======
