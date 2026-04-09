@@ -26,6 +26,7 @@ ERROR_RESPONSES = {
     401: {"model": ErrorResponseDTO, "description": "Unauthorized"},
     403: {"model": ErrorResponseDTO, "description": "Forbidden"},
     404: {"model": ErrorResponseDTO, "description": "Not Found"},
+    500: {"model": ErrorResponseDTO, "description": "Internal Server Error"},
     409: {"model": ErrorResponseDTO, "description": "Conflict"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }

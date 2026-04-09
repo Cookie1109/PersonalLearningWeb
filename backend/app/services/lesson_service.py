@@ -41,12 +41,22 @@ def _build_lesson_model_candidates(settings) -> list[str]:
     configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-1.5-pro"
     configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
 
+    stable_fallbacks = (
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash-lite-001",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+    )
+
     candidates: list[str] = []
     for candidate in (
         configured_pro_model,
         _normalize_model_name(configured_pro_model),
         configured_flash_model,
         _normalize_model_name(configured_flash_model),
+        *stable_fallbacks,
     ):
         if candidate and candidate not in candidates:
             candidates.append(candidate)
@@ -54,42 +64,56 @@ def _build_lesson_model_candidates(settings) -> list[str]:
     return candidates
 
 
-def _fallback_theory_markdown(*, title: str, source_content: str) -> str:
-    cleaned = source_content.strip()
-    if not cleaned:
-        return f"## {title}\n\nTai lieu goc dang trong."
-
-    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", cleaned) if chunk.strip()]
-    if not chunks:
-        chunks = [cleaned]
-
-    lines = [f"## {title}", "", "### Tom tat tu tai lieu goc", ""]
-    for chunk in chunks[:10]:
-        lines.append(f"- {chunk[:400]}")
-
-    return "\n".join(lines).strip()
-
-
 def build_document_theory_prompt(*, title: str, source_content: str) -> str:
-    bounded_source = source_content.strip()[:40000]
+    full_source = source_content.strip()
 
     return (
-        "Ban la mot tro ly hoc tap theo mo hinh NotebookLM mini. "
-        "Nguon su that DUY NHAT la tai lieu goc ben duoi. "
-        "TUYET DOI KHONG bo sung kien thuc ben ngoai tai lieu goc, KHONG suy dien, KHONG phong doan. "
-        "Moi nhan dinh, so lieu, vi du, ma lenh deu phai truy vet duoc tu tai lieu goc. "
-        "Neu tai lieu goc khong de cap, phai ghi ro nguyen van: 'Tai lieu goc khong de cap'. "
-        "Dau ra bat buoc la Markdown GFM hop le (khong JSON). "
-        "Duoc phep va khuyen khich dung code fence ```lang``` khi tai lieu co code/command; "
-        "duoc phep dung bang Markdown khi co du lieu doi chieu. "
-        "Khong duoc dat toan bo cau tra loi trong mot code fence duy nhat. "
-        "Cau truc bat buoc: 1) Muc tieu tai lieu, 2) Khai niem then chot, 3) Quy trinh/thao tac (neu co), "
-        "4) Thong so/ghi chu quan trong (neu co), 5) Tong ket ngan. "
-        "Su dung heading ro rang, bullet ngan gon, va chi trinh bay noi dung co trong tai lieu.\n\n"
-        f"Tieu de tai lieu: {title.strip()}\n\n"
-        "Tai lieu goc (nguon su that duy nhat):\n"
-        f"{bounded_source}"
+        "Bạn là một Chuyên gia Viết sách Kỹ thuật và Giảng viên IT xuất sắc. "
+        "Bạn nhận được văn bản thô được cào từ website hoặc tài liệu. "
+        "Nhiệm vụ của bạn là thực hiện quy trình \"Chắt lọc Sư phạm\" gồm 4 bước bắt buộc sau để tạo ra một bài giảng Markdown hoàn hảo:\n\n"
+        "BƯỚC 1: LỌC NHIỄU (NOISE REDUCTION)\n"
+        "- Đọc lướt toàn bộ văn bản. Nhận diện và XÓA BỎ NGAY LẬP TỨC: Các câu \"Bài trước\", \"Bài sau\", \"Mục lục\", lời chào hỏi đầu/cuối bài, text quảng cáo, ghi chú tác giả, và các đoạn trắc nghiệm/bài tập có sẵn. CHỈ GIỮ LẠI nội dung lý thuyết và thực hành cốt lõi.\n\n"
+        "BƯỚC 2: TÁI CẤU TRÚC (RESTRUCTURING)\n"
+        "- Gom nhóm các ý có liên quan lại với nhau. Đặt Tiêu đề phụ (Heading 3: ###) cho từng phần để tạo bộ khung rõ ràng.\n"
+        "- TUYỆT ĐỐI KHÔNG viết đoạn văn dài quá 4 dòng. Sử dụng linh hoạt danh sách gạch đầu dòng (-) để liệt kê các tính năng, khái niệm.\n\n"
+        "BƯỚC 3: BẢO TOÀN KỸ THUẬT (TECHNICAL PRESERVATION) - RẤT QUAN TRỌNG\n"
+        "- Bạn phải trích xuất ĐẦY ĐỦ 100% các câu lệnh (command line), mã nguồn (code) và kết quả Terminal có trong bài gốc.\n"
+        "- BẮT BUỘC bọc tất cả chúng trong Markdown Code Block ( ```ngôn ngữ...``` ). Ví dụ kết quả bảng SQL thì bọc trong ```text hoặc ```sql. Tuyệt đối không để code nằm lẫn với văn bản thường.\n\n"
+        "BƯỚC 4: ĐỊNH DẠNG HIỂN THỊ (WHITESPACE FORMATTING)\n"
+        "- Đảm bảo luôn có 2 DẤU XUỐNG DÒNG (\\n\\n) ngăn cách giữa các đoạn văn và giữa đoạn văn với Code Block.\n\n"
+        "QUY TẮC CỐT LÕI: Chỉ dùng thông tin từ văn bản gốc, tuyệt đối không bịa đặt thêm kiến thức ngoài.\n\n"
+        f"Tiêu đề tài liệu: {title.strip()}\n\n"
+        "Tài liệu gốc (nguồn sự thật duy nhất):\n"
+        f"{full_source}"
     )
+
+
+def _raise_theory_ai_failure(*, scope: str, exc: Exception) -> None:
+    if isinstance(exc, AppException):
+        logger.error(
+            "%s upstream_status=%s upstream_detail=%s message=%s",
+            scope,
+            exc.status_code,
+            exc.detail,
+            exc.message,
+            exc_info=True,
+        )
+        raise AppException(
+            status_code=500,
+            message=f"He thong AI gap loi: {exc.message}",
+            detail={
+                "code": "THEORY_AI_FAILED",
+                "upstream_status": exc.status_code,
+                "upstream_code": exc.detail.get("code") if isinstance(exc.detail, dict) else None,
+            },
+        ) from exc
+
+    logger.error("%s unexpected_error=%s", scope, str(exc), exc_info=True)
+    raise AppException(
+        status_code=500,
+        message=f"He thong AI gap loi: {str(exc)}",
+        detail={"code": "THEORY_AI_FAILED"},
+    ) from exc
 
 
 def _build_unique_document_title(*, db: Session, user_id: int, preferred_title: str) -> str:
@@ -129,18 +153,19 @@ def create_document_for_user(
     if not normalized_source:
         raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
 
-    theory_markdown = ""
     try:
         theory_markdown = generate_grounded_markdown(
             prompt=build_document_theory_prompt(title=normalized_title, source_content=normalized_source)
         ).strip()
-    except AppException as exc:
-        logger.warning("document.create_theory_llm_failed title=%s error=%s", normalized_title, str(exc))
     except Exception as exc:
-        logger.warning("document.create_theory_llm_unexpected_error title=%s error=%s", normalized_title, str(exc))
+        _raise_theory_ai_failure(scope=f"document.create_theory_failed title={normalized_title}", exc=exc)
 
     if not theory_markdown:
-        theory_markdown = _fallback_theory_markdown(title=normalized_title, source_content=normalized_source)
+        raise AppException(
+            status_code=500,
+            message="He thong AI gap loi: AI service returned empty response",
+            detail={"code": "THEORY_AI_EMPTY_RESPONSE"},
+        )
 
     try:
         lesson = Lesson(
@@ -407,6 +432,38 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+def _extract_llm_error_message(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return (response.text or "").strip()[:500] or "Unknown AI service error"
+
+    if isinstance(payload, dict):
+        error_block = payload.get("error")
+        if isinstance(error_block, dict):
+            message = error_block.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()[:500]
+        return str(payload)[:500]
+
+    return str(payload)[:500]
+
+
+def _build_gemini_payload(*, prompt: str, max_output_tokens: int) -> dict[str, Any]:
+    return {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": max_output_tokens,
+        },
+    }
+
+
 def generate_grounded_markdown(*, prompt: str) -> str:
     settings = get_settings()
     api_key = (settings.gemini_api_key or "").strip()
@@ -419,24 +476,14 @@ def generate_grounded_markdown(*, prompt: str) -> str:
 
     model_candidates = _build_lesson_model_candidates(settings)
     timeout_seconds = max(120.0, float(settings.gemini_timeout_seconds))
-
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}],
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.2,
-            "maxOutputTokens": 6144,
-        },
-    }
+    max_output_tokens = 8192
+    retry_max_output_tokens = 4096
 
     with httpx.Client(timeout=timeout_seconds) as client:
         for index, model_name in enumerate(model_candidates):
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             has_fallback = index < len(model_candidates) - 1
+            payload = _build_gemini_payload(prompt=prompt, max_output_tokens=max_output_tokens)
 
             try:
                 response = client.post(endpoint, params={"key": api_key}, json=payload)
@@ -452,16 +499,75 @@ def generate_grounded_markdown(*, prompt: str) -> str:
             if response.status_code in (401, 403):
                 raise AppException(
                     status_code=503,
-                    message="AI service authentication failed",
+                    message=f"AI service authentication failed: {_extract_llm_error_message(response)}",
                     detail={"code": "LLM_AUTH_FAILED"},
                 )
 
+            if response.status_code == 400:
+                error_message = _extract_llm_error_message(response)
+                logger.error(
+                    "lesson.llm_bad_request model=%s max_output_tokens=%s error=%s",
+                    model_name,
+                    max_output_tokens,
+                    error_message,
+                )
+
+                if (
+                    max_output_tokens > retry_max_output_tokens
+                    and (
+                        "maxoutputtokens" in error_message.lower()
+                        or "max output" in error_message.lower()
+                        or "invalid argument" in error_message.lower()
+                    )
+                ):
+                    retry_payload = _build_gemini_payload(prompt=prompt, max_output_tokens=retry_max_output_tokens)
+                    retry_response = client.post(endpoint, params={"key": api_key}, json=retry_payload)
+                    if retry_response.status_code < 400:
+                        try:
+                            retry_payload_json = retry_response.json()
+                        except ValueError as exc:
+                            raise AppException(
+                                status_code=503,
+                                message="AI service returned invalid response",
+                                detail={"code": "LLM_INVALID_RESPONSE"},
+                            ) from exc
+
+                        generation_text = _extract_gemini_text(retry_payload_json).strip()
+                        if generation_text:
+                            return generation_text
+                        raise AppException(
+                            status_code=503,
+                            message="AI service returned empty response",
+                            detail={"code": "LLM_EMPTY_RESPONSE"},
+                        )
+
+                    retry_error_message = _extract_llm_error_message(retry_response)
+                    logger.error(
+                        "lesson.llm_bad_request_retry_failed model=%s max_output_tokens=%s error=%s",
+                        model_name,
+                        retry_max_output_tokens,
+                        retry_error_message,
+                    )
+
+                raise AppException(
+                    status_code=503,
+                    message=f"AI service bad request: {error_message}",
+                    detail={"code": "LLM_BAD_REQUEST"},
+                )
+
             if response.status_code >= 400:
+                error_message = _extract_llm_error_message(response)
+                logger.error(
+                    "lesson.llm_service_error model=%s status=%s error=%s",
+                    model_name,
+                    response.status_code,
+                    error_message,
+                )
                 if has_fallback and response.status_code in (404, 429, 500, 503):
                     continue
                 raise AppException(
                     status_code=503,
-                    message="AI service unavailable",
+                    message=f"AI service unavailable: {error_message}",
                     detail={"code": "LLM_SERVICE_ERROR"},
                 )
 
@@ -506,16 +612,19 @@ def generate_lesson_content_for_user(*, db: Session, user_id: int, lesson_id: in
             detail={"code": "LESSON_SOURCE_EMPTY"},
         )
 
-    markdown = ""
     try:
         markdown = generate_grounded_markdown(
             prompt=build_document_theory_prompt(title=lesson.title, source_content=source_content)
         ).strip()
-    except AppException as exc:
-        logger.warning("lesson.grounded_theory_generation_failed lesson_id=%s error=%s", lesson.id, str(exc))
+    except Exception as exc:
+        _raise_theory_ai_failure(scope=f"lesson.generate_theory_failed lesson_id={lesson.id}", exc=exc)
 
     if not markdown:
-        markdown = _fallback_theory_markdown(title=lesson.title, source_content=source_content)
+        raise AppException(
+            status_code=500,
+            message="He thong AI gap loi: AI service returned empty response",
+            detail={"code": "THEORY_AI_EMPTY_RESPONSE"},
+        )
 
     try:
         lesson.content_markdown = markdown

@@ -82,7 +82,7 @@ def test_create_document_auto_suffixes_duplicate_title(
     assert second_title == "Collision Title (2)"
 
 
-def test_create_document_falls_back_when_llm_raises_unexpected_error(
+def test_create_document_returns_ai_error_when_llm_raises_unexpected_error(
     client,
     db_session: Session,
     auth_headers,
@@ -107,11 +107,10 @@ def test_create_document_falls_back_when_llm_raises_unexpected_error(
         headers=headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 500
     payload = response.json()
-    assert payload["title"] == "Fallback LLM Error"
+    assert payload["message"].startswith("He thong AI gap loi:")
+    assert payload["detail"]["code"] == "THEORY_AI_FAILED"
 
-    created_lesson = db_session.scalar(select(Lesson).where(Lesson.id == payload["document_id"]))
-    assert created_lesson is not None
-    assert created_lesson.content_markdown is not None
-    assert "Tom tat tu tai lieu goc" in created_lesson.content_markdown
+    created_lesson = db_session.scalar(select(Lesson).where(Lesson.title == "Fallback LLM Error"))
+    assert created_lesson is None

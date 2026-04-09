@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 import {
@@ -747,14 +748,14 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-violet-300 prose-headings:text-white prose-code:text-cyan-300 prose-a:text-cyan-300 prose-a:no-underline hover:prose-a:underline">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeHighlight]}
         components={{
           h2: ({ children }) => <h2 className="text-xl text-white mt-6 mb-3" style={{ fontWeight: 700 }}>{children}</h2>,
           h3: ({ children }) => <h3 className="text-base text-zinc-200 mt-4 mb-2" style={{ fontWeight: 600 }}>{children}</h3>,
-          p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed my-2">{children}</p>,
+          p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed mb-4">{children}</p>,
           li: ({ children }) => <li className="text-zinc-300 text-sm my-1">{children}</li>,
-          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed">{children}</pre>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed mb-4">{children}</pre>,
           code: ({ inline, children, ...props }) => {
             if (inline) {
               return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
@@ -1431,10 +1432,11 @@ export default function LearningWorkspace() {
                 {message.role === 'assistant' ? (
                   <div className="prose prose-invert max-w-none prose-p:my-1 prose-p:text-zinc-100 prose-li:text-zinc-200 prose-strong:text-cyan-300">
                     <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
                       rehypePlugins={[rehypeHighlight]}
                       components={{
-                        pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-950/80 p-2.5 text-xs leading-relaxed">{children}</pre>,
+                        p: ({ children }) => <p className="mb-4 text-zinc-100">{children}</p>,
+                        pre: ({ children }) => <pre className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-950/80 p-2.5 text-xs leading-relaxed mb-4">{children}</pre>,
                         code: ({ inline, children, ...props }) => {
                           if (inline) {
                             return <code className="rounded bg-cyan-400/10 px-1 py-0.5 text-xs text-cyan-200">{children}</code>;

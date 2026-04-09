@@ -28,7 +28,6 @@ ParserSourceType = Literal["url", "pdf", "docx", "image"]
 
 MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024
 MAX_URL_DOWNLOAD_BYTES = 5 * 1024 * 1024
-MAX_EXTRACTED_TEXT_LENGTH = 120000
 MAX_EXTRACTED_TITLE_LENGTH = 180
 
 SUPPORTED_IMAGE_MIME_TYPES = {
@@ -57,12 +56,12 @@ def _collapse_whitespace(value: str) -> str:
 
 
 def _sanitize_extracted_line(value: str) -> str:
-    normalized = _collapse_whitespace(value)
+    normalized = value.replace("\xa0", " ").strip()
     if not normalized:
         return ""
 
     normalized = re.sub(r"[<>]+", " ", normalized)
-    normalized = _collapse_whitespace(normalized)
+    normalized = normalized.strip()
     if re.fullmatch(r"[-=_*~`|•·]+", normalized):
         return ""
 
@@ -70,20 +69,14 @@ def _sanitize_extracted_line(value: str) -> str:
 
 
 def _normalize_extracted_text(value: str) -> str:
+    normalized_input = (value or "").replace("\r\n", "\n").replace("\r", "\n")
     lines: list[str] = []
-    previous = ""
-    for raw_line in value.splitlines():
+    for raw_line in normalized_input.split("\n"):
         cleaned = _sanitize_extracted_line(raw_line)
-        if not cleaned:
-            continue
-        if cleaned == previous:
-            continue
         lines.append(cleaned)
-        previous = cleaned
 
     normalized = "\n".join(lines).strip()
-    if len(normalized) > MAX_EXTRACTED_TEXT_LENGTH:
-        return normalized[:MAX_EXTRACTED_TEXT_LENGTH].strip()
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
     return normalized
 
 
@@ -102,7 +95,7 @@ def _normalize_extracted_title(value: str | None) -> str | None:
 
 
 def _build_title_from_text_excerpt(text: str, *, max_chars: int = 40) -> str | None:
-    normalized = _collapse_whitespace((text or "").replace("\n", " "))
+    normalized = _collapse_whitespace(text or "")
     if not normalized:
         return None
     if len(normalized) <= max_chars:
@@ -114,7 +107,11 @@ def _extract_title_from_html(html_text: str) -> str | None:
     if not html_text.strip():
         return None
     soup = BeautifulSoup(html_text, "html.parser")
-    raw_title = soup.title.string if soup.title and soup.title.string else (soup.title.get_text(" ", strip=True) if soup.title else "")
+    raw_title = (
+        soup.title.string
+        if soup.title and soup.title.string
+        else (soup.title.get_text(separator="\n\n", strip=True) if soup.title else "")
+    )
     return _normalize_extracted_title(raw_title)
 
 
@@ -192,16 +189,16 @@ def _extract_best_container_text(soup: BeautifulSoup) -> str:
         if not containers:
             continue
 
-        best_container = max(containers, key=lambda item: len(item.get_text(" ", strip=True)), default=None)
+        best_container = max(containers, key=lambda item: len(item.get_text(separator="\n\n", strip=True)), default=None)
         if best_container is None:
             continue
 
-        candidate_text = _normalize_extracted_text(best_container.get_text("\n", strip=True))
+        candidate_text = _normalize_extracted_text(best_container.get_text(separator="\n\n", strip=True))
         if candidate_text:
             return candidate_text
 
     fallback_container = soup.body or soup
-    return _normalize_extracted_text(fallback_container.get_text("\n", strip=True))
+    return _normalize_extracted_text(fallback_container.get_text(separator="\n\n", strip=True))
 
 
 def _extract_readability_text(html_text: str) -> str:
@@ -219,7 +216,7 @@ def _extract_readability_text(html_text: str) -> str:
 
     summary_soup = BeautifulSoup(summary_html, "html.parser")
     _remove_noise_nodes(summary_soup)
-    return _normalize_extracted_text(summary_soup.get_text("\n", strip=True))
+    return _normalize_extracted_text(summary_soup.get_text(separator="\n\n", strip=True))
 
 
 def _validate_url(url: str) -> str:

@@ -1,9 +1,14 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+
+def _lesson_content_text_type() -> Text:
+    return Text().with_variant(mysql.LONGTEXT(), "mysql")
 
 
 class Lesson(Base):
@@ -18,8 +23,8 @@ class Lesson(Base):
     week_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    source_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    content_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_content: Mapped[str] = mapped_column(_lesson_content_text_type(), nullable=False, default="")
+    content_markdown: Mapped[str | None] = mapped_column(_lesson_content_text_type(), nullable=True)
     youtube_video_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
