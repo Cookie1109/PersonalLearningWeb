@@ -169,13 +169,8 @@ export interface QuizPublicQuestionDTO {
   question_id: string;
   text: string;
   options: QuizOptionDTO[];
-}
-
-// Security contract: never include correct_answer or explanation in quiz fetch payload.
-export interface QuizResponseDTO {
-  quiz_id: string;
-  lesson_id: string;
-  questions: QuizPublicQuestionDTO[];
+  type?: 'theory' | 'fill_code' | 'find_bug' | 'english' | null;
+  difficulty?: 'Easy' | 'Medium' | 'Hard' | null;
 }
 
 export interface QuizSubmitAnswerDTO {
@@ -206,6 +201,24 @@ export interface QuizSubmitResponseDTO {
   reward_granted: boolean;
   message: string;
   results: QuizSubmitResultDTO[];
+  selected_answers?: Record<string, string>;
+}
+
+export interface QuizAttemptSnapshotDTO extends QuizSubmitResponseDTO {
+  selected_answers: Record<string, string>;
+  submitted_at: string;
+}
+
+// Security contract: never include correct_answer or explanation in quiz fetch payload.
+export interface QuizResponseDTO {
+  quiz_id: string;
+  lesson_id: string;
+  questions: QuizPublicQuestionDTO[];
+  attempt?: QuizAttemptSnapshotDTO | null;
+}
+
+export interface DocumentQuizSubmitRequestDTO {
+  selected_answers: Record<string, string>;
 }
 
 export interface LessonCompleteResponseDTO {

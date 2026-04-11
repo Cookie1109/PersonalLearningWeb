@@ -10,7 +10,7 @@ import 'highlight.js/styles/github-dark.css';
 import {
   CheckCircle2, BookOpen,
   Loader2, Zap,
-  MessageSquare, CreditCard, ListChecks, Lightbulb, Send
+  MessageSquare, CreditCard, ListChecks, Lightbulb, Send, RefreshCw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -25,7 +25,7 @@ import {
 import FlashCardDeck from '../components/FlashCard';
 import { Flashcard } from '../lib/types';
 import { QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
-import { fetchQuizByLesson, submitQuiz } from '../../api/quiz';
+import { fetchQuizByDocument, generateQuizByDocument, submitQuizByDocument } from '../../api/quiz';
 
 type LearningTab = 'theory' | 'quiz' | 'flashcard' | 'qa';
 
@@ -44,6 +44,72 @@ interface QuizResultDisplayProps {
   quizQuestions: QuizResponseDTO['questions'];
   onRetry: () => void;
   onBackToTheory: () => void;
+  onRegenerate: () => void;
+  isRegenerating: boolean;
+  isRegenerateDisabled: boolean;
+  regenerateTooltip: string;
+  regenerationCount: number;
+}
+
+type MarkdownCodeComponentProps = React.ComponentPropsWithoutRef<'code'> & {
+  inline?: boolean;
+};
+
+const QUIZ_TYPE_LABELS: Record<string, string> = {
+  theory: 'Ly thuyet',
+  fill_code: 'Dien code',
+  find_bug: 'Tim loi',
+};
+
+const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
+  Easy: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
+  Medium: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+  Hard: 'border-red-500/40 bg-red-500/15 text-red-300',
+};
+
+function getQuizTypeLabel(type: string | null | undefined): string {
+  if (!type) return 'Khac';
+  return QUIZ_TYPE_LABELS[type] ?? type;
+}
+
+function getQuizDifficultyStyle(difficulty: string | null | undefined): string {
+  if (!difficulty) {
+    return 'border-zinc-600 bg-zinc-800/70 text-zinc-300';
+  }
+  return QUIZ_DIFFICULTY_STYLES[difficulty] ?? 'border-zinc-600 bg-zinc-800/70 text-zinc-300';
+}
+
+function parseRetryAfterSeconds(rawValue: unknown): number {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(parsed));
+}
+
+function cleanQuizOptionText(rawOptionText: string): string {
+  return String(rawOptionText)
+    .replace(/^[A-D][\.\:\)]\s*/i, '')
+    .trim();
+}
+
+function normalizeSelectedAnswersMap(rawValue: unknown): Record<string, string> {
+  if (!rawValue || typeof rawValue !== 'object') {
+    return {};
+  }
+
+  return Object.entries(rawValue as Record<string, unknown>).reduce<Record<string, string>>((acc, [questionId, selected]) => {
+    if (typeof selected !== 'string') {
+      return acc;
+    }
+    const normalizedQuestionId = String(questionId).trim();
+    const normalizedSelected = selected.trim();
+    if (!normalizedQuestionId || !normalizedSelected) {
+      return acc;
+    }
+    acc[normalizedQuestionId] = normalizedSelected;
+    return acc;
+  }, {});
 }
 
 function isLearningTab(value: string | null): value is LearningTab {
@@ -680,6 +746,11 @@ export function QuizResultDisplay({
   quizQuestions,
   onRetry,
   onBackToTheory,
+  onRegenerate,
+  isRegenerating,
+  isRegenerateDisabled,
+  regenerateTooltip,
+  regenerationCount,
 }: QuizResultDisplayProps) {
   const correctCount = quizResult.results.filter(item => item.is_correct).length;
 
@@ -704,24 +775,68 @@ export function QuizResultDisplay({
         </div>
       )}
 
-      <div className="space-y-2">
-        {quizResult.results.map((answer, index) => (
-          <div key={answer.question_id} className="space-y-2">
-            <div
-              className={`rounded-lg border px-3 py-2 text-sm ${answer.is_correct ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100' : 'border-red-500/30 bg-red-500/10 text-red-100'}`}
-            >
-              Cau {index + 1}: {answer.is_correct ? 'Dung' : 'Sai'}
-            </div>
-            {!answer.is_correct && answer.explanation && (
-              <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
-                  <Lightbulb size={13} />Giai thich
-                </div>
-                <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
+      <div className="space-y-3">
+        {quizResult.results.map((answer, index) => {
+          const question = quizQuestions[index];
+          const optionTextByKey = new Map(
+            (question?.options ?? []).map(option => [option.option_key, cleanQuizOptionText(option.text)])
+          );
+          const selectedOptionText = answer.selected_option
+            ? (optionTextByKey.get(answer.selected_option) ?? answer.selected_option)
+            : 'Khong chon dap an';
+          const correctOptionText = answer.correct_answer
+            ? (optionTextByKey.get(answer.correct_answer) ?? answer.correct_answer)
+            : 'Khong xac dinh';
+
+          return (
+            <div key={answer.question_id} className="space-y-3 rounded-xl border border-zinc-700 bg-zinc-950/60 p-3">
+              <p className="text-sm text-zinc-100" style={{ fontWeight: 700 }}>
+                Cau {index + 1}
+              </p>
+              <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-3">
+                <QuizQuestionMarkdown content={question?.text ?? 'Noi dung cau hoi'} />
               </div>
-            )}
-          </div>
-        ))}
+
+              {answer.is_correct ? (
+                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
+                  Ban da tra loi dung: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2.5 text-sm text-red-100">
+                    Ban da chon: <span style={{ fontWeight: 700 }}>{selectedOptionText}</span>
+                  </div>
+                  <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
+                    Dap an dung: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
+                  </div>
+                </>
+              )}
+
+              {answer.explanation && (
+                <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
+                    <Lightbulb size={13} />Giai thich
+                  </div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="space-y-2">
+        <span className="block" title={regenerateTooltip}>
+          <button
+            onClick={onRegenerate}
+            disabled={isRegenerating || isRegenerateDisabled}
+            className="w-full rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-60 disabled:cursor-not-allowed text-cyan-100 px-4 py-2.5 text-sm inline-flex items-center justify-center gap-2"
+            style={{ fontWeight: 600 }}
+          >
+            <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
+            {isRegenerating ? 'Dang tao lai quiz...' : 'Tao lai Quiz moi'}
+          </button>
+        </span>
       </div>
 
       <div className="flex gap-3">
@@ -756,7 +871,7 @@ function MarkdownContent({ content }: { content: string }) {
           p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed mb-4">{children}</p>,
           li: ({ children }) => <li className="text-zinc-300 text-sm my-1">{children}</li>,
           pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed mb-4">{children}</pre>,
-          code: ({ inline, children, ...props }) => {
+          code: ({ inline, children, ...props }: MarkdownCodeComponentProps) => {
             if (inline) {
               return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
             }
@@ -771,6 +886,32 @@ function MarkdownContent({ content }: { content: string }) {
           th: ({ children }) => <th className="border border-zinc-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-zinc-300">{children}</th>,
           td: ({ children }) => <td className="border border-zinc-800 px-3 py-2 align-top text-sm">{children}</td>,
           blockquote: ({ children }) => <blockquote className="my-4 border-l-4 border-zinc-600 pl-4 text-zinc-300 italic">{children}</blockquote>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+function QuizQuestionMarkdown({ content }: { content: string }) {
+  return (
+    <div className="prose prose-invert max-w-none prose-p:text-zinc-100 prose-p:text-base prose-p:leading-relaxed prose-p:my-2 prose-strong:text-cyan-300 prose-code:text-cyan-200 prose-code:bg-cyan-400/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:my-3 prose-pre:bg-zinc-950/90 prose-pre:border prose-pre:border-zinc-700 prose-pre:rounded-xl prose-pre:p-3 prose-pre:overflow-x-auto">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          p: ({ children }) => <p className="text-zinc-100 text-base leading-relaxed my-2">{children}</p>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/90 p-3 text-xs leading-relaxed my-3">{children}</pre>,
+          code: ({ inline, children, ...props }: MarkdownCodeComponentProps) => {
+            if (inline) {
+              return <code className="text-cyan-200 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
+            }
+            return <code className="text-zinc-100" {...props}>{children}</code>;
+          },
+          ul: ({ children }) => <ul className="my-2 pl-5 list-disc text-zinc-100">{children}</ul>,
+          li: ({ children }) => <li className="my-1 text-zinc-100 text-sm">{children}</li>,
+          blockquote: ({ children }) => <blockquote className="my-3 border-l-4 border-zinc-600 pl-3 text-zinc-200 italic">{children}</blockquote>,
         }}
       >
         {content}
@@ -801,10 +942,17 @@ export default function LearningWorkspace() {
   const [quizData, setQuizData] = useState<QuizResponseDTO | null>(null);
   const [quizState, setQuizState] = useState<QuizState>({ currentIndex: 0, selectedAnswers: {} });
   const [isQuizLoading, setIsQuizLoading] = useState(false);
+  const [hasQuizFetchAttempted, setHasQuizFetchAttempted] = useState(false);
+  const [isQuizGenerating, setIsQuizGenerating] = useState(false);
   const [quizLoadError, setQuizLoadError] = useState<string | null>(null);
+  const [quizGenerateError, setQuizGenerateError] = useState<string | null>(null);
   const [isQuizSubmitting, setIsQuizSubmitting] = useState(false);
   const [quizSubmitError, setQuizSubmitError] = useState<string | null>(null);
   const [quizResult, setQuizResult] = useState<QuizSubmitResponseDTO | null>(null);
+  const [isQuizSubmitted, setIsQuizSubmitted] = useState(false);
+  const [regenerationCount, setRegenerationCount] = useState(0);
+  const [quizRegenerateRetryAfterSeconds, setQuizRegenerateRetryAfterSeconds] = useState(0);
+  const [showQuizRegenerateConfirm, setShowQuizRegenerateConfirm] = useState(false);
 
   const [isMarkingFlashcardComplete, setIsMarkingFlashcardComplete] = useState(false);
   const [flashcardError, setFlashcardError] = useState<string | null>(null);
@@ -820,6 +968,21 @@ export default function LearningWorkspace() {
   );
   const quizQuestions = quizData?.questions ?? [];
   const currentQuizQuestion = quizQuestions[quizState.currentIndex];
+  const hasRegenerateCooldown = quizRegenerateRetryAfterSeconds > 0;
+  const canRegenerate = isQuizSubmitted && !hasRegenerateCooldown;
+  const regenerateTooltip = !isQuizSubmitted
+    ? 'Vui long nop bai de co the tao de moi'
+    : hasRegenerateCooldown
+      ? `Ban da het luot tao trong 10 phut. Thu lai sau ${quizRegenerateRetryAfterSeconds} giay`
+      : 'Tao bo cau hoi moi';
+  const isRegenerateDisabled = !canRegenerate || isQuizGenerating || isQuizSubmitting || isQuizLoading;
+
+  const resetQuizSessionState = useCallback(() => {
+    setQuizState({ currentIndex: 0, selectedAnswers: {} });
+    setQuizResult(null);
+    setQuizSubmitError(null);
+    setIsQuizSubmitted(false);
+  }, []);
 
   const setLearningTab = useCallback((tab: LearningTab) => {
     setActiveTab(tab);
@@ -885,10 +1048,17 @@ export default function LearningWorkspace() {
     setQuizData(null);
     setQuizState({ currentIndex: 0, selectedAnswers: {} });
     setIsQuizLoading(false);
+    setHasQuizFetchAttempted(false);
+    setIsQuizGenerating(false);
     setQuizLoadError(null);
+    setQuizGenerateError(null);
     setIsQuizSubmitting(false);
     setQuizSubmitError(null);
     setQuizResult(null);
+    setIsQuizSubmitted(false);
+    setRegenerationCount(0);
+    setQuizRegenerateRetryAfterSeconds(0);
+    setShowQuizRegenerateConfirm(false);
     setIsMarkingFlashcardComplete(false);
     setFlashcardError(null);
     setQaMessages([]);
@@ -897,6 +1067,18 @@ export default function LearningWorkspace() {
     setIsQASending(false);
     void loadLesson(lessonId);
   }, [lessonId, loadLesson]);
+
+  useEffect(() => {
+    if (quizRegenerateRetryAfterSeconds <= 0) {
+      return;
+    }
+
+    const timerId = window.setInterval(() => {
+      setQuizRegenerateRetryAfterSeconds(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [quizRegenerateRetryAfterSeconds]);
 
   useEffect(() => {
     if (activeTab !== 'qa') {
@@ -919,13 +1101,23 @@ export default function LearningWorkspace() {
     setIsQuizLoading(true);
     setQuizLoadError(null);
     try {
-      const quiz = await fetchQuizByLesson(targetLessonId);
+      const quiz = await fetchQuizByDocument(targetLessonId);
+      const restoredAttempt = quiz.attempt ?? null;
+      const restoredSelectedAnswers = normalizeSelectedAnswersMap(restoredAttempt?.selected_answers ?? {});
+
       setQuizData(quiz);
-      setQuizState({ currentIndex: 0, selectedAnswers: {} });
-      setQuizResult(null);
+      setQuizState({ currentIndex: 0, selectedAnswers: restoredSelectedAnswers });
+      setQuizResult(restoredAttempt);
       setQuizSubmitError(null);
+      setIsQuizSubmitted(Boolean(restoredAttempt));
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404 || error.response?.data?.detail?.code === 'QUIZ_NOT_FOUND') {
+          setQuizData(null);
+          setQuizLoadError(null);
+          return;
+        }
+
         const errorCode = error.response?.data?.detail?.code;
         if (errorCode === 'LLM_API_KEY_MISSING') {
           setQuizLoadError('Quiz AI chua duoc cau hinh. Vui long thiet lap GEMINI_API_KEY trong backend/.env.');
@@ -941,15 +1133,74 @@ export default function LearningWorkspace() {
       }
     } finally {
       setIsQuizLoading(false);
+      setHasQuizFetchAttempted(true);
     }
   }, []);
 
+  const handleGenerateQuiz = useCallback(async (options?: { resetExistingSession?: boolean }) => {
+    if (!lessonId || isQuizGenerating || isQuizSubmitting) {
+      return;
+    }
+
+    setIsQuizGenerating(true);
+    setQuizGenerateError(null);
+    setQuizLoadError(null);
+
+    try {
+      const quiz = await generateQuizByDocument(lessonId);
+      setQuizData(quiz);
+      resetQuizSessionState();
+      setQuizRegenerateRetryAfterSeconds(0);
+      if (options?.resetExistingSession) {
+        setRegenerationCount(prev => prev + 1);
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 429) {
+          const retryAfter = parseRetryAfterSeconds(error.response?.data?.detail?.retry_after_seconds);
+          setQuizRegenerateRetryAfterSeconds(retryAfter);
+          setQuizGenerateError(
+            retryAfter
+              ? `Ban tao quiz qua nhanh. Vui long thu lai sau ${retryAfter} giay.`
+              : 'Ban tao quiz qua nhanh. Vui long thu lai sau it phut.'
+          );
+        } else if (error.response?.status === 403 || error.response?.data?.detail?.code === 'QUIZ_REGENERATION_REQUIRES_SUBMISSION') {
+          setQuizGenerateError(error.response?.data?.message ?? 'Vui long nop bai de co the tao de moi.');
+        } else {
+          setQuizGenerateError(error.response?.data?.message ?? 'Khong the tao bo quiz luc nay.');
+        }
+      } else if (error instanceof Error) {
+        setQuizGenerateError(error.message);
+      } else {
+        setQuizGenerateError('Khong the tao bo quiz luc nay.');
+      }
+    } finally {
+      setIsQuizGenerating(false);
+    }
+  }, [lessonId, isQuizGenerating, isQuizSubmitting, resetQuizSessionState]);
+
+  const handleRequestRegenerateQuiz = useCallback(() => {
+    if (!quizData || isRegenerateDisabled) {
+      return;
+    }
+    setShowQuizRegenerateConfirm(true);
+  }, [quizData, isRegenerateDisabled]);
+
+  const handleConfirmRegenerateQuiz = useCallback(() => {
+    if (isRegenerateDisabled) {
+      setShowQuizRegenerateConfirm(false);
+      return;
+    }
+    setShowQuizRegenerateConfirm(false);
+    void handleGenerateQuiz({ resetExistingSession: true });
+  }, [handleGenerateQuiz, isRegenerateDisabled]);
+
   useEffect(() => {
-    if (activeTab !== 'quiz' || !lessonId || quizData || isQuizLoading || quizLoadError) {
+    if (activeTab !== 'quiz' || !lessonId || quizData || isQuizLoading || quizLoadError || hasQuizFetchAttempted) {
       return;
     }
     void loadQuiz(lessonId);
-  }, [activeTab, lessonId, quizData, isQuizLoading, quizLoadError, loadQuiz]);
+  }, [activeTab, lessonId, quizData, isQuizLoading, quizLoadError, hasQuizFetchAttempted, loadQuiz]);
 
   const retryGeneration = async () => {
     if (!lessonId) return;
@@ -986,7 +1237,7 @@ export default function LearningWorkspace() {
   };
 
   const handleSubmitQuiz = async () => {
-    if (!quizData || isQuizSubmitting) {
+    if (!lessonId || !quizData || isQuizSubmitting) {
       return;
     }
 
@@ -994,12 +1245,8 @@ export default function LearningWorkspace() {
     setQuizSubmitError(null);
 
     try {
-      const answers = Object.entries(quizState.selectedAnswers).map(([question_id, selected_option]) => ({
-        question_id,
-        selected_option,
-      }));
-
-      const result = await submitQuiz(quizData.quiz_id, { answers });
+      const selectedAnswersPayload = normalizeSelectedAnswersMap(quizState.selectedAnswers);
+      const result = await submitQuizByDocument(lessonId, { selected_answers: selectedAnswersPayload });
       const totalExpGained = (result.exp_gained ?? 0) + (result.streak_bonus_exp ?? 0);
       applyServerExp(totalExpGained);
       syncServerGamification({
@@ -1009,6 +1256,11 @@ export default function LearningWorkspace() {
       });
 
       setQuizResult(result);
+      setQuizState(prev => ({
+        ...prev,
+        selectedAnswers: normalizeSelectedAnswersMap(result.selected_answers ?? selectedAnswersPayload),
+      }));
+      setIsQuizSubmitted(true);
       if (result.is_passed) {
         setLessonDetail(prev => (prev ? { ...prev, quizPassed: true } : prev));
         setShowCompletionModal(false);
@@ -1046,6 +1298,7 @@ export default function LearningWorkspace() {
     setQuizState({ currentIndex: 0, selectedAnswers: {} });
     setQuizResult(null);
     setQuizSubmitError(null);
+    setIsQuizSubmitted(false);
   };
 
   const handleFlashcardComplete = async (_known: number, _total: number) => {
@@ -1247,6 +1500,24 @@ export default function LearningWorkspace() {
       );
     }
 
+    if (isQuizGenerating) {
+      return (
+        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-6 space-y-4">
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-100" style={{ fontWeight: 700 }}>
+            <Loader2 size={13} className="animate-spin" />AI dang tao bo 10 cau hoi...
+          </div>
+          <p className="text-sm text-cyan-100/90">
+            Qua trinh sinh quiz co the mat khoang 10-20 giay. Vui long doi trong giay lat.
+          </p>
+          <div className="space-y-2">
+            {[...Array(3)].map((_, index) => (
+              <div key={`quiz-skeleton-${index}`} className="h-10 rounded-lg bg-cyan-500/15 border border-cyan-400/20 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     if (quizLoadError) {
       return (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4">
@@ -1263,14 +1534,21 @@ export default function LearningWorkspace() {
 
     if (!quizData || quizQuestions.length === 0) {
       return (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
-          <p className="text-sm text-zinc-300">Quiz chua san sang cho bai hoc nay.</p>
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-5 py-6">
+          <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Chưa có bài trắc nghiệm</h3>
+          <p className="mt-2 text-sm text-zinc-300">Tạo bộ 10 câu hỏi tự động bằng AI để luyện tập ngay trên tài liệu này.</p>
           <button
-            onClick={() => lessonId && void loadQuiz(lessonId)}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-500 px-3 py-2 text-xs text-white"
+            onClick={() => void handleGenerateQuiz()}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-5 py-3 text-sm text-white"
+            style={{ fontWeight: 700 }}
           >
-            <Zap size={12} />Tai quiz ngay
+            <Zap size={16} />Tạo bộ 10 câu trắc nghiệm AI
           </button>
+          {quizGenerateError && (
+            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {quizGenerateError}
+            </div>
+          )}
         </div>
       );
     }
@@ -1282,6 +1560,11 @@ export default function LearningWorkspace() {
           quizQuestions={quizQuestions}
           onRetry={handleRestartQuiz}
           onBackToTheory={() => setLearningTab('theory')}
+          onRegenerate={handleRequestRegenerateQuiz}
+          isRegenerating={isQuizGenerating}
+          isRegenerateDisabled={isRegenerateDisabled}
+          regenerateTooltip={regenerateTooltip}
+          regenerationCount={regenerationCount}
         />
       );
     }
@@ -1290,10 +1573,16 @@ export default function LearningWorkspace() {
 
     return (
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-zinc-400">Cau {quizState.currentIndex + 1}/{quizQuestions.length}</p>
           <p className="text-xs text-cyan-300">Da chon {Object.keys(quizState.selectedAnswers).length} dap an</p>
         </div>
+
+        {isRegenerateDisabled && (
+          <div className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-300">
+            {regenerateTooltip}
+          </div>
+        )}
 
         <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
           <motion.div
@@ -1303,12 +1592,24 @@ export default function LearningWorkspace() {
         </div>
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-950/60 p-4">
-          <h3 className="text-lg text-white" style={{ fontWeight: 600 }}>{currentQuizQuestion?.text}</h3>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-indigo-500/40 bg-indigo-500/15 px-2.5 py-1 text-xs text-indigo-200" style={{ fontWeight: 600 }}>
+              {getQuizTypeLabel(currentQuizQuestion?.type)}
+            </span>
+            <span
+              className={`rounded-full border px-2.5 py-1 text-xs ${getQuizDifficultyStyle(currentQuizQuestion?.difficulty)}`}
+              style={{ fontWeight: 600 }}
+            >
+              {currentQuizQuestion?.difficulty ?? 'N/A'}
+            </span>
+          </div>
+          <QuizQuestionMarkdown content={currentQuizQuestion?.text ?? ''} />
         </div>
 
         <div className="space-y-3">
           {currentQuizQuestion?.options.map(option => {
             const isSelected = selectedKey === option.option_key;
+            const cleanOption = cleanQuizOptionText(option.text);
             return (
               <button
                 key={option.option_key}
@@ -1319,7 +1620,7 @@ export default function LearningWorkspace() {
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-current text-xs" style={{ fontWeight: 600 }}>
                     {option.option_key}
                   </span>
-                  {option.text}
+                  {cleanOption}
                 </span>
               </button>
             );
@@ -1437,7 +1738,7 @@ export default function LearningWorkspace() {
                       components={{
                         p: ({ children }) => <p className="mb-4 text-zinc-100">{children}</p>,
                         pre: ({ children }) => <pre className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-950/80 p-2.5 text-xs leading-relaxed mb-4">{children}</pre>,
-                        code: ({ inline, children, ...props }) => {
+                        code: ({ inline, children, ...props }: MarkdownCodeComponentProps) => {
                           if (inline) {
                             return <code className="rounded bg-cyan-400/10 px-1 py-0.5 text-xs text-cyan-200">{children}</code>;
                           }
@@ -1672,6 +1973,51 @@ export default function LearningWorkspace() {
                   style={{ fontWeight: 600 }}
                 >
                   Lam ngay
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showQuizRegenerateConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/65 backdrop-blur-sm z-[65] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-6"
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mb-4">
+                <RefreshCw size={20} className="text-amber-300" />
+              </div>
+              <h3 className="text-xl text-white" style={{ fontWeight: 700 }}>Tao bo cau hoi moi?</h3>
+              <p className="text-sm text-zinc-300 mt-2">
+                Ban co chac chan muon tao bo cau hoi moi? Toan bo ket qua cua bai lam hien tai se bi xoa.
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowQuizRegenerateConfirm(false)}
+                  className="rounded-xl px-4 py-2.5 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                  style={{ fontWeight: 600 }}
+                >
+                  Huy
+                </button>
+                <button
+                  onClick={handleConfirmRegenerateQuiz}
+                  disabled={isRegenerateDisabled}
+                  className="rounded-xl px-4 py-2.5 text-sm bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 disabled:cursor-not-allowed text-white inline-flex items-center justify-center gap-2"
+                  style={{ fontWeight: 600 }}
+                >
+                  <RefreshCw size={14} className={isQuizGenerating ? 'animate-spin' : ''} />
+                  Xac nhan tao lai
                 </button>
               </div>
             </motion.div>

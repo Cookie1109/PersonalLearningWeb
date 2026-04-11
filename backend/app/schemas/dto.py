@@ -1,9 +1,28 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+QUIZ_OPTION_PREFIX_PATTERN = re.compile(r"^[A-D][\.:\)]\s*", re.IGNORECASE)
+QUIZ_INLINE_FENCE_PATTERN = re.compile(r"```([a-zA-Z0-9_+-]*)[ \t]+([\s\S]*?)```")
+
+
+def _normalize_quiz_question_markdown(raw_text: str) -> str:
+    text = str(raw_text)
+
+    def _replace_inline_fence(match: re.Match[str]) -> str:
+        language = (match.group(1) or "").strip()
+        code_body = (match.group(2) or "").strip()
+        opening_fence = f"```{language}".rstrip()
+        return f"{opening_fence}\n{code_body}\n```"
+
+    normalized = QUIZ_INLINE_FENCE_PATTERN.sub(_replace_inline_fence, text)
+    normalized = re.sub(r":\s*```", ":\n```", normalized)
+    return normalized.strip()
 
 
 class ErrorResponseDTO(BaseModel):
@@ -224,12 +243,71 @@ class QuizPublicQuestionDTO(BaseModel):
     question_id: str
     text: str
     options: list[QuizOptionDTO]
+    type: Literal["theory", "fill_code", "find_bug"] | None = None
+    difficulty: Literal["Easy", "Medium", "Hard"] | None = None
+
+
+class QuizQuestionDTO(BaseModel):
+    id: int
+    type: Literal["theory", "fill_code", "find_bug"]
+    difficulty: Literal["Easy", "Medium", "Hard"]
+    question: str
+    options: list[str] = Field(..., min_length=4, max_length=4)
+    correct_answer: str
+    explanation: str
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def normalize_question_markdown_code_block(cls, value: object) -> object:
+        if isinstance(value, str):
+            return _normalize_quiz_question_markdown(value)
+        return value
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type_to_lowercase(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def normalize_options_whitespace(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [QUIZ_OPTION_PREFIX_PATTERN.sub("", str(option)).strip() for option in value]
+        return value
+
+    @field_validator("correct_answer", mode="before")
+    @classmethod
+    def normalize_correct_answer_whitespace(cls, value: object) -> object:
+        if isinstance(value, str):
+            return QUIZ_OPTION_PREFIX_PATTERN.sub("", value).strip()
+        return value
+
+    @model_validator(mode="after")
+    def validate_correct_answer_in_options(self) -> "QuizQuestionDTO":
+        normalized_options = [QUIZ_OPTION_PREFIX_PATTERN.sub("", option).strip() for option in self.options]
+        if any(not option for option in normalized_options):
+            raise ValueError("Each option must be non-empty")
+
+        normalized_correct_answer = QUIZ_OPTION_PREFIX_PATTERN.sub("", self.correct_answer).strip()
+        if normalized_correct_answer not in normalized_options:
+            raise ValueError("correct_answer must match one of the options")
+
+        self.options = normalized_options
+        self.correct_answer = normalized_correct_answer
+        return self
 
 
 class QuizResponseDTO(BaseModel):
+    questions: list[QuizQuestionDTO] = Field(..., min_length=10, max_length=10)
+
+
+class QuizPublicResponseDTO(BaseModel):
     quiz_id: str
     lesson_id: str
     questions: list[QuizPublicQuestionDTO]
+    attempt: QuizAttemptSnapshotDTO | None = None
 
 
 class QuizSubmitAnswerDTO(BaseModel):
@@ -239,6 +317,10 @@ class QuizSubmitAnswerDTO(BaseModel):
 
 class QuizSubmitRequestDTO(BaseModel):
     answers: list[QuizSubmitAnswerDTO] = Field(default_factory=list)
+
+
+class DocumentQuizSubmitRequestDTO(BaseModel):
+    selected_answers: dict[str, str] = Field(default_factory=dict)
 
 
 class QuizSubmitResultDTO(BaseModel):
@@ -260,6 +342,11 @@ class QuizSubmitResponseDTO(BaseModel):
     reward_granted: bool = False
     message: str
     results: list[QuizSubmitResultDTO] = Field(default_factory=list)
+    selected_answers: dict[str, str] = Field(default_factory=dict)
+
+
+class QuizAttemptSnapshotDTO(QuizSubmitResponseDTO):
+    submitted_at: datetime
 
 
 class ChatMessageDTO(BaseModel):

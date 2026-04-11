@@ -1,15 +1,57 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
+from app.schemas import QuizResponseDTO
 
+logger = logging.getLogger("app.quiz_generation")
+QUIZ_TOTAL_QUESTIONS = 10
+
+QUIZ_SYSTEM_PROMPT = (
+    "Ban la mot chuyen gia thiet ke chuong trinh giang day va Senior Backend Developer. "
+    "Nhiem vu cua ban la doc DU LIEU DAU VAO va tao ra MOT BO TRAC NGHIEM DUNG 10 CAU HOI chuyen sau. "
+    "Khong dung kien thuc ngoai le.\n\n"
+    "BAT BUOC PHAN BO 10 CAU HOI NHU SAU:\n"
+    "1. Ly thuyet (4 cau): Danh gia luong thuc thi, ban chat cong nghe.\n"
+    "2. Dien code (fill_code - 3 cau):\n"
+    "QUY TAC RENDER MARKDOWN TRONG JSON: KHI VIET CODE BLOCK (```javascript) BEN TRONG TRUONG question, BAN BAT BUOC PHAI SU DUNG KY TU NGAT DONG \\n THUC SU TRONG CHUOI JSON DE TACH BIET CAC DONG CODE. TUYET DOI KHONG VIET TOAN BO CODE BLOCK DINH LIEN TREN 1 DONG.\n"
+    "BAT BUOC CAU TRUC TRUONG \"question\" PHAI CO 2 PHAN: CAU HUONG DAN VA BLOCK CODE.\n"
+    "VI DU MAU CHUAN BAT BUOC LAM THEO:\n"
+    "\"Dien vao cho trong ___ de hoan thanh doan code sau:\\n```javascript\\nconst app = express();\\napp.get('/', (req, res) => {\\n  ___('Hello');\\n});\\n```\"\n"
+    "- Truong options: Chi chua cac tu khoa, ten ham, hoac doan code RAT NGAN de dien vua van vao cho trong ___ do. Khong nhet toan bo function vao options.\n"
+    "3. Tim loi sai (find_bug - 3 cau):\n"
+    "Dua ra doan code bi sai logic.\n"
+    "QUY TAC SONG CON: Doan code phai trong nhu code that tren Production. TUYET DOI SACH SE, khong chua bat ky comment nao (khong dung `//`).\n"
+    "VI DU DOAN CODE CHUAN (KHONG CO COMMENT RAC):\n"
+    "\"```javascript\\napp.use((req, res) => {\\n  console.log('Log');\\n});\\napp.get('/', (req, res) => { res.send('OK'); });\\n```\"\n\n"
+    "TRUONG 'type' BAT BUOC PHAI VIET THUONG TOAN BO: 'theory', 'fill_code', 'find_bug'.\n\n"
+    "PHAN OPTIONS/CORRECT_ANSWER: TUYET DOI KHONG THEM CAC TIEN TO 'A.', 'B.', 'C.', 'D.' O DAU CHUOI. "
+    "HE THONG UI DA TU DONG XU LY VIEC NAY. VI DU CHUAN: \"options\": [\"req.body\", \"req.query\"], \"correct_answer\": \"req.query\".\n\n"
+    "RANG BUOC COT LOI:\n"
+    "- Co tinh tao ra cac dap an sai (distractors) dua tren loi thuong gap cua sinh vien. Dung lam dap an sai qua ngo ngan.\n"
+    "- Doan code o dap an dung phai compile/run duoc, khong bi loi syntax.\n"
+    "- Giai thich chi tiet tai sao dung va tai sao sai.\n\n"
+    "DINH DANG DAU RA:\n"
+    "Tra ve MOT MANG JSON CHUAN chua 10 object. Moi object co cau truc:\n"
+    "{\n"
+    "  \"id\": 1,\n"
+    "  \"type\": \"theory | fill_code | find_bug\",\n"
+    "  \"difficulty\": \"Easy | Medium | Hard\",\n"
+    "  \"question\": \"Noi dung cau hoi...\",\n"
+    "  \"options\": [\"req.body\", \"req.query\", \"req.params\", \"req.headers\"],\n"
+    "  \"correct_answer\": \"req.query\",\n"
+    "  \"explanation\": \"Giai thich chi tiet...\"\n"
+    "}"
+)
 CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
 
@@ -19,6 +61,10 @@ class GeneratedQuizQuestion:
     options: list[str]
     correct_index: int
     explanation: str
+    question_id: int | None = None
+    question_type: str | None = None
+    difficulty: str | None = None
+    correct_answer: str | None = None
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -52,18 +98,10 @@ def _build_quiz_model_candidates(settings) -> list[str]:
 
 def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
     return (
-        "Ban la tro ly hoc tap. Hay tao DUNG 3 cau hoi trac nghiem CHI dua tren tai lieu goc ben duoi. "
-        "Tai lieu goc la nguon su that DUY NHAT. TUYET DOI KHONG dua kien thuc ben ngoai tai lieu. "
-        "Moi cau hoi, dap an va explanation phai truy vet duoc tu tai lieu goc; khong duoc suy doan. "
-        "Neu tai lieu goc thieu thong tin, van tao cau hoi o muc do co ban dua tren noi dung da co, "
-        "khong chen su kien/khai niem moi khong xuat hien trong tai lieu. "
-        "BAt BUOC: explanation phai neu can cu cu the tu tai lieu goc (trich y ngan gon). "
-        "Tra ve dinh dang JSON mang tuyet doi nghiem ngat: "
-        "[{ \"question\": \"...\", \"options\": [\"A\", \"B\", \"C\", \"D\"], \"correct_index\": 0, \"explanation\": \"...\" }]. "
-        "Khong kem bat ky van ban nao khac ngoai JSON.\n\n"
-        f"Tieu de tai lieu: {lesson_title.strip()}\n\n"
-        "Tai lieu goc (nguon su that duy nhat):\n"
-        f"{source_content.strip()[:40000]}"
+        "DU LIEU DAU VAO:\n"
+        f"- Tieu de tai lieu: {lesson_title.strip()}\n"
+        "- Nguon su that duy nhat (source_content):\n"
+        f"{source_content.strip()[:50000]}"
     )
 
 
@@ -95,65 +133,151 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
-def sanitize_quiz_json_text(raw_text: str) -> str:
+def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
+        return None
+
+    finish_reason = first_candidate.get("finishReason")
+    return finish_reason if isinstance(finish_reason, str) else None
+
+
+def _extract_json_candidate_text(raw_text: str) -> str:
     text = (raw_text or "").strip()
     if not text:
-        raise ValueError("Empty model output")
+        return ""
 
-    block_match = CODE_FENCE_PATTERN.search(text)
-    if block_match:
-        text = block_match.group(1).strip()
+    if text.startswith("```"):
+        block_match = CODE_FENCE_PATTERN.search(text)
+        if block_match:
+            text = block_match.group(1).strip()
 
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+    array_start = text.find("[")
+    array_end = text.rfind("]")
+    if array_start != -1 and array_end != -1 and array_end > array_start:
+        return text[array_start : array_end + 1]
+
+    object_start = text.find("{")
+    object_end = text.rfind("}")
+    if object_start != -1 and object_end != -1 and object_end > object_start:
+        return text[object_start : object_end + 1]
 
     return text
 
 
-def parse_generated_quiz(raw_text: str) -> list[GeneratedQuizQuestion]:
-    cleaned = sanitize_quiz_json_text(raw_text)
-    payload = json.loads(cleaned)
+def _extract_question_items(raw_payload: Any) -> list[Any] | None:
+    if isinstance(raw_payload, list):
+        return raw_payload
 
-    if not isinstance(payload, list):
-        raise ValueError("Quiz payload must be a JSON array")
-    if len(payload) != 3:
-        raise ValueError("Quiz payload must contain exactly 3 questions")
+    if not isinstance(raw_payload, dict):
+        return None
+
+    for key in ("questions", "quiz", "items", "data"):
+        value = raw_payload.get(key)
+        if isinstance(value, list):
+            return value
+
+    return None
+
+
+def _build_quiz_generation_payload(*, user_prompt: str) -> dict[str, Any]:
+    return {
+        "systemInstruction": {
+            "role": "user",
+            "parts": [{"text": QUIZ_SYSTEM_PROMPT}],
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": user_prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "application/json",
+        },
+    }
+
+
+def _build_quiz_repair_payload(*, user_prompt: str, invalid_json: str, error_message: str) -> dict[str, Any]:
+    repair_prompt = (
+        "Ban vua tra ve JSON quiz khong hop le. "
+        "HAY TRA VE LAI MOT MANG JSON HOP LE DUY NHAT, DUNG 10 OBJECT, KHONG THEM VAN BAN GIAI THICH. "
+        "TRUONG 'type' BAT BUOC PHAI VIET THUONG: 'theory', 'fill_code', 'find_bug'. "
+        "TUYET DOI KHONG THEM TIEN TO 'A.', 'B.', 'C.', 'D.' TRONG options va correct_answer. "
+        "VOI fill_code, MO DAU question BAT BUOC: 'Dien vao cho trong ___ de hoan thanh doan code sau:'. "
+        "KHI VIET CODE BLOCK TRONG question, BAT BUOC DUNG KY TU NGAT DONG \\n THUC SU, KHONG DUOC DINH CODE BLOCK TREN MOT DONG. "
+        "VOI find_bug, TUYET DOI KHONG CHEN COMMENT GOI Y LOI TRONG CODE. "
+        "TRUONG 'difficulty' BAT BUOC: 'Easy' | 'Medium' | 'Hard'.\n\n"
+        f"Ly do JSON khong hop le: {error_message}\n\n"
+        "Du lieu JSON loi can sua:\n"
+        f"{invalid_json[:12000]}"
+    )
+
+    return {
+        "systemInstruction": {
+            "role": "user",
+            "parts": [{"text": QUIZ_SYSTEM_PROMPT}],
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": user_prompt}],
+            },
+            {
+                "role": "model",
+                "parts": [{"text": invalid_json[:12000]}],
+            },
+            {
+                "role": "user",
+                "parts": [{"text": repair_prompt}],
+            },
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "application/json",
+        },
+    }
+
+
+def parse_generated_quiz(raw_text: str) -> list[GeneratedQuizQuestion]:
+    text = _extract_json_candidate_text((raw_text or "").strip())
+    if not text:
+        raise ValueError("Empty model output")
+
+    raw_payload = json.loads(text)
+    question_items = _extract_question_items(raw_payload)
+    if question_items is None:
+        raise ValueError("Quiz payload must be a JSON array or an object with questions")
+
+    if len(question_items) > QUIZ_TOTAL_QUESTIONS:
+        question_items = question_items[:QUIZ_TOTAL_QUESTIONS]
+
+    dto_payload: dict[str, Any] = {"questions": question_items}
+
+    validated = QuizResponseDTO.model_validate(dto_payload)
+    if len(validated.questions) < QUIZ_TOTAL_QUESTIONS:
+        raise ValueError(f"Quiz payload must contain exactly {QUIZ_TOTAL_QUESTIONS} questions")
 
     normalized: list[GeneratedQuizQuestion] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            raise ValueError("Each quiz item must be a JSON object")
-
-        question = str(item.get("question", "")).strip()
-        explanation = str(item.get("explanation", "")).strip()
-        options_raw = item.get("options")
-        correct_index = item.get("correct_index")
-
-        if not question:
-            raise ValueError("Question text is required")
-        if not explanation:
-            raise ValueError("Explanation is required")
-        if not isinstance(options_raw, list) or len(options_raw) != 4:
-            raise ValueError("Each question must contain exactly 4 options")
-
-        options: list[str] = []
-        for option in options_raw:
-            option_text = str(option).strip()
-            if not option_text:
-                raise ValueError("Each option must be non-empty")
-            options.append(option_text)
-
-        if not isinstance(correct_index, int) or correct_index < 0 or correct_index > 3:
-            raise ValueError("correct_index must be an integer between 0 and 3")
-
+    for item in validated.questions:
+        correct_index = item.options.index(item.correct_answer)
         normalized.append(
             GeneratedQuizQuestion(
-                question=question,
-                options=options,
+                question=item.question,
+                options=[str(option) for option in item.options],
                 correct_index=correct_index,
-                explanation=explanation,
+                explanation=item.explanation,
+                question_id=item.id,
+                question_type=item.type,
+                difficulty=item.difficulty,
+                correct_answer=item.correct_answer,
             )
         )
 
@@ -173,22 +297,8 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
     model_candidates = _build_quiz_model_candidates(settings)
     timeout_seconds = max(30.0, float(settings.gemini_timeout_seconds))
 
-    request_payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": build_quiz_prompt(lesson_title=lesson_title, source_content=source_content),
-                    }
-                ],
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.2,
-            "maxOutputTokens": 3072,
-        },
-    }
+    user_prompt = build_quiz_prompt(lesson_title=lesson_title, source_content=source_content)
+    request_payload = _build_quiz_generation_payload(user_prompt=user_prompt)
 
     with httpx.Client(timeout=timeout_seconds) as client:
         for index, model_name in enumerate(model_candidates):
@@ -243,18 +353,54 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
                     detail={"code": "LLM_EMPTY_RESPONSE"},
                 )
 
+            finish_reason = _extract_finish_reason(response_json)
+
+            parse_error: Exception | None = None
+            questions: list[GeneratedQuizQuestion] | None = None
             try:
                 questions = parse_generated_quiz(generated_text)
-            except (ValueError, json.JSONDecodeError) as exc:
-                if has_fallback:
-                    continue
-                raise AppException(
-                    status_code=503,
-                    message="AI service returned invalid quiz format",
-                    detail={"code": "LLM_INVALID_QUIZ_FORMAT", "error": str(exc)},
-                ) from exc
+            except (ValueError, json.JSONDecodeError, ValidationError) as exc:
+                parse_error = exc
+                logger.error(
+                    "quiz_generation.invalid_json model=%s error=%s payload_preview=%s",
+                    model_name,
+                    str(exc),
+                    generated_text[:800],
+                    exc_info=True,
+                )
 
-            return model_name, questions
+            if questions is None:
+                repair_payload = _build_quiz_repair_payload(
+                    user_prompt=user_prompt,
+                    invalid_json=generated_text,
+                    error_message=str(parse_error) if parse_error is not None else "Unknown parse error",
+                )
+                try:
+                    repair_response = client.post(endpoint, params={"key": api_key}, json=repair_payload)
+                    if repair_response.status_code < 400:
+                        repair_payload_json = repair_response.json()
+                        repaired_text = _extract_gemini_text(repair_payload_json)
+                        if repaired_text:
+                            questions = parse_generated_quiz(repaired_text)
+                except Exception as repair_exc:
+                    logger.warning("quiz_generation.repair_failed model=%s error=%s", model_name, str(repair_exc))
+
+            if questions is not None:
+                return model_name, questions
+
+            if has_fallback:
+                logger.warning(
+                    "quiz_generation.try_fallback_model current_model=%s finish_reason=%s",
+                    model_name,
+                    finish_reason,
+                )
+                continue
+
+            raise AppException(
+                status_code=500,
+                message="AI service returned invalid quiz JSON",
+                detail={"code": "LLM_INVALID_QUIZ_JSON", "error": str(parse_error) if parse_error else "Unable to repair quiz JSON"},
+            )
 
     raise AppException(
         status_code=503,

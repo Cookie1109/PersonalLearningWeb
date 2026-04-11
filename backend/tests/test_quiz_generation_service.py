@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from app.core.exceptions import AppException
+from app.services import quiz_generation_service
+
+
+def _build_question_payload(index: int) -> dict[str, object]:
+    option_a = f"A. option {index}"
+    option_b = f"B. option {index}"
+    option_c = f"C. option {index}"
+    option_d = f"D. option {index}"
+    return {
+        "id": index,
+        "type": "theory" if index <= 4 else ("fill_code" if index <= 7 else "find_bug"),
+        "difficulty": "Easy" if index <= 3 else ("Medium" if index <= 7 else "Hard"),
+        "question": f"Question {index}",
+        "options": [option_a, option_b, option_c, option_d],
+        "correct_answer": option_b,
+        "explanation": f"Explanation {index}",
+    }
+
+
+def _build_quiz_array_json() -> str:
+    return json.dumps([_build_question_payload(index) for index in range(1, 11)], ensure_ascii=False)
+
+
+def test_generate_quiz_questions_uses_json_mode_and_returns_10_questions(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_request_payload: dict[str, object] = {}
+
+    class FakeSettings:
+        gemini_api_key = "test-key"
+        gemini_timeout_seconds = 120.0
+        gemini_model = "gemini-2.5-flash"
+        gemini_quiz_model = "gemini-2.5-flash"
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": _build_quiz_array_json(),
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, timeout: float):
+            _ = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            _ = (exc_type, exc, tb)
+            return False
+
+        def post(self, endpoint: str, *, params: dict[str, str], json: dict[str, object]):
+            _ = (endpoint, params)
+            captured_request_payload["payload"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(quiz_generation_service, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(quiz_generation_service.httpx, "Client", FakeClient)
+
+    model_name, questions = quiz_generation_service.generate_quiz_questions(
+        lesson_title="Async Patterns",
+        source_content="Event loop, await, gather, and timeout handling.",
+    )
+
+    assert model_name == "gemini-2.5-flash"
+    assert len(questions) == 10
+
+    request_payload = captured_request_payload["payload"]
+    generation_config = request_payload["generationConfig"]
+    assert generation_config["responseMimeType"] == "application/json"
+    assert "systemInstruction" in request_payload
+    system_text = request_payload["systemInstruction"]["parts"][0]["text"]
+    assert "Dien code (fill_code - 3 cau)" in system_text
+    assert "QUY TAC RENDER MARKDOWN TRONG JSON" in system_text
+    assert "\\n THUC SU TRONG CHUOI JSON" in system_text
+    assert "```javascript" in system_text
+    assert "\\n```javascript\\nconst app = express();" in system_text
+    assert "const app = express();" in system_text
+    assert "___('Hello');" in system_text
+    assert "Tim loi sai (find_bug - 3 cau)" in system_text
+    assert "khong dung `//`" in system_text
+
+
+def test_generate_quiz_questions_raises_500_on_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeSettings:
+        gemini_api_key = "test-key"
+        gemini_timeout_seconds = 120.0
+        gemini_model = "gemini-2.5-flash"
+        gemini_quiz_model = "gemini-2.5-flash"
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": "this-is-not-json",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, timeout: float):
+            _ = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            _ = (exc_type, exc, tb)
+            return False
+
+        def post(self, endpoint: str, *, params: dict[str, str], json: dict[str, object]):
+            _ = (endpoint, params, json)
+            return FakeResponse()
+
+    monkeypatch.setattr(quiz_generation_service, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(quiz_generation_service.httpx, "Client", FakeClient)
+
+    with pytest.raises(AppException) as exc_info:
+        quiz_generation_service.generate_quiz_questions(
+            lesson_title="Failing Quiz",
+            source_content="Only for validation path.",
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail["code"] == "LLM_INVALID_QUIZ_JSON"
+
+
+def test_parse_generated_quiz_normalizes_type_and_whitespace() -> None:
+    payload = []
+    for index in range(1, 11):
+        item = _build_question_payload(index)
+        if index == 1:
+            item["type"] = "Theory"
+            item["options"] = [" A. first ", " B. second ", " C. third ", " D. fourth "]
+            item["correct_answer"] = " B. second "
+        payload.append(item)
+
+    questions = quiz_generation_service.parse_generated_quiz(json.dumps(payload, ensure_ascii=False))
+    assert len(questions) == 10
+    assert questions[0].question_type == "theory"
+    assert questions[0].options[1] == "second"
+    assert questions[0].correct_answer == "second"
+    assert questions[0].correct_index == 1
+
+
+def test_parse_generated_quiz_trims_extra_questions() -> None:
+    payload = [_build_question_payload(index) for index in range(1, 13)]
+    questions = quiz_generation_service.parse_generated_quiz(json.dumps(payload, ensure_ascii=False))
+    assert len(questions) == 10
+    assert questions[-1].question_id == 10
+
+
+def test_parse_generated_quiz_normalizes_single_line_code_fence_question() -> None:
+    payload = [_build_question_payload(index) for index in range(1, 11)]
+    payload[4]["type"] = "fill_code"
+    payload[4]["question"] = (
+        "Dien vao cho trong ___ de hoan thanh doan code sau: "
+        "```javascript const app = express(); app.get('/', (req, res) => { ___('Hello'); }); ```"
+    )
+
+    questions = quiz_generation_service.parse_generated_quiz(json.dumps(payload, ensure_ascii=False))
+
+    assert "\n```javascript\n" in questions[4].question
+    assert "___('Hello');" in questions[4].question
+    assert questions[4].question.endswith("```")
+
+
+def test_generate_quiz_questions_repairs_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeSettings:
+        gemini_api_key = "test-key"
+        gemini_timeout_seconds = 120.0
+        gemini_model = "gemini-2.5-flash"
+        gemini_quiz_model = "gemini-2.5-flash"
+
+    class FakeResponse:
+        def __init__(self, payload: dict[str, object], status_code: int = 200):
+            self._payload = payload
+            self.status_code = status_code
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    malformed_json = _build_quiz_array_json()[:-10]
+    response_queue = [
+        FakeResponse(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": malformed_json}],
+                        }
+                    }
+                ]
+            }
+        ),
+        FakeResponse(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": _build_quiz_array_json()}],
+                        }
+                    }
+                ]
+            }
+        ),
+    ]
+
+    class FakeClient:
+        def __init__(self, timeout: float):
+            _ = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            _ = (exc_type, exc, tb)
+            return False
+
+        def post(self, endpoint: str, *, params: dict[str, str], json: dict[str, object]):
+            _ = (endpoint, params, json)
+            return response_queue.pop(0)
+
+    monkeypatch.setattr(quiz_generation_service, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(quiz_generation_service.httpx, "Client", FakeClient)
+
+    model_name, questions = quiz_generation_service.generate_quiz_questions(
+        lesson_title="Repair Test",
+        source_content="event loop middleware route handler" * 200,
+    )
+
+    assert model_name == "gemini-2.5-flash"
+    assert len(questions) == 10

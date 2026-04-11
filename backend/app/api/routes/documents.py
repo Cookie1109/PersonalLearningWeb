@@ -1,25 +1,39 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
+from redis import Redis
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.db.session import get_db
+from app.infra.redis_client import get_redis_client
 from app.models import Lesson, User
 from app.schemas import (
     DocumentChatRequestDTO,
     DocumentChatResponseDTO,
     DocumentCreateRequestDTO,
     DocumentCreateResponseDTO,
+    DocumentQuizSubmitRequestDTO,
     DocumentSummaryDTO,
     ErrorResponseDTO,
+    QuizPublicResponseDTO,
+    QuizSubmitResponseDTO,
 )
 from app.services import chat_service
 from app.services.lesson_service import create_document_for_user, list_documents_for_user
+from app.services.quiz_generation_rate_limit_store import QuizGenerationRateLimitStore
+from app.services.quiz_service import (
+    ensure_quiz_regeneration_allowed_for_lesson_user,
+    generate_quiz_for_lesson_user,
+    get_quiz_for_lesson_user,
+    submit_quiz_for_lesson_user,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+settings = get_settings()
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponseDTO, "description": "Bad Request"},
@@ -28,6 +42,7 @@ ERROR_RESPONSES = {
     404: {"model": ErrorResponseDTO, "description": "Not Found"},
     500: {"model": ErrorResponseDTO, "description": "Internal Server Error"},
     409: {"model": ErrorResponseDTO, "description": "Conflict"},
+    429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }
 
@@ -103,3 +118,84 @@ def chat_with_document(
         history=[item.model_dump() for item in payload.history],
     )
     return DocumentChatResponseDTO(reply=reply)
+
+
+@router.post(
+    "/{document_id}/quiz/generate",
+    response_model=QuizPublicResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def generate_document_quiz(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    redis_client: Redis = Depends(get_redis_client),
+) -> QuizPublicResponseDTO:
+    ensure_quiz_regeneration_allowed_for_lesson_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=document_id,
+    )
+
+    if settings.quiz_regeneration_limit_enabled:
+        limiter = QuizGenerationRateLimitStore(
+            redis_client,
+            max_requests=settings.quiz_regeneration_limit_max_requests,
+            window_seconds=settings.quiz_regeneration_limit_window_seconds,
+        )
+        try:
+            limiter.enforce_or_raise(user_id=current_user.id, lesson_id=document_id)
+        except AppException as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            if settings.app_env == "dev" and exc.status_code == 503 and detail.get("code") == "REDIS_UNAVAILABLE":
+                pass
+            else:
+                raise
+
+    return generate_quiz_for_lesson_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=document_id,
+    )
+
+
+@router.get(
+    "/{document_id}/quiz",
+    response_model=QuizPublicResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_document_quiz(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuizPublicResponseDTO:
+    return get_quiz_for_lesson_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=document_id,
+    )
+
+
+@router.post(
+    "/{document_id}/quiz/submit",
+    response_model=QuizSubmitResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def submit_document_quiz(
+    document_id: int,
+    payload: DocumentQuizSubmitRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> QuizSubmitResponseDTO:
+    return submit_quiz_for_lesson_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=document_id,
+        selected_answers=payload.selected_answers,
+        pass_score=settings.quiz_pass_score,
+        reward_exp=settings.quiz_pass_reward_exp,
+        reward_type=settings.quiz_first_pass_reward_type,
+    )

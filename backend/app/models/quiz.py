@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -15,6 +16,7 @@ class Quiz(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True, nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    quiz_content: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -58,6 +60,8 @@ class QuizAttempt(Base):
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     reward_granted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    generation_marker: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    selected_answers: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
     answers_json: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

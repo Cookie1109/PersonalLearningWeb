@@ -19,6 +19,7 @@ from app.services.gamification_service import add_exp_and_check_level, get_curre
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
 STREAK_BONUS_REWARD_TYPE = "streak_bonus"
 logger = logging.getLogger("app.lesson")
+INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -432,6 +433,126 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
+def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+
+    first_candidate = candidates[0]
+    if not isinstance(first_candidate, dict):
+        return None
+
+    reason = first_candidate.get("finishReason")
+    return reason if isinstance(reason, str) else None
+
+
+def _is_markdown_truncated(markdown: str, *, finish_reason: str | None) -> bool:
+    content = (markdown or "").strip()
+    if not content:
+        return True
+
+    if finish_reason == "MAX_TOKENS":
+        return True
+
+    lines = [line.rstrip() for line in content.splitlines() if line.strip()]
+    if not lines:
+        return True
+
+    last_line = lines[-1]
+    if INCOMPLETE_TRAILING_PATTERN.search(last_line):
+        return True
+    if re.match(r"^#{1,6}\s*$", last_line):
+        return True
+    if re.match(r"^\*\*[^*]*$", last_line):
+        return True
+
+    if content.count("```") % 2 != 0:
+        return True
+
+    return False
+
+
+def _build_theory_continuation_prompt(*, partial_markdown: str) -> str:
+    return (
+        "Noi dung ly thuyet ban vua tra loi dang bi cat giua chung. "
+        "Hay viet tiep PHAN CON LAI bang Markdown, KHONG lap lai noi dung da co, "
+        "giu nguyen cau truc heading/list/code block, va ket thuc day du.\n\n"
+        "[NOI DUNG DA CO]\n"
+        f"{partial_markdown[-7000:]}"
+    )
+
+
+def _extend_truncated_markdown(
+    *,
+    client: httpx.Client,
+    endpoint: str,
+    api_key: str,
+    prompt: str,
+    initial_markdown: str,
+    initial_finish_reason: str | None,
+) -> str:
+    combined = (initial_markdown or "").strip()
+    finish_reason = initial_finish_reason
+
+    if not _is_markdown_truncated(combined, finish_reason=finish_reason):
+        return combined
+
+    logger.warning("lesson.llm_detected_truncation finish_reason=%s", finish_reason)
+
+    for _ in range(2):
+        continuation_payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": prompt}],
+                },
+                {
+                    "role": "model",
+                    "parts": [{"text": combined}],
+                },
+                {
+                    "role": "user",
+                    "parts": [{"text": _build_theory_continuation_prompt(partial_markdown=combined)}],
+                },
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 4096,
+            },
+        }
+
+        try:
+            continuation_response = client.post(endpoint, params={"key": api_key}, json=continuation_payload)
+        except Exception as exc:  # pragma: no cover - defensive for transport-level issues
+            logger.warning("lesson.llm_continuation_request_failed error=%s", str(exc))
+            break
+
+        if continuation_response.status_code >= 400:
+            logger.warning(
+                "lesson.llm_continuation_failed status=%s error=%s",
+                continuation_response.status_code,
+                _extract_llm_error_message(continuation_response),
+            )
+            break
+
+        try:
+            continuation_payload_json = continuation_response.json()
+        except ValueError:
+            logger.warning("lesson.llm_continuation_invalid_json")
+            break
+
+        continuation_text = _extract_gemini_text(continuation_payload_json).strip()
+        if not continuation_text:
+            break
+
+        combined = f"{combined.rstrip()}\n\n{continuation_text.lstrip()}"
+        finish_reason = _extract_finish_reason(continuation_payload_json)
+        if not _is_markdown_truncated(combined, finish_reason=finish_reason):
+            break
+
+    return combined
+
+
 def _extract_llm_error_message(response: httpx.Response) -> str:
     try:
         payload = response.json()
@@ -534,7 +655,15 @@ def generate_grounded_markdown(*, prompt: str) -> str:
 
                         generation_text = _extract_gemini_text(retry_payload_json).strip()
                         if generation_text:
-                            return generation_text
+                            finish_reason = _extract_finish_reason(retry_payload_json)
+                            return _extend_truncated_markdown(
+                                client=client,
+                                endpoint=endpoint,
+                                api_key=api_key,
+                                prompt=prompt,
+                                initial_markdown=generation_text,
+                                initial_finish_reason=finish_reason,
+                            )
                         raise AppException(
                             status_code=503,
                             message="AI service returned empty response",
@@ -584,7 +713,15 @@ def generate_grounded_markdown(*, prompt: str) -> str:
 
             generation_text = _extract_gemini_text(response_payload).strip()
             if generation_text:
-                return generation_text
+                finish_reason = _extract_finish_reason(response_payload)
+                return _extend_truncated_markdown(
+                    client=client,
+                    endpoint=endpoint,
+                    api_key=api_key,
+                    prompt=prompt,
+                    initial_markdown=generation_text,
+                    initial_finish_reason=finish_reason,
+                )
 
             if has_fallback:
                 continue
