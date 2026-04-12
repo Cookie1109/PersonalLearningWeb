@@ -51,7 +51,7 @@ export default function LessonsPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Khong the tai du lieu bai hoc. Vui long thu lai.');
+        setError('Không thể tải dữ liệu bài học. Vui lòng thử lại.');
       }
     } finally {
       setIsLoading(false);
@@ -89,19 +89,19 @@ export default function LessonsPage() {
             <BookMarked size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Bai hoc cua toi</h1>
-            <p className="text-zinc-500 text-sm">Hien thi theo cau truc Lo trinh -&gt; Tuan -&gt; Bai hoc</p>
+            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Bài học của tôi</h1>
+            <p className="text-zinc-500 text-sm">Hiển thị theo cấu trúc Lộ trình -> Tuần -> Bài học</p>
           </div>
         </div>
       </motion.div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs text-zinc-500">Tong bai hoc</p>
+          <p className="text-xs text-zinc-500">Tổng bài học</p>
           <p className="text-xl text-zinc-100" style={{ fontWeight: 700 }}>{totalLessons}</p>
         </div>
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-          <p className="text-xs text-emerald-300">Da hoan thanh</p>
+          <p className="text-xs text-emerald-300">Đã hoàn thành</p>
           <p className="text-xl text-emerald-300" style={{ fontWeight: 700 }}>{completedLessons}</p>
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function LessonsPage() {
       {isLoading && (
         <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-5 flex items-center gap-3">
           <Loader2 size={18} className="text-violet-300 animate-spin" />
-          <p className="text-sm text-violet-200">Dang tai danh sach lo trinh va bai hoc...</p>
+          <p className="text-sm text-violet-200">Đang tải danh sách lộ trình và bài học...</p>
         </div>
       )}
 
@@ -120,15 +120,15 @@ export default function LessonsPage() {
             onClick={() => void fetchRoadmaps()}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-200"
           >
-            <RefreshCw size={12} />Thu lai
+            <RefreshCw size={12} />Thử lại
           </button>
         </div>
       )}
 
       {!isLoading && !error && roadmaps.length === 0 && (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-          <p className="text-zinc-300" style={{ fontWeight: 600 }}>Chua co lo trinh nao</p>
-          <p className="text-sm text-zinc-500 mt-1">Hay tao lo trinh moi tai trang Lo trinh AI.</p>
+          <p className="text-zinc-300" style={{ fontWeight: 600 }}>Chưa có lộ trình nào</p>
+          <p className="text-sm text-zinc-500 mt-1">Hãy tạo lộ trình mới tại trang Lộ trình AI.</p>
         </div>
       )}
 
@@ -153,9 +153,9 @@ export default function LessonsPage() {
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-lg text-white truncate" style={{ fontWeight: 700 }}>{roadmap.title}</p>
-                      <p className="text-sm text-zinc-400 mt-1">Muc tieu: {roadmap.goal}</p>
+                      <p className="text-sm text-zinc-400 mt-1">Mục tiêu: {roadmap.goal}</p>
                       <p className="text-xs text-zinc-500 mt-2">
-                        {roadmapCompletedCount}/{roadmapLessonCount} bai da hoan thanh
+                        {roadmapCompletedCount}/{roadmapLessonCount} bài đã hoàn thành
                       </p>
                     </div>
                     <motion.div animate={{ rotate: roadmapExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -190,7 +190,7 @@ export default function LessonsPage() {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm text-zinc-100" style={{ fontWeight: 600 }}>{week.title}</p>
-                                    <p className="text-xs text-zinc-500">{week.lessons.length} bai hoc</p>
+                                    <p className="text-xs text-zinc-500">{week.lessons.length} bài học</p>
                                   </div>
                                   <motion.div animate={{ rotate: weekExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
                                     <ChevronDown size={15} className="text-zinc-500" />
@@ -227,7 +227,7 @@ export default function LessonsPage() {
                                                 {lesson.title}
                                               </p>
                                               <p className={`text-xs ${lesson.isCompleted ? 'text-emerald-300/80' : 'text-zinc-500'}`}>
-                                                {lesson.isCompleted ? 'Da hoan thanh' : 'Chua hoan thanh'} · Quiz {lesson.quizPassed ? 'dat' : 'chua dat'} · Flashcard {lesson.flashcardCompleted ? 'xong' : 'chua xong'}
+                                                {lesson.isCompleted ? 'Đã hoàn thành' : 'Chưa hoàn thành'} · Quiz {lesson.quizPassed ? 'đạt' : 'chưa đạt'} · Flashcard {lesson.flashcardCompleted ? 'xong' : 'chưa xong'}
                                               </p>
                                             </div>
 
@@ -237,21 +237,21 @@ export default function LessonsPage() {
                                           <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-700">
                                             <button
                                               onClick={() => navigate(`/learn/${lesson.id}?tab=theory`)}
-                                              title="Mo tab Ly thuyet"
+                                              title="Mở tab Lý thuyết"
                                               className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800/80 text-zinc-300 hover:text-white hover:border-violet-400/60 hover:bg-violet-500/10 transition-colors"
                                             >
                                               <BookOpen size={14} />
                                             </button>
                                             <button
                                               onClick={() => navigate(`/learn/${lesson.id}?tab=quiz`)}
-                                              title="Mo tab Quiz"
+                                              title="Mở tab Quiz"
                                               className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${lesson.quizPassed ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' : 'border-zinc-600 bg-zinc-800/80 text-zinc-400 hover:text-zinc-100 hover:border-cyan-400/60 hover:bg-cyan-500/10'}`}
                                             >
                                               <ListChecks size={14} />
                                             </button>
                                             <button
                                               onClick={() => navigate(`/learn/${lesson.id}?tab=flashcard`)}
-                                              title="Mo tab Flashcard"
+                                              title="Mở tab Flashcard"
                                               className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${lesson.flashcardCompleted ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25' : 'border-zinc-600 bg-zinc-800/80 text-zinc-400 hover:text-zinc-100 hover:border-cyan-400/60 hover:bg-cyan-500/10'}`}
                                             >
                                               <CreditCard size={14} />
@@ -278,3 +278,6 @@ export default function LessonsPage() {
     </div>
   );
 }
+
+
+

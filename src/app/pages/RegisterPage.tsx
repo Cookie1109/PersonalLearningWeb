@@ -28,12 +28,12 @@ export default function RegisterPage() {
 
     const normalizedUsername = username.trim();
     if (!normalizedUsername) {
-      setError('Vui long nhap ten dang nhap.');
+      setError('Vui lòng nhập tên đăng nhập.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Mat khau xac nhan khong khop.');
+      setError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
@@ -45,7 +45,7 @@ export default function RegisterPage() {
         password,
       });
 
-      setSuccess('Dang ky thanh cong. Dang chuyen den trang dang nhap...');
+      setSuccess('Đăng ký thành công. Đang chuyển đến trang đăng nhập...');
       setTimeout(() => {
         navigate('/login', { replace: true });
       }, 900);
@@ -53,14 +53,14 @@ export default function RegisterPage() {
       if (axios.isAxiosError(err)) {
         const code = err.response?.data?.detail?.code;
         if (code === 'USER_ALREADY_EXISTS') {
-          setError('Ten dang nhap da ton tai.');
+          setError('Tên đăng nhập đã tồn tại.');
         } else {
-          setError(err.response?.data?.message ?? 'Dang ky that bai. Vui long thu lai.');
+          setError(err.response?.data?.message ?? 'Đăng ký thất bại. Vui lòng thử lại.');
         }
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Dang ky that bai. Vui long thu lai.');
+        setError('Đăng ký thất bại. Vui lòng thử lại.');
       }
     } finally {
       setIsSubmitting(false);
@@ -70,44 +70,44 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-7">
-        <h1 className="text-2xl" style={{ fontWeight: 700 }}>Dang ky</h1>
-        <p className="text-zinc-500 text-sm mt-1">Tao tai khoan de bat dau hoc</p>
+        <h1 className="text-2xl" style={{ fontWeight: 700 }}>Đăng ký</h1>
+        <p className="text-zinc-500 text-sm mt-1">Tạo tài khoản để bắt đầu học</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
-            <label className="block text-sm text-zinc-300 mb-1">Ten dang nhap (email)</label>
+            <label className="block text-sm text-zinc-300 mb-1">Tên đăng nhập (email)</label>
             <input
               type="email"
               required
               value={username}
               onChange={e => setUsername(e.target.value)}
-              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-violet-500/70"
+              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-cyan-500/70"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-300 mb-1">Mat khau</label>
+            <label className="block text-sm text-zinc-300 mb-1">Mật khẩu</label>
             <input
               type="password"
               required
               minLength={8}
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-violet-500/70"
+              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-cyan-500/70"
               placeholder="********"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-300 mb-1">Xac nhan mat khau</label>
+            <label className="block text-sm text-zinc-300 mb-1">Xác nhận mật khẩu</label>
             <input
               type="password"
               required
               minLength={8}
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-violet-500/70"
+              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-cyan-500/70"
               placeholder="********"
             />
           </div>
@@ -127,20 +127,24 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm"
+            className="w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm"
             style={{ fontWeight: 600 }}
           >
-            {isSubmitting ? 'Dang dang ky...' : 'Dang ky'}
+            {isSubmitting ? 'Đang đăng ký...' : 'Đăng ký'}
           </button>
         </form>
 
         <p className="mt-4 text-sm text-zinc-400">
-          Da co tai khoan?{' '}
-          <Link to="/login" className="text-violet-400 hover:text-violet-300">
-            Dang nhap ngay
+          Đã có tài khoản?{' '}
+          <Link to="/login" className="text-cyan-500 hover:text-cyan-400">
+            Đăng nhập ngay
           </Link>
         </p>
       </div>
     </div>
   );
 }
+
+
+
+

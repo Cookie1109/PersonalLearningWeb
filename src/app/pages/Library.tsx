@@ -14,7 +14,7 @@ const shortDateFormatter = new Intl.DateTimeFormat('vi-VN', {
 function formatDocumentDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return 'Khong ro ngay tao';
+    return 'Không rõ ngày tạo';
   }
   return shortDateFormatter.format(date);
 }
@@ -56,7 +56,7 @@ export default function Library() {
       if (error instanceof Error) {
         setLoadError(error.message);
       } else {
-        setLoadError('Khong the tai danh sach tai lieu luc nay.');
+        setLoadError('Không thể tải danh sách tài liệu lúc này.');
       }
     } finally {
       setIsLoading(false);
@@ -76,7 +76,7 @@ export default function Library() {
   };
 
   const handleMegaQuizClick = () => {
-    toast.info('Tinh nang dang duoc phat trien');
+    toast.info('Tính năng đang được phát triển');
   };
 
   return (
@@ -87,8 +87,7 @@ export default function Library() {
             <LibraryBig size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Thu vien tai lieu</h1>
-            <p className="text-zinc-500 text-sm">Quan ly tai lieu da luu va chon nhieu tai lieu de tao Mega Quiz.</p>
+            <h1 className="text-2xl text-slate-900 dark:text-white" style={{ fontWeight: 700 }}>Thư viện tài liệu</h1>
           </div>
         </div>
       </motion.div>
@@ -101,25 +100,25 @@ export default function Library() {
           <button
             type="button"
             onClick={() => void loadDocuments()}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 px-4 py-2 text-sm text-zinc-100"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-700 px-4 py-2 text-sm text-slate-700 dark:text-zinc-100"
           >
-            <Loader2 size={14} />Thu tai lai
+            <Loader2 size={14} />Thử tải lại
           </button>
         </div>
       ) : documents.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-zinc-800 mx-auto flex items-center justify-center">
-            <BookOpen size={24} className="text-zinc-400" />
+        <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-zinc-800 mx-auto flex items-center justify-center">
+            <BookOpen size={24} className="text-slate-500 dark:text-zinc-400" />
           </div>
-          <h2 className="text-lg text-white mt-4" style={{ fontWeight: 600 }}>Chua co tai lieu nao</h2>
-          <p className="text-sm text-zinc-500 mt-1">Hay tao Workspace dau tien de bat dau xay dung thu vien tai lieu.</p>
+          <h2 className="text-lg text-slate-900 dark:text-white mt-4" style={{ fontWeight: 600 }}>Chưa có tài liệu nào</h2>
+          <p className="text-sm text-slate-600 dark:text-zinc-500 mt-1">Hãy tạo Workspace đầu tiên để bắt đầu xây dựng thư viện tài liệu.</p>
           <button
             type="button"
             onClick={() => navigate('/create')}
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-sm text-white"
             style={{ fontWeight: 600 }}
           >
-            <Sparkles size={14} />Tao Workspace
+            <Sparkles size={14} />Tạo Workspace
           </button>
         </div>
       ) : (
@@ -143,8 +142,8 @@ export default function Library() {
                 }}
                 className={`relative cursor-pointer rounded-2xl border p-5 transition-all duration-200 ${
                   isSelected
-                    ? 'border-cyan-500/60 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.15)]'
-                    : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-900/90'
+                    ? 'border-cyan-300 dark:border-cyan-500/60 bg-cyan-50 dark:bg-cyan-500/10 shadow-[0_0_0_1px_rgba(8,145,178,0.2)] dark:shadow-[0_0_0_1px_rgba(34,211,238,0.15)]'
+                    : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-slate-300 dark:hover:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-900/90'
                 }`}
               >
                 <div
@@ -152,30 +151,30 @@ export default function Library() {
                   onKeyDown={event => event.stopPropagation()}
                   className="absolute right-3 top-3"
                 >
-                  <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-xs text-zinc-200">
+                  <label className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white/95 dark:bg-zinc-950/80 px-2 py-1 text-xs text-slate-700 dark:text-zinc-200">
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelection(document.id)}
                       className="h-3.5 w-3.5 accent-cyan-500"
-                      aria-label={`Chon tai lieu ${document.title}`}
+                      aria-label={`Chọn tài liệu ${document.title}`}
                     />
-                    Chon
+                    Chọn
                   </label>
                 </div>
 
-                <h3 className="text-base text-white pr-16 leading-snug" style={{ fontWeight: 600 }}>
+                <h3 className="text-base text-slate-900 dark:text-white pr-16 leading-snug" style={{ fontWeight: 600 }}>
                   {document.title}
                 </h3>
 
-                <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500">
                   <CalendarDays size={13} />
-                  <span>Tao ngay {formatDocumentDate(document.createdAt)}</span>
+                  <span>Tạo ngày {formatDocumentDate(document.createdAt)}</span>
                 </div>
 
-                <div className="mt-5 inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-300">
+                <div className="mt-5 inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800/80 px-2.5 py-1 text-xs text-slate-600 dark:text-zinc-300">
                   <BookOpen size={13} />
-                  Mo Learning Workspace
+                  Mở Learning Workspace
                 </div>
               </motion.div>
             );
@@ -191,19 +190,19 @@ export default function Library() {
             exit={{ opacity: 0, y: 24 }}
             className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-[min(95vw,720px)]"
           >
-            <div className="rounded-2xl border border-cyan-500/40 bg-zinc-900/95 backdrop-blur px-4 py-3 shadow-2xl">
+            <div className="rounded-2xl border border-cyan-300 dark:border-cyan-500/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur px-4 py-3 shadow-2xl">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="inline-flex items-center gap-2 text-cyan-200 text-sm" style={{ fontWeight: 600 }}>
-                  <CheckSquare size={16} />Da chon {selectedDocuments.length} tai lieu
+                <div className="inline-flex items-center gap-2 text-cyan-700 dark:text-cyan-200 text-sm" style={{ fontWeight: 600 }}>
+                  <CheckSquare size={16} />Đã chọn {selectedDocuments.length} tài liệu
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedDocuments([])}
-                    className="rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-200"
+                    className="rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-2 text-xs text-slate-700 dark:text-zinc-200"
                     style={{ fontWeight: 600 }}
                   >
-                    Bo chon
+                    Bỏ chọn
                   </button>
                   <button
                     type="button"
@@ -211,7 +210,7 @@ export default function Library() {
                     className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-sm text-white"
                     style={{ fontWeight: 700 }}
                   >
-                    Tao Mega Quiz (Sap ra mat)
+                    Tạo Mega Quiz (Sắp ra mắt)
                   </button>
                 </div>
               </div>
@@ -222,3 +221,7 @@ export default function Library() {
     </div>
   );
 }
+
+
+
+

@@ -124,11 +124,11 @@ export default function QuizPage({
       }
 
       if (axios.isAxiosError(error)) {
-        setSubmitError(error.response?.data?.message ?? 'Khong the nop bai luc nay.');
+        setSubmitError(error.response?.data?.message ?? 'Không thể nộp bài lúc này.');
       } else if (error instanceof Error) {
         setSubmitError(error.message);
       } else {
-        setSubmitError('Khong the nop bai luc nay.');
+        setSubmitError('Không thể nộp bài lúc này.');
       }
     } finally {
       setIsSubmitting(false);
@@ -220,7 +220,7 @@ export default function QuizPage({
           <Sparkles size={16} className="text-violet-400 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm text-zinc-300" style={{ fontWeight: 500 }}>Security mode enabled</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Quiz payload does not expose correct answers in GET response.</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Quiz payload does not expose câu trả lời đúng in GET response.</p>
           </div>
         </div>
 
@@ -259,10 +259,10 @@ export default function QuizPage({
           <h2 className="text-3xl text-white mb-2" style={{ fontWeight: 800 }}>{grade.label}</h2>
           <p className="text-zinc-400">Server score</p>
           <div className={`text-6xl my-6 ${grade.color}`} style={{ fontWeight: 800 }}>{score}%</div>
-          <p className="text-zinc-300 text-sm">{correctCount}/{questions.length} correct answers</p>
+          <p className="text-zinc-300 text-sm">{correctCount}/{questions.length} câu trả lời đúng</p>
           {quizResult?.reward_granted && (
             <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-              Chuc mung! Ban da vuot quiz lan dau va nhan {quizResult.exp_gained} EXP.
+              Chúc mừng! Bạn đã vượt quiz lần đầu và nhận {quizResult.exp_gained} EXP.
             </div>
           )}
 
@@ -373,7 +373,7 @@ export default function QuizPage({
                   Evaluation is server-side only
                 </p>
                 <p className="text-sm text-zinc-300 leading-relaxed">
-                  This payload never contains correct answers before submit.
+                  This payload never contains câu trả lời đúng before submit.
                 </p>
               </div>
             </div>
@@ -401,3 +401,7 @@ export default function QuizPage({
     </div>
   );
 }
+
+
+
+

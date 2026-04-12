@@ -24,7 +24,7 @@ function mapHistoryMessage(dto: ChatHistoryMessageDTO): PersistedChatMessage {
 function normalizeChatError(error: unknown): Error {
   if (!axios.isAxiosError(error)) {
     if (error instanceof Error) return error;
-    return new Error('Khong the ket noi tro ly AI luc nay. Vui long thu lai.');
+    return new Error('Không thể kết nối trợ lý AI lúc này. Vui lòng thử lại.');
   }
 
   const hasResponse = Boolean(error.response);
@@ -32,22 +32,22 @@ function normalizeChatError(error: unknown): Error {
   const message = error.response?.data?.message as string | undefined;
 
   if (!hasResponse) {
-    return new Error('Loi mang khi ket noi AI. Vui long kiem tra mang va thu lai.');
+    return new Error('Lỗi mạng khi kết nối AI. Vui lòng kiểm tra mạng và thử lại.');
   }
 
   if (code === 'LLM_AUTH_FAILED' || code === 'LLM_API_KEY_MISSING') {
-    return new Error('AI API key khong hop le hoac da het han. Vui long cap nhat cau hinh backend.');
+    return new Error('AI API key không hợp lệ hoặc đã hết hạn. Vui lòng cập nhật cấu hình backend.');
   }
 
   if (code === 'LLM_TIMEOUT' || code === 'LLM_NETWORK_ERROR' || code === 'LLM_SERVICE_ERROR') {
-    return new Error('Dich vu AI tam thoi khong san sang. Vui long thu lai sau it phut.');
+    return new Error('Dịch vụ AI tạm thời không sẵn sàng. Vui lòng thử lại sau ít phút.');
   }
 
   if (typeof message === 'string' && message.trim()) {
     return new Error(message);
   }
 
-  return new Error('Khong the ket noi tro ly AI luc nay. Vui long thu lai.');
+  return new Error('Không thể kết nối trợ lý AI lúc này. Vui lòng thử lại.');
 }
 
 export async function getChatHistory(): Promise<PersistedChatMessage[]> {
@@ -67,7 +67,7 @@ export async function getChatHistory(): Promise<PersistedChatMessage[]> {
 export async function sendChatMessage(content: string): Promise<string> {
   const trimmedContent = content.trim();
   if (!trimmedContent) {
-    throw new Error('Noi dung tin nhan khong duoc de trong.');
+    throw new Error('Nội dung tin nhắn không được để trống.');
   }
 
   const payload: ChatRequestDTO = {
@@ -105,3 +105,7 @@ export async function getSocraticResponse(message: string, history: Message[]): 
   void history;
   return sendChatMessage(message);
 }
+
+
+
+

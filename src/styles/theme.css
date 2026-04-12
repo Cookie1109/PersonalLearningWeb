@@ -39,6 +39,26 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* App theme tokens (Light) */
+  --app-bg: #f2f5f9;
+  --app-surface: #ffffff;
+  --app-surface-elevated: #f8fafc;
+  --app-surface-strong: #edf2f7;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: #334155;
+  --app-text-muted: #64748b;
+  --app-border: #d9e2ec;
+  --app-ring: rgba(6, 182, 212, 0.35);
+  --app-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --app-button-primary-bg: #0891b2;
+  --app-button-primary-bg-hover: #0e7490;
+  --app-button-primary-text: #ffffff;
+  --app-button-ghost-bg: #e2e8f0;
+  --app-button-ghost-bg-hover: #cbd5e1;
+  --app-button-ghost-text: #0f172a;
+  --app-input-bg: #ffffff;
+  --app-input-border: #cbd5e1;
 }
 
 .dark {
@@ -76,6 +96,26 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+
+  /* App theme tokens (Dark) */
+  --app-bg: #09090b;
+  --app-surface: #18181b;
+  --app-surface-elevated: #27272a;
+  --app-surface-strong: #3f3f46;
+  --app-text-primary: #f8fafc;
+  --app-text-secondary: #d4d4d8;
+  --app-text-muted: #a1a1aa;
+  --app-border: #3f3f46;
+  --app-ring: rgba(34, 211, 238, 0.35);
+  --app-shadow: 0 8px 24px rgba(2, 6, 23, 0.35);
+  --app-button-primary-bg: #0891b2;
+  --app-button-primary-bg-hover: #0e7490;
+  --app-button-primary-text: #ffffff;
+  --app-button-ghost-bg: #27272a;
+  --app-button-ghost-bg-hover: #3f3f46;
+  --app-button-ghost-text: #f4f4f5;
+  --app-input-bg: #18181b;
+  --app-input-border: #3f3f46;
 }
 
 @theme inline {
@@ -126,6 +166,9 @@
 
   body {
     @apply bg-background text-foreground;
+    background-color: var(--app-bg);
+    color: var(--app-text-primary);
+    transition: background-color 200ms ease, color 200ms ease;
   }
 
   /**
@@ -178,4 +221,80 @@
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
+}
+
+/*
+ * Light-theme remapping for frequently used utility classes in legacy screens
+ * so existing dark-oriented class names still render a coherent light UI.
+ */
+html:not(.dark) .bg-zinc-950,
+html:not(.dark) [class*="bg-zinc-950/"] {
+  background-color: var(--app-bg) !important;
+}
+
+html:not(.dark) .bg-zinc-900,
+html:not(.dark) [class*="bg-zinc-900/"] {
+  background-color: var(--app-surface) !important;
+}
+
+html:not(.dark) .bg-zinc-800,
+html:not(.dark) [class*="bg-zinc-800/"] {
+  background-color: var(--app-surface-elevated) !important;
+}
+
+html:not(.dark) .hover\:bg-zinc-900:hover,
+html:not(.dark) .hover\:bg-zinc-800:hover,
+html:not(.dark) .hover\:bg-zinc-700:hover {
+  background-color: var(--app-surface-strong) !important;
+}
+
+html:not(.dark) .border-zinc-900,
+html:not(.dark) .border-zinc-800,
+html:not(.dark) .border-zinc-700,
+html:not(.dark) .border-zinc-600,
+html:not(.dark) [class*="border-zinc-"] {
+  border-color: var(--app-border) !important;
+}
+
+html:not(.dark) .text-zinc-100,
+html:not(.dark) .text-zinc-200,
+html:not(.dark) .text-zinc-300,
+html:not(.dark) .text-zinc-400 {
+  color: var(--app-text-secondary) !important;
+}
+
+html:not(.dark) .text-zinc-500,
+html:not(.dark) .text-zinc-600 {
+  color: var(--app-text-muted) !important;
+}
+
+html:not(.dark) .text-white {
+  color: var(--app-text-primary) !important;
+}
+
+html:not(.dark) button[class*="bg-violet-6"],
+html:not(.dark) button[class*="bg-violet-7"],
+html:not(.dark) button[class*="bg-violet-8"],
+html:not(.dark) button[class*="bg-violet-9"],
+html:not(.dark) button[class*="bg-cyan-6"],
+html:not(.dark) button[class*="bg-cyan-7"],
+html:not(.dark) button[class*="bg-cyan-8"],
+html:not(.dark) button[class*="bg-cyan-9"],
+html:not(.dark) button[class*="bg-emerald-6"],
+html:not(.dark) button[class*="bg-emerald-7"],
+html:not(.dark) button[class*="bg-emerald-8"],
+html:not(.dark) button[class*="bg-emerald-9"],
+html:not(.dark) button[class*="bg-orange-6"],
+html:not(.dark) button[class*="bg-orange-7"],
+html:not(.dark) button[class*="bg-orange-8"],
+html:not(.dark) button[class*="bg-orange-9"] {
+  color: #ffffff !important;
+}
+
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: var(--app-input-bg) !important;
+  border-color: var(--app-input-border) !important;
+  color: var(--app-text-primary) !important;
 }

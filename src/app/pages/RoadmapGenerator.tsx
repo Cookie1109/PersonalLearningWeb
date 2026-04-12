@@ -41,7 +41,7 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
       if (error instanceof Error) {
         setGenerateError(error.message);
       } else {
-        setGenerateError('Khong the tao lo trinh luc nay. Vui long thu lai sau.');
+        setGenerateError('Không thể tạo lộ trình lúc này. Vui lòng thử lại sau.');
       }
     } finally {
       setIsGenerating(false);
@@ -56,8 +56,8 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
             <Wand2 size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Tao Lo Trinh Hoc Tap</h1>
-            <p className="text-zinc-500 text-sm">Nhap muc tieu, AI se bien soan lo trinh chi tiet cho ban</p>
+            <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Tạo Lộ Trình Học Tập</h1>
+            <p className="text-zinc-500 text-sm">Nhập mục tiêu, AI sẽ biên soạn lộ trình chi tiết cho bạn</p>
           </div>
         </div>
       </motion.div>
@@ -71,7 +71,7 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
       >
         <label htmlFor="roadmap-goal" className="block text-sm text-zinc-300 mb-3" style={{ fontWeight: 600 }}>
           <Target size={14} className="inline mr-2 text-violet-400" />
-          Muc tieu hoc tap cua ban la gi?
+          Mục tiêu học tập của bạn là gì?
         </label>
 
         <textarea
@@ -79,20 +79,20 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
           value={inputGoal}
           onChange={event => setInputGoal(event.target.value)}
           disabled={isGenerating}
-          placeholder='Vi du: "Toi muon hoc Python backend de xay API trong 6 tuan"'
+          placeholder='Ví dụ: "Tôi muốn học Python backend để xây API trong 6 tuần"'
           rows={6}
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-200 placeholder:text-zinc-600 resize-y min-h-[160px] outline-none focus:border-violet-500/60 transition-colors text-sm disabled:opacity-70"
         />
 
         {isGoalTooShort && (
           <p className="mt-2 text-xs text-amber-300">
-            Muc tieu can it nhat 3 ky tu de AI tao lo trinh.
+            Mục tiêu cần ít nhất 3 ký tự để AI tạo lộ trình.
           </p>
         )}
 
         {isGoalTooLong && (
           <p className="mt-2 text-xs text-amber-300">
-            Muc tieu toi da 500 ky tu. Vui long rut gon de tiep tuc.
+            Mục tiêu tối đa 500 ký tự. Vui lòng rút gọn để tiếp tục.
           </p>
         )}
 
@@ -100,7 +100,7 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
           <div className="mt-4 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 flex items-center gap-3">
             <Loader2 size={16} className="text-violet-300 animate-spin" />
             <p className="text-sm text-violet-100" style={{ fontWeight: 600 }}>
-              AI dang bien soan lo trinh chi tiet. Qua trinh nay mat khoang 15-30 giay...
+              AI đang biên soạn lộ trình chi tiết. Quá trình này mất khoảng 15-30 giây...
             </p>
           </div>
         )}
@@ -119,10 +119,12 @@ export default function RoadmapGenerator({ onGenerateRoadmap = generateRoadmap }
             style={{ fontWeight: 600 }}
           >
             {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {isGenerating ? 'Dang tao lo trinh...' : 'Tao lo trinh voi AI'}
+            {isGenerating ? 'Đang tạo lộ trình...' : 'Tạo lộ trình với AI'}
           </button>
         </div>
       </motion.form>
     </div>
   );
 }
+
+

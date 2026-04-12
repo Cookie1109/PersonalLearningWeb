@@ -41,42 +41,42 @@ QUIZ_DISTRIBUTION_BY_DOMAIN: dict[str, dict[str, int]] = {
 QUIZ_SYSTEM_PROMPT = (
     "Ban la mot chuyen gia thiet ke chuong trinh giang day va Senior Backend Developer. "
     "Nhiem vu cua ban la doc DU LIEU DAU VAO va tao ra MOT BO TRAC NGHIEM DUNG 10 CAU HOI chuyen sau. "
-    "Khong dung kien thuc ngoai le.\n\n"
+    "Không dung kien thuc ngoai le.\n\n"
     "BUOC 1: PHAN LOAI TAI LIEU\n"
-    "Hay doc tai lieu va xac dinh no thuoc linh vuc nao:\n"
-    "- NHOM A (IT & Lap trinh): Chua ma nguon, thuat toan, cong nghe web, database, API, framework...\n"
-    "- NHOM B (Phi ky thuat): Lich su, Ngon ngu, Kinh te, Khoa hoc xa hoi, Quan tri...\n\n"
+    "Hay doc tài liệu va xac dinh no thuoc linh vuc nao:\n"
+    "- NHÓM A (IT & Lap trinh): Chưa ma nguon, thuat toan, cong nghe web, database, API, framework...\n"
+    "- NHÓM B (Phi ky thuat): Lich su, Ngon ngu, Kinh te, Khoa hoc xa hoi, Quan tri...\n\n"
     "BUOC 2: RE NHANH CAU TRUC 10 CAU HOI\n"
-    "[NEU LA NHOM A - IT & LAP TRINH]:\n"
-    "- Bat buoc sinh DUNG 10 cau gom: 4 cau 'theory', 3 cau 'fill_code', 3 cau 'find_bug'.\n"
-    "- VOI fill_code: cau hoi bat buoc co huong dan ro rang va cho trong ___.\n"
+    "[NEU LA NHÓM A - IT & LAP TRINH]:\n"
+    "- Bat buoc sinh DUNG 10 câu gom: 4 câu 'theory', 3 câu 'fill_code', 3 câu 'find_bug'.\n"
+    "- VOI fill_code: câu hỏi bat buoc co huong dan ro rang va cho trong ___.\n"
     "- QUY TAC RENDER MARKDOWN TRONG JSON: KHI VIET CODE BLOCK (```javascript) BEN TRONG TRUONG question, BAN BAT BUOC PHAI SU DUNG KY TU NGAT DONG \\n THUC SU TRONG CHUOI JSON DE TACH BIET CAC DONG CODE. TUYET DOI KHONG VIET TOAN BO CODE BLOCK DINH LIEN TREN 1 DONG.\n"
-    "- BAT BUOC CAU TRUC TRUONG question PHAI CO 2 PHAN: cau huong dan + code block.\n"
+    "- BAT BUOC CAU TRUC TRUONG question PHAI CO 2 PHAN: câu huong dan + code block.\n"
     "- VI DU MAU CHUAN BAT BUOC LAM THEO:\n"
-    "\"Dien vao cho trong ___ de hoan thanh doan code sau:\\n```javascript\\nconst app = express();\\napp.get('/', (req, res) => {\\n  ___('Hello');\\n});\\n```\"\n"
-    "- Truong options cua fill_code chi chua tu khoa/ten ham/doan code rat ngan de dien vua cho trong.\n"
-    "- VOI find_bug: dua doan code sai logic nhu production, TUYET DOI KHONG CHUA COMMENT GOI Y (khong dung //).\n"
+    "\"Điền vào chỗ trống ___ để hoàn thành đoạn code sau:\\n```javascript\\nconst app = express();\\napp.get('/', (req, res) => {\\n  ___('Hello');\\n});\\n```\"\n"
+    "- Truong options cua fill_code chi chưa tu khoa/ten ham/doan code rat ngan de dien vua cho trong.\n"
+    "- VOI find_bug: dua doan code sai logic nhu production, TUYET DOI KHONG CHUA COMMENT GOI Y (không dung //).\n"
     "- VI DU DOAN CODE CHUAN (KHONG CO COMMENT RAC):\n"
     "\"```javascript\\napp.use((req, res) => {\\n  console.log('Log');\\n});\\napp.get('/', (req, res) => { res.send('OK'); });\\n```\"\n\n"
-    "[NEU LA NHOM B - PHI KY THUAT]:\n"
+    "[NEU LA NHÓM B - PHI KY THUAT]:\n"
     "- TUYET DOI KHONG SINH CAU HOI CODE.\n"
-    "- Bat buoc sinh DUNG 10 cau gom: 7 cau 'general_choice', 3 cau 'fill_blank'.\n"
-    "- VOI fill_blank: trich 1 cau quan trong trong tai lieu, duc lo 1 tu khoa bang ___, va tao 4 lua chon la 4 tu khoa cung chu de.\n"
-    "- Cac cau hoi phai duoc viet theo ngu canh ly thuyet/doc hieu, khong ep cu phap lap trinh.\n\n"
+    "- Bat buoc sinh DUNG 10 câu gom: 7 câu 'general_choice', 3 câu 'fill_blank'.\n"
+    "- VOI fill_blank: trich 1 câu quan trong trong tài liệu, duc lo 1 tu khoa bang ___, va tao 4 lua chon la 4 tu khoa cung chu de.\n"
+    "- Cac câu hỏi phai được viet theo ngu canh lý thuyết/doc hieu, không ep cu phap lap trinh.\n\n"
     "TRUONG 'type' BAT BUOC PHAI VIET THUONG TOAN BO: 'theory', 'fill_code', 'find_bug', 'general_choice', 'fill_blank'.\n\n"
     "PHAN OPTIONS/CORRECT_ANSWER: TUYET DOI KHONG THEM CAC TIEN TO 'A.', 'B.', 'C.', 'D.' O DAU CHUOI. "
     "HE THONG UI DA TU DONG XU LY VIEC NAY. VI DU CHUAN: \"options\": [\"req.body\", \"req.query\"], \"correct_answer\": \"req.query\".\n\n"
     "RANG BUOC COT LOI:\n"
     "- Co tinh tao ra cac dap an sai (distractors) dua tren loi thuong gap cua sinh vien. Dung lam dap an sai qua ngo ngan.\n"
-    "- Doan code o dap an dung phai compile/run duoc, khong bi loi syntax.\n"
+    "- Doan code o dap an dung phai compile/run được, không bi loi syntax.\n"
     "- Giai thich chi tiet tai sao dung va tai sao sai.\n\n"
     "DINH DANG DAU RA:\n"
-    "Tra ve MOT MANG JSON CHUAN chua 10 object. Moi object co cau truc:\n"
+    "Tra ve MOT MANG JSON CHUAN chưa 10 object. Moi object co câu truc:\n"
     "{\n"
     "  \"id\": 1,\n"
     "  \"type\": \"theory | fill_code | find_bug | general_choice | fill_blank\",\n"
     "  \"difficulty\": \"Easy | Medium | Hard\",\n"
-    "  \"question\": \"Noi dung cau hoi...\",\n"
+    "  \"question\": \"Nội dung câu hỏi...\",\n"
     "  \"options\": [\"Lua chon 1\", \"Lua chon 2\", \"Lua chon 3\", \"Lua chon 4\"],\n"
     "  \"correct_answer\": \"Lua chon dung\",\n"
     "  \"explanation\": \"Giai thich chi tiet...\"\n"
@@ -135,7 +135,7 @@ def _build_quiz_model_candidates(settings) -> list[str]:
 def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
     return (
         "DU LIEU DAU VAO:\n"
-        f"- Tieu de tai lieu: {lesson_title.strip()}\n"
+        f"- Tiêu đề tài liệu: {lesson_title.strip()}\n"
         "- Nguon su that duy nhat (source_content):\n"
         f"{source_content.strip()[:50000]}"
     )
@@ -158,12 +158,12 @@ def _classify_document_domain(*, lesson_title: str, source_content: str) -> str:
 def _build_domain_distribution_instruction(domain: str) -> str:
     if domain == DOMAIN_TECHNICAL:
         return (
-            "RANG BUOC DOMAIN NHOM A (IT): DUNG 10 CAU = 4 theory + 3 fill_code + 3 find_bug. "
-            "Khong duoc sinh general_choice hoac fill_blank."
+            "RANG BUOC DOMAIN NHÓM A (IT): DUNG 10 CAU = 4 theory + 3 fill_code + 3 find_bug. "
+            "Không được sinh general_choice hoac fill_blank."
         )
     return (
-        "RANG BUOC DOMAIN NHOM B (Phi ky thuat): DUNG 10 CAU = 7 general_choice + 3 fill_blank. "
-        "TUYET DOI KHONG duoc sinh fill_code hoac find_bug."
+        "RANG BUOC DOMAIN NHÓM B (Phi ky thuat): DUNG 10 CAU = 7 general_choice + 3 fill_blank. "
+        "TUYET DOI KHONG được sinh fill_code hoac find_bug."
     )
 
 
@@ -315,17 +315,17 @@ def _build_quiz_generation_payload(*, user_prompt: str) -> dict[str, Any]:
 
 def _build_quiz_repair_payload(*, user_prompt: str, invalid_json: str, error_message: str, domain: str) -> dict[str, Any]:
     repair_prompt = (
-        "Ban vua tra ve JSON quiz khong hop le. "
+        "Ban vua tra ve JSON quiz không hop le. "
         "HAY TRA VE LAI MOT MANG JSON HOP LE DUY NHAT, DUNG 10 OBJECT, KHONG THEM VAN BAN GIAI THICH. "
         "TRUONG 'type' BAT BUOC PHAI VIET THUONG: 'theory', 'fill_code', 'find_bug', 'general_choice', 'fill_blank'. "
         f"{_build_domain_distribution_instruction(domain)} "
         "TUYET DOI KHONG THEM TIEN TO 'A.', 'B.', 'C.', 'D.' TRONG options va correct_answer. "
-        "VOI fill_code, MO DAU question BAT BUOC: 'Dien vao cho trong ___ de hoan thanh doan code sau:'. "
+        "VOI fill_code, MO DAU question BAT BUOC: 'Điền vào chỗ trống ___ để hoàn thành đoạn code sau:'. "
         "KHI VIET CODE BLOCK TRONG question, BAT BUOC DUNG KY TU NGAT DONG \\n THUC SU, KHONG DUOC DINH CODE BLOCK TREN MOT DONG. "
         "VOI find_bug, TUYET DOI KHONG CHEN COMMENT GOI Y LOI TRONG CODE. "
         "VOI fill_blank, question bat buoc co cho trong ___ va options la 4 tu khoa. "
         "TRUONG 'difficulty' BAT BUOC: 'Easy' | 'Medium' | 'Hard'.\n\n"
-        f"Ly do JSON khong hop le: {error_message}\n\n"
+        f"Ly do JSON không hop le: {error_message}\n\n"
         "Du lieu JSON loi can sua:\n"
         f"{invalid_json[:12000]}"
     )
@@ -563,3 +563,4 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
         )
 
     raise AppException(status_code=503, message="AI service unavailable", detail={"code": "LLM_SERVICE_ERROR"})
+

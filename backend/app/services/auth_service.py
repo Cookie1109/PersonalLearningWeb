@@ -38,7 +38,7 @@ def register_user(
     if existing_user is not None:
         raise AppException(
             status_code=400,
-            message="Ten dang nhap da ton tai",
+            message="Ten đang nhap da ton tai",
             detail={"code": "USER_ALREADY_EXISTS"},
         )
 
@@ -61,7 +61,7 @@ def register_user(
         db.rollback()
         raise AppException(
             status_code=400,
-            message="Ten dang nhap da ton tai",
+            message="Ten đang nhap da ton tai",
             detail={"code": "USER_ALREADY_EXISTS"},
         ) from exc
 
@@ -132,3 +132,4 @@ def revoke_session(*, user_id: int, refresh_token: str | None, revoke_all_device
         raise AppException(status_code=401, message="Refresh token is required", detail={"code": "REFRESH_TOKEN_REQUIRED"})
 
     store.revoke_token_family_by_token(refresh_token)
+

@@ -18,8 +18,8 @@ const quizQuestions = [
 ];
 
 describe('QuizResultDisplay explanation rendering', () => {
-  it('render explanation khi ket qua cau tra loi dung neu backend tra ve explanation', () => {
-    // Hien tai UI hien explanation cho moi cau neu backend co explanation.
+  it('render explanation khi ket qua câu tra loi dung neu backend tra ve explanation', () => {
+    // Hien tai UI hien explanation cho moi câu neu backend co explanation.
     const submitResultFromApi = {
       score: 100,
       is_passed: true,
@@ -36,7 +36,7 @@ describe('QuizResultDisplay explanation rendering', () => {
           is_correct: true,
           selected_option: 'A',
           correct_answer: 'A',
-          explanation: 'Noi dung nay khong duoc hien thi vi cau dung',
+          explanation: 'Nội dung này không được hiển thị vì câu đúng',
         },
       ],
     };
@@ -55,12 +55,12 @@ describe('QuizResultDisplay explanation rendering', () => {
       />
     );
 
-    expect(screen.getByText(/Giai thich/i)).toBeInTheDocument();
-    expect(screen.getByText('Noi dung nay khong duoc hien thi vi cau dung')).toBeInTheDocument();
+    expect(screen.getByText(/Giải thích/i)).toBeInTheDocument();
+    expect(screen.getByText('Nội dung này không được hiển thị vì câu đúng')).toBeInTheDocument();
   });
 
-  it('render explanation khi ket qua cau tra loi sai', () => {
-    // Mock du lieu API submit quiz: cau tra loi sai co explanation.
+  it('render explanation khi ket qua câu tra loi sai', () => {
+    // Mock du lieu API submit quiz: câu tra loi sai co explanation.
     const submitResultFromApi = {
       score: 0,
       is_passed: false,
@@ -97,47 +97,47 @@ describe('QuizResultDisplay explanation rendering', () => {
     );
 
     expect(screen.getByText('Đây là giải thích chi tiết')).toBeInTheDocument();
-    expect(screen.getAllByText(/Giai thich/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Giải thích/i).length).toBeGreaterThan(0);
   });
 });
 
 describe('buildFlashcardsFromMarkdown', () => {
-  it('tao flashcard co nghia, dang hoi-dap, va loai bo cau mo dau nhieu', () => {
+  it('tao flashcard co nghia, đang hoi-dap, va loai bo câu mo dau nhieu', () => {
     const markdown = `
 ## Moi truong phat trien
-Trong bai hoc nay, chung ta se cung nhau tim hieu tong quan.
+Trong bài học này, chung ta se cung nhau tim hieu tong quan.
 Compiler la chuong trinh bien ma nguon thanh ma may.
-Neu code sai cu phap thi compiler bao loi ngay.
+Neu code sai cu phap thi compiler bao loi ngày.
 
-## Quy trinh cai dat
-1. Cai dat compiler phu hop he dieu hanh.
-2. Cau hinh IDE de goi y va debug.
+## Quy trinh cai đạt
+1. Cai đạt compiler phu hop he dieu hanh.
+2. Câu hinh IDE de goi y va debug.
 
-## Cau hinh
+## Câu hinh
 Compiler: GCC hoac Clang.
 `;
 
     const cards = buildFlashcardsFromMarkdown(markdown, 8);
 
     expect(cards.length).toBeGreaterThan(0);
-    expect(cards.some(card => /\?$/.test(card.front) || card.front.startsWith('Dien vao cho trong:'))).toBe(true);
+    expect(cards.some(card => /\?$/.test(card.front) || card.front.startsWith('Điền vào chỗ trống:'))).toBe(true);
     expect(cards.some(card => /Khai niem/i.test(card.front))).toBe(true);
     expect(cards.some(card => /buoc\s+1|mot buoc quan trong/i.test(card.front))).toBe(true);
     expect(cards.some(card => /Neu .*dieu gi xay ra\?/i.test(card.front))).toBe(true);
-    expect(cards.some(card => card.front.startsWith('Dien vao cho trong:'))).toBe(true);
+    expect(cards.some(card => card.front.startsWith('Điền vào chỗ trống:'))).toBe(true);
     expect(cards.some(card => /Tinh huong IT/i.test(card.front))).toBe(true);
-    expect(cards.every(card => !/Trong bai hoc nay, chung ta se/i.test(card.back))).toBe(true);
+    expect(cards.every(card => !/Trong bài học này, chung ta se/i.test(card.back))).toBe(true);
   });
 
   it('giu moi the gon va mot y chinh', () => {
     const markdown = `
 ## Khoi tao
-API duoc dung de trao doi du lieu giua frontend va backend.
+API được dung de trao doi du lieu giua frontend va backend.
 Khi timeout xay ra thi can retry co gioi han de tranh request storm.
 
 ## Quy trinh
 1. Xac thuc request.
-2. Validate du lieu dau vao.
+2. Valiđạte du lieu dau vao.
 3. Xu ly nghiep vu va tra response.
 `;
 
@@ -149,3 +149,6 @@ Khi timeout xay ra thi can retry co gioi han de tranh request storm.
     expect(cards.every(card => card.back.split('. ').length <= 2)).toBe(true);
   });
 });
+
+
+

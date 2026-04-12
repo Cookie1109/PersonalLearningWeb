@@ -31,9 +31,9 @@ SYSTEM_PROMPT = (
     "Ban la mot Chuyen gia Dao tao Da linh vuc (Polymath) hang dau the gioi. "
     "Ban co kha nang thiet ke lo trinh va giang day BAT KY chu de nao. "
     "TUYET DOI KHONG su dung cac thuat ngu IT/Lap trinh (nhu moi truong code, bien, cu phap...) "
-    "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
-    "Tra loi ro rang, co cau truc, va LUON ket thuc bang cau tron ven (khong bo do giua chung). "
-    "Neu nguoi dung yeu cau so sanh hoac tu van lua chon, dua ra khuyen nghi cu the va ly do ngan gon. "
+    "neu chu de nguoi dung yeu câu không lien quan den cong nghe. "
+    "Tra loi ro rang, co câu truc, va LUON ket thuc bang câu tron ven (không bo do giua chung). "
+    "Neu nguoi dung yeu câu so sanh hoac tu van lua chon, dua ra khuyen nghi cu the va ly do ngan gon. "
     "If the user expresses intent to learn a new topic, append this exact tag format on a NEW final line only after a complete answer: "
     "[SUGGEST_ROADMAP: Topic Name]. Never cut the sentence right before this tag."
 )
@@ -82,13 +82,13 @@ def build_document_chat_system_prompt(*, source_content: str) -> str:
     bounded_source = (source_content or "").strip()[:DOCUMENT_CHAT_SOURCE_MAX_CHARS]
     return (
         "Ban la gia su AI cho che do NotebookLM Mini. "
-        "Nhiem vu cua ban la tra loi cau hoi CHI dua tren tai lieu nguon duoc cung cap ben duoi. "
-        "Tai lieu nguon la su that DUY NHAT. TUYET DOI KHONG bo sung kien thuc ben ngoai tai lieu, KHONG suy doan. "
-        "Neu nguoi dung hoi ngoai pham vi tai lieu, khong duoc tu dien giai them. "
-        "Neu tai lieu khong co thong tin de tra loi, phai noi dung nguyen van: 'Tai lieu khong de cap den van de nay'. "
+        "Nhiem vu cua ban la tra loi câu hỏi CHI dua tren tài liệu nguon được cung cap ben duoi. "
+        "Tài liệu nguon la su that DUY NHAT. TUYET DOI KHONG bo sung kien thuc ben ngoai tài liệu, KHONG suy doan. "
+        "Neu nguoi dung hoi ngoai pham vi tài liệu, không được tu dien giai them. "
+        "Neu tài liệu không co thong tin de tra loi, phai nội dung nguyen van: 'Tài liệu không de cap den van de nay'. "
         "Tra loi ngan gon, ro rang, uu tien giai thich theo bullet neu can. "
-        "Neu tai lieu co code, command hoac bang bieu thi trinh bay bang Markdown GFM tuong ung.\n\n"
-        "Tai lieu nguon:\n"
+        "Neu tài liệu co code, command hoac bang bieu thi trinh bay bang Markdown GFM tuong ung.\n\n"
+        "Tài liệu nguon:\n"
         f"{bounded_source}"
     )
 
@@ -204,10 +204,10 @@ def _is_reply_truncated(reply: str, *, finish_reason: str | None) -> bool:
 
 def _build_continuation_prompt(*, partial_reply: str) -> str:
     return (
-        "Cau tra loi ban vua gui dang bi cat giua chung. "
-        "Hay viet tiep phan con lai that tron ven, KHONG lap lai noi dung da viet, "
-        "giu dung ngu canh va ket thuc bang cau day du.\n\n"
-        "[Noi dung da tra loi]\n"
+        "Câu tra loi ban vua gui đang bi cat giua chung. "
+        "Hay viet tiep phan con lai that tron ven, KHONG lap lai nội dung da viet, "
+        "giu dung ngu canh va ket thuc bang câu day du.\n\n"
+        "[Nội dung da tra loi]\n"
         f"{partial_reply[-6000:]}"
     )
 
@@ -371,4 +371,5 @@ def process_chat_turn(*, db: Session, user_id: int, messages: list[dict[str, str
         ) from exc
 
     return reply
+
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityDay } from '../lib/types';
 
 interface Props {
@@ -8,23 +8,52 @@ interface Props {
 const DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8', 'Th9', 'Th10', 'Th11', 'Th12'];
 
-function getColor(count: number): string {
-  if (count === 0) return '#18181b';
-  if (count <= 2) return '#4c1d95';
-  if (count <= 4) return '#6d28d9';
-  if (count <= 6) return '#7c3aed';
-  return '#8b5cf6';
+function getColor(count: number, isDarkTheme: boolean): string {
+  if (isDarkTheme) {
+    if (count === 0) return 'transparent';
+    if (count <= 2) return '#083344';
+    if (count <= 4) return '#0e7490';
+    if (count <= 6) return '#06b6d4';
+    return '#22d3ee';
+  }
+
+  if (count === 0) return '#e2e8f0';
+  if (count <= 2) return '#bae6fd';
+  if (count <= 4) return '#67e8f9';
+  if (count <= 6) return '#22d3ee';
+  return '#0891b2';
 }
 
-function getBorderColor(count: number): string {
-  if (count === 0) return '#27272a';
-  if (count <= 2) return '#5b21b6';
-  if (count <= 4) return '#7c3aed';
-  return '#a78bfa';
+function getBorderColor(count: number, isDarkTheme: boolean): string {
+  if (isDarkTheme) {
+    if (count === 0) return '#1f2b43';
+    if (count <= 2) return '#0e7490';
+    if (count <= 4) return '#22d3ee';
+    return '#67e8f9';
+  }
+
+  if (count === 0) return '#cbd5e1';
+  if (count <= 2) return '#7dd3fc';
+  if (count <= 4) return '#22d3ee';
+  return '#0891b2';
 }
 
 export default function ProgressHeatmap({ data }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isDarkTheme, setIsDarkTheme] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const updateTheme = () => setIsDarkTheme(root.classList.contains('dark'));
+
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
 
   const weeks = useMemo(() => {
     const today = new Date();
@@ -78,6 +107,8 @@ export default function ProgressHeatmap({ data }: Props) {
 
   const totalActivity = data.reduce((sum, d) => sum + d.count, 0);
   const activeDays = data.filter(d => d.count > 0).length;
+  const mutedTextClass = isDarkTheme ? 'text-zinc-400' : 'text-slate-500';
+  const dayLabelClass = isDarkTheme ? 'text-zinc-500' : 'text-slate-500';
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -93,14 +124,14 @@ export default function ProgressHeatmap({ data }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-zinc-500">{totalActivity} phiên học · {activeDays} ngày hoạt động trong năm qua</p>
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <p className={`text-xs ${mutedTextClass}`}>{totalActivity} phiên học · {activeDays} ngày hoạt động trong năm qua</p>
+        <div className={`flex items-center gap-2 text-xs ${mutedTextClass}`}>
           <span>Ít</span>
           {[0, 2, 4, 6, 8].map(v => (
             <div
               key={v}
-              className="w-3 h-3 rounded-sm"
-              style={{ backgroundColor: getColor(v), border: `1px solid ${getBorderColor(v)}` }}
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: getColor(v, isDarkTheme), border: `1px solid ${getBorderColor(v, isDarkTheme)}` }}
             />
           ))}
           <span>Nhiều</span>
@@ -112,7 +143,7 @@ export default function ProgressHeatmap({ data }: Props) {
           {/* Day labels */}
           <div className="flex flex-col gap-1 pt-5 pr-1">
             {DAYS.map((day, i) => (
-              <div key={day} className={`h-3 text-xs text-zinc-600 flex items-center ${i % 2 === 0 ? '' : 'opacity-0'}`} style={{ minWidth: 16 }}>
+              <div key={day} className={`h-3 text-xs ${dayLabelClass} flex items-center ${i % 2 === 0 ? '' : 'opacity-0'}`} style={{ minWidth: 16 }}>
                 {i % 2 === 0 ? day : ''}
               </div>
             ))}
@@ -125,7 +156,7 @@ export default function ProgressHeatmap({ data }: Props) {
               {monthLabels.map(({ month, col }) => (
                 <span
                   key={`${month}-${col}`}
-                  className="absolute text-xs text-zinc-500"
+                  className={`absolute text-xs ${mutedTextClass}`}
                   style={{ left: col * 16, whiteSpace: 'nowrap' }}
                 >
                   {month}
@@ -140,10 +171,13 @@ export default function ProgressHeatmap({ data }: Props) {
                     <div
                       key={di}
                       title={day.date ? `${day.date}: ${day.count} phiên học` : ''}
-                      className="w-3 h-3 rounded-sm transition-all duration-150 cursor-pointer hover:scale-125 hover:ring-1 hover:ring-violet-400"
+                      className="w-3 h-3 rounded-full transition-all duration-150 cursor-pointer hover:scale-125 hover:ring-1 hover:ring-cyan-300"
                       style={{
-                        backgroundColor: day.date ? getColor(day.count) : 'transparent',
-                        border: day.date ? `1px solid ${getBorderColor(day.count)}` : 'none',
+                        backgroundColor: day.date ? getColor(day.count, isDarkTheme) : 'transparent',
+                        border: day.date ? `1px solid ${getBorderColor(day.count, isDarkTheme)}` : 'none',
+                        boxShadow: day.date && day.count > 0 && isDarkTheme
+                          ? '0 0 0 1px rgba(34, 211, 238, 0.15), 0 0 8px rgba(6, 182, 212, 0.2)'
+                          : 'none',
                       }}
                     />
                   ))}

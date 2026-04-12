@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 130" fill="none">
+  <defs>
+    <linearGradient id="nexlWordLightGrad" x1="24" y1="116" x2="500" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f3f67"/>
+      <stop offset="1" stop-color="#1f5f8f"/>
+    </linearGradient>
+  </defs>
+  <text x="22" y="98" fill="url(#nexlWordLightGrad)" font-family="Segoe UI, Arial, sans-serif" font-size="98" font-weight="700" letter-spacing="8">NEXL</text>
+</svg>

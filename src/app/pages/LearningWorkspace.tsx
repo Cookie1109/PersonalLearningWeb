@@ -56,11 +56,19 @@ type MarkdownCodeComponentProps = React.ComponentPropsWithoutRef<'code'> & {
 };
 
 const QUIZ_TYPE_LABELS: Record<string, string> = {
-  theory: 'Ly thuyet',
-  fill_code: 'Dien code',
-  find_bug: 'Tim loi',
-  general_choice: 'Trac nghiem',
-  fill_blank: 'Dien khuyet',
+  theory: 'Lý thuyết',
+  fill_code: 'Điền code',
+  find_bug: 'Tìm lỗi',
+  general_choice: 'Trắc nghiệm',
+  fill_blank: 'Điền khuyết',
+};
+
+const QUIZ_TYPE_BADGE_STYLES: Record<string, string> = {
+  theory: 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200',
+  fill_code: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
+  find_bug: 'border-red-200 bg-red-100 text-red-800',
+  general_choice: 'border-blue-200 bg-blue-100 text-blue-800',
+  fill_blank: 'border-orange-200 bg-orange-100 text-orange-800',
 };
 
 const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
@@ -70,8 +78,15 @@ const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
 };
 
 function getQuizTypeLabel(type: string | null | undefined): string {
-  if (!type) return 'Khac';
+  if (!type) return 'Khác';
   return QUIZ_TYPE_LABELS[type] ?? type;
+}
+
+function getQuizTypeStyle(type: string | null | undefined): string {
+  if (!type) {
+    return 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200';
+  }
+  return QUIZ_TYPE_BADGE_STYLES[type] ?? 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200';
 }
 
 function getQuizDifficultyStyle(difficulty: string | null | undefined): string {
@@ -259,7 +274,7 @@ function _splitAtomicIdeas(raw: string): string[] {
 function _extractKnowledgeEntries(markdown: string): KnowledgeEntry[] {
   const lines = markdown.split('\n');
   const entries: KnowledgeEntry[] = [];
-  let currentSection = 'Tong quan';
+  let currentSection = 'Tổng quan';
   let inCodeBlock = false;
 
   for (const rawLine of lines) {
@@ -518,7 +533,7 @@ function _buildClozeSeed(seed: FlashcardSeed): FlashcardSeed | null {
     return null;
   }
 
-  return _buildSeed('cloze', `Dien vao cho trong: ${masked}`, token, seed.section, seed.sourceText);
+  return _buildSeed('cloze', `Điền vào chỗ trống: ${masked}`, token, seed.section, seed.sourceText);
 }
 
 function _buildContextSeed(seeds: FlashcardSeed[], entries: KnowledgeEntry[]): FlashcardSeed | null {
@@ -534,7 +549,7 @@ function _buildContextSeed(seeds: FlashcardSeed[], entries: KnowledgeEntry[]): F
     {
       pattern: /\b(ide|editor|vs code|vscode|debug)\b/,
       front: 'Tinh huong IT: IDE giup gi khi ban debug mot loi kho?',
-      back: 'IDE cho phep dat breakpoint, theo doi bien, va trace tung buoc de khoanh vung nguyen nhan nhanh hon.',
+      back: 'IDE cho phep đạt breakpoint, theo doi bien, va trace tung buoc de khoanh vung nguyen nhan nhanh hon.',
     },
     {
       pattern: /\b(index|database|sql)\b/,
@@ -650,7 +665,7 @@ export function buildFlashcardsFromMarkdown(markdown: string | null, maxCards: n
       continue;
     }
 
-    const topic = _extractTopic(entry.section === 'Tong quan' ? entry.text : entry.section, 'noi dung nay');
+    const topic = _extractTopic(entry.section === 'Tổng quan' ? entry.text : entry.section, 'nội dung này');
     const seed = _buildSeed(
       'fact',
       `Y chinh can nho ve "${topic}" la gi?`,
@@ -759,21 +774,21 @@ export function QuizResultDisplay({
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
       <div className="text-center">
-        <p className="text-xs uppercase tracking-wide text-zinc-500">Ket qua quiz</p>
+        <p className="text-xs uppercase tracking-wide text-zinc-500">Kết quả quiz</p>
         <p className={`text-5xl mt-2 ${quizResult.is_passed ? 'text-emerald-400' : 'text-amber-400'}`} style={{ fontWeight: 800 }}>
           {quizResult.score}%
         </p>
-        <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} cau dung</p>
+        <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} câu đúng</p>
         {quizResult.is_passed ? (
-          <p className="text-emerald-300 text-sm mt-2">Ban da dat quiz. Icon Quiz se sang ngay lap tuc.</p>
+          <p className="text-emerald-300 text-sm mt-2">Bạn đã đạt quiz. Icon Quiz sẽ sáng ngày lập tức.</p>
         ) : (
-          <p className="text-amber-300 text-sm mt-2">Chua dat nguong. Hay on lai ly thuyet va thu lai.</p>
+          <p className="text-amber-300 text-sm mt-2">Chưa đạt ngưỡng. Hãy ôn lại lý thuyết và thử lại.</p>
         )}
       </div>
 
       {quizResult.reward_granted && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-          Chuc mung! Ban nhan {quizResult.exp_gained} EXP khi vuot quiz lan dau.
+          Chúc mừng! Bạn nhận {quizResult.exp_gained} EXP khi vượt quiz lần đầu.
         </div>
       )}
 
@@ -785,31 +800,31 @@ export function QuizResultDisplay({
           );
           const selectedOptionText = answer.selected_option
             ? (optionTextByKey.get(answer.selected_option) ?? answer.selected_option)
-            : 'Khong chon dap an';
+            : 'Không chọn đáp án';
           const correctOptionText = answer.correct_answer
             ? (optionTextByKey.get(answer.correct_answer) ?? answer.correct_answer)
-            : 'Khong xac dinh';
+            : 'Không xác định';
 
           return (
             <div key={answer.question_id} className="space-y-3 rounded-xl border border-zinc-700 bg-zinc-950/60 p-3">
               <p className="text-sm text-zinc-100" style={{ fontWeight: 700 }}>
-                Cau {index + 1}
+                Câu {index + 1}
               </p>
               <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-3">
-                <QuizQuestionMarkdown content={question?.text ?? 'Noi dung cau hoi'} />
+                <QuizQuestionMarkdown content={question?.text ?? 'Nội dung câu hỏi'} />
               </div>
 
               {answer.is_correct ? (
                 <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
-                  Ban da tra loi dung: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
+                  Bạn đã trả lời đúng: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
                 </div>
               ) : (
                 <>
                   <div className="rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2.5 text-sm text-red-100">
-                    Ban da chon: <span style={{ fontWeight: 700 }}>{selectedOptionText}</span>
+                    Bạn đã chọn: <span style={{ fontWeight: 700 }}>{selectedOptionText}</span>
                   </div>
                   <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
-                    Dap an dung: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
+                    Đáp án đúng: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
                   </div>
                 </>
               )}
@@ -817,7 +832,7 @@ export function QuizResultDisplay({
               {answer.explanation && (
                 <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
-                    <Lightbulb size={13} />Giai thich
+                    <Lightbulb size={13} />Giải thích
                   </div>
                   <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
                 </div>
@@ -836,7 +851,7 @@ export function QuizResultDisplay({
             style={{ fontWeight: 600 }}
           >
             <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
-            {isRegenerating ? 'Dang tao lai quiz...' : 'Tao lai Quiz moi'}
+            {isRegenerating ? 'Đang tạo lại quiz...' : 'Tạo lại Quiz mới'}
           </button>
         </span>
       </div>
@@ -847,14 +862,14 @@ export function QuizResultDisplay({
           className="flex-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2.5 text-sm"
           style={{ fontWeight: 600 }}
         >
-          Lam lai quiz
+          Làm lại quiz
         </button>
         <button
           onClick={onBackToTheory}
           className="flex-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2.5 text-sm"
           style={{ fontWeight: 600 }}
         >
-          Quay lai ly thuyet
+          Quay lại lý thuyết
         </button>
       </div>
     </div>
@@ -863,7 +878,7 @@ export function QuizResultDisplay({
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-violet-300 prose-headings:text-white prose-code:text-cyan-300 prose-a:text-cyan-300 prose-a:no-underline hover:prose-a:underline">
+    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-cyan-300 prose-headings:text-white prose-code:text-cyan-300 prose-a:text-cyan-300 prose-a:no-underline hover:prose-a:underline">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeHighlight]}
@@ -973,10 +988,10 @@ export default function LearningWorkspace() {
   const hasRegenerateCooldown = quizRegenerateRetryAfterSeconds > 0;
   const canRegenerate = isQuizSubmitted && !hasRegenerateCooldown;
   const regenerateTooltip = !isQuizSubmitted
-    ? 'Vui long nop bai de co the tao de moi'
+    ? 'Vui lòng nộp bài để có thể tạo đề mới'
     : hasRegenerateCooldown
-      ? `Ban da het luot tao trong 10 phut. Thu lai sau ${quizRegenerateRetryAfterSeconds} giay`
-      : 'Tao bo cau hoi moi';
+      ? `Bạn đã hết lượt tạo trong 10 phút. Thử lại sau ${quizRegenerateRetryAfterSeconds} giây`
+      : 'Tạo bộ câu hỏi mới';
   const isRegenerateDisabled = !canRegenerate || isQuizGenerating || isQuizSubmitting || isQuizLoading;
 
   const resetQuizSessionState = useCallback(() => {
@@ -1022,11 +1037,11 @@ export default function LearningWorkspace() {
           setLessonDetail(generatedDetail);
         } catch (error) {
           if (axios.isAxiosError(error)) {
-            setGenerationError(error.response?.data?.message ?? 'Khong the tao noi dung bai hoc luc nay.');
+            setGenerationError(error.response?.data?.message ?? 'Không thể tạo nội dung bài học lúc này.');
           } else if (error instanceof Error) {
             setGenerationError(error.message);
           } else {
-            setGenerationError('Khong the tao noi dung bai hoc luc nay.');
+            setGenerationError('Không thể tạo nội dung bài học lúc này.');
           }
         } finally {
           setIsGeneratingContent(false);
@@ -1034,11 +1049,11 @@ export default function LearningWorkspace() {
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setLoadError(error.response?.data?.message ?? 'Khong the tai thong tin bai hoc.');
+        setLoadError(error.response?.data?.message ?? 'Không thể tải thông tin bài học.');
       } else if (error instanceof Error) {
         setLoadError(error.message);
       } else {
-        setLoadError('Khong the tai thong tin bai hoc.');
+        setLoadError('Không thể tải thông tin bài học.');
       }
     } finally {
       setIsLoading(false);
@@ -1122,18 +1137,18 @@ export default function LearningWorkspace() {
 
         const errorCode = error.response?.data?.detail?.code;
         if (errorCode === 'LLM_API_KEY_MISSING') {
-          setQuizLoadError('Quiz AI chua duoc cau hinh. Vui long thiet lap GEMINI_API_KEY trong backend/.env.');
+          setQuizLoadError('Quiz AI chưa được cấu hình. Vui lòng thiết lập GEMINI_API_KEY trong backend/.env.');
         } else if (errorCode === 'LLM_AUTH_FAILED') {
-          setQuizLoadError('Khoa API AI khong hop le. Vui long kiem tra GEMINI_API_KEY.');
+          setQuizLoadError('Khóa API AI không hợp lệ. Vui lòng kiểm tra GEMINI_API_KEY.');
         } else if (errorCode === 'LLM_QUOTA_EXCEEDED') {
-          setQuizLoadError('Da vuot han muc AI hien tai. Vui long kiem tra quota/billing Gemini hoac thu lai sau.');
+          setQuizLoadError('Đã vượt hạn mức AI hiện tại. Vui lòng kiểm tra quota/billing Gemini hoặc thử lại sau.');
         } else {
-          setQuizLoadError(error.response?.data?.message ?? 'Khong the tai quiz luc nay.');
+          setQuizLoadError(error.response?.data?.message ?? 'Không thể tải quiz lúc này.');
         }
       } else if (error instanceof Error) {
         setQuizLoadError(error.message);
       } else {
-        setQuizLoadError('Khong the tai quiz luc nay.');
+        setQuizLoadError('Không thể tải quiz lúc này.');
       }
     } finally {
       setIsQuizLoading(false);
@@ -1162,24 +1177,24 @@ export default function LearningWorkspace() {
       if (axios.isAxiosError(error)) {
         const errorCode = error.response?.data?.detail?.code;
         if (errorCode === 'LLM_QUOTA_EXCEEDED') {
-          setQuizGenerateError('Da vuot han muc AI hien tai. Vui long kiem tra quota/billing Gemini hoac thu lai sau.');
+          setQuizGenerateError('Đã vượt hạn mức AI hiện tại. Vui lòng kiểm tra quota/billing Gemini hoặc thử lại sau.');
         } else if (error.response?.status === 429) {
           const retryAfter = parseRetryAfterSeconds(error.response?.data?.detail?.retry_after_seconds);
           setQuizRegenerateRetryAfterSeconds(retryAfter);
           setQuizGenerateError(
             retryAfter
-              ? `Ban tao quiz qua nhanh. Vui long thu lai sau ${retryAfter} giay.`
-              : 'Ban tao quiz qua nhanh. Vui long thu lai sau it phut.'
+              ? `Bạn tạo quiz quá nhanh. Vui lòng thử lại sau ${retryAfter} giây.`
+              : 'Bạn tạo quiz quá nhanh. Vui lòng thử lại sau it phut.'
           );
         } else if (error.response?.status === 403 || error.response?.data?.detail?.code === 'QUIZ_REGENERATION_REQUIRES_SUBMISSION') {
-          setQuizGenerateError(error.response?.data?.message ?? 'Vui long nop bai de co the tao de moi.');
+          setQuizGenerateError(error.response?.data?.message ?? 'Vui lòng nộp bài để có thể tạo đề mới.');
         } else {
-          setQuizGenerateError(error.response?.data?.message ?? 'Khong the tao bo quiz luc nay.');
+          setQuizGenerateError(error.response?.data?.message ?? 'Không thể tạo bộ quiz lúc này.');
         }
       } else if (error instanceof Error) {
         setQuizGenerateError(error.message);
       } else {
-        setQuizGenerateError('Khong the tao bo quiz luc nay.');
+        setQuizGenerateError('Không thể tạo bộ quiz lúc này.');
       }
     } finally {
       setIsQuizGenerating(false);
@@ -1218,11 +1233,11 @@ export default function LearningWorkspace() {
       setLessonDetail(generatedDetail);
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setGenerationError(error.response?.data?.message ?? 'Khong the tao noi dung bai hoc luc nay.');
+        setGenerationError(error.response?.data?.message ?? 'Không thể tạo nội dung bài học lúc này.');
       } else if (error instanceof Error) {
         setGenerationError(error.message);
       } else {
-        setGenerationError('Khong the tao noi dung bai hoc luc nay.');
+        setGenerationError('Không thể tạo nội dung bài học lúc này.');
       }
     } finally {
       setIsGeneratingContent(false);
@@ -1275,13 +1290,13 @@ export default function LearningWorkspace() {
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 429) {
         const retryAfter = error.response?.data?.detail?.retry_after_seconds ?? '?';
-        setQuizSubmitError(`Ban da sai hoi nhieu, hay thu lai sau ${retryAfter} giay.`);
+        setQuizSubmitError(`Bạn đã sai hơi nhiều, hãy thử lại sau ${retryAfter} giây.`);
       } else if (axios.isAxiosError(error)) {
-        setQuizSubmitError(error.response?.data?.message ?? 'Khong the nop quiz luc nay.');
+        setQuizSubmitError(error.response?.data?.message ?? 'Không thể nộp quiz lúc này.');
       } else if (error instanceof Error) {
         setQuizSubmitError(error.message);
       } else {
-        setQuizSubmitError('Khong the nop quiz luc nay.');
+        setQuizSubmitError('Không thể nộp quiz lúc này.');
       }
     } finally {
       setIsQuizSubmitting(false);
@@ -1322,11 +1337,11 @@ export default function LearningWorkspace() {
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setFlashcardError(error.response?.data?.message ?? 'Khong the ghi nhan flashcard luc nay.');
+        setFlashcardError(error.response?.data?.message ?? 'Không thể ghi nhan flashcard luc nay.');
       } else if (error instanceof Error) {
         setFlashcardError(error.message);
       } else {
-        setFlashcardError('Khong the ghi nhan flashcard luc nay.');
+        setFlashcardError('Không thể ghi nhan flashcard luc nay.');
       }
     } finally {
       setIsMarkingFlashcardComplete(false);
@@ -1370,7 +1385,7 @@ export default function LearningWorkspace() {
       if (error instanceof Error) {
         setQaError(error.message);
       } else {
-        setQaError('Khong the gui cau hoi luc nay.');
+        setQaError('Không thể gửi câu hỏi lúc này.');
       }
     } finally {
       setIsQASending(false);
@@ -1419,9 +1434,9 @@ export default function LearningWorkspace() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <BookOpen size={48} className="text-zinc-700" />
-        <p className="text-zinc-400">Chua co tai lieu nao duoc chon</p>
-        <button onClick={() => navigate('/create')} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm">
-          Tao tai lieu moi
+        <p className="text-zinc-400">Chưa có tài liệu nào được chọn</p>
+        <button onClick={() => navigate('/create')} className="px-4 py-2 rounded-xl bg-cyan-600 text-white text-sm">
+          Tạo tài liệu mới
         </button>
       </div>
     );
@@ -1439,9 +1454,9 @@ export default function LearningWorkspace() {
             </div>
           ))}
           <div className="flex items-center gap-3 py-4">
-            <Loader2 size={20} className="text-violet-400 animate-spin" />
+            <Loader2 size={20} className="text-cyan-400 animate-spin" />
             <span className="text-zinc-300 text-sm" style={{ fontWeight: 600 }}>
-              AI dang bien soan noi dung chi tiet cho bai hoc nay, vui long doi...
+              AI đang biên soạn nội dung chi tiết cho bài học này, vui lòng đợi...
             </span>
           </div>
         </div>
@@ -1456,7 +1471,7 @@ export default function LearningWorkspace() {
             onClick={() => void retryGeneration()}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-100"
           >
-            <Loader2 size={12} />Thu tao lai
+            <Loader2 size={12} />Thử tạo lại
           </button>
         </div>
       );
@@ -1470,7 +1485,7 @@ export default function LearningWorkspace() {
               <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
                 <BookOpen size={13} className="text-blue-400" />
               </div>
-              <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Noi dung bai hoc</h2>
+              <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Nội dung bài học</h2>
             </div>
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
               <MarkdownContent content={lessonDetail.contentMarkdown} />
@@ -1483,12 +1498,12 @@ export default function LearningWorkspace() {
     if (!loadError) {
       return (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
-          <p className="text-sm text-zinc-300">Noi dung bai hoc dang trong trang thai ban nhap.</p>
+          <p className="text-sm text-zinc-300">Nội dung bài học đang trong trạng thái bản nháp.</p>
           <button
             onClick={() => void retryGeneration()}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-500 px-3 py-2 text-xs text-white"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs text-white"
           >
-            <Zap size={12} />Tao noi dung ngay
+            <Zap size={12} />Tạo nội dung ngày
           </button>
         </div>
       );
@@ -1500,9 +1515,9 @@ export default function LearningWorkspace() {
   const renderQuizPanel = () => {
     if (isQuizLoading) {
       return (
-        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-5 flex items-center gap-3">
-          <Loader2 size={18} className="text-violet-300 animate-spin" />
-          <p className="text-sm text-violet-200">Dang tai du lieu quiz cho bai hoc nay...</p>
+        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-5 flex items-center gap-3">
+          <Loader2 size={18} className="text-cyan-300 animate-spin" />
+          <p className="text-sm text-cyan-200">Đang tải dữ liệu quiz cho bài học này...</p>
         </div>
       );
     }
@@ -1511,10 +1526,10 @@ export default function LearningWorkspace() {
       return (
         <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-6 space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-500/20 px-3 py-1.5 text-xs text-cyan-100" style={{ fontWeight: 700 }}>
-            <Loader2 size={13} className="animate-spin" />AI dang tao bo 10 cau hoi...
+            <Loader2 size={13} className="animate-spin" />AI đang tạo bộ 10 câu hỏi...
           </div>
           <p className="text-sm text-cyan-100/90">
-            Qua trinh sinh quiz co the mat khoang 10-20 giay. Vui long doi trong giay lat.
+            Qua trinh sinh quiz co thẻ mat khoang 10-20 giây. Vui lòng đợi trong giây lát.
           </p>
           <div className="space-y-2">
             {[...Array(3)].map((_, index) => (
@@ -1533,7 +1548,7 @@ export default function LearningWorkspace() {
             onClick={() => lessonId && void loadQuiz(lessonId)}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-100"
           >
-            <Loader2 size={12} />Thu tai quiz
+            <Loader2 size={12} />Thử tải quiz
           </button>
         </div>
       );
@@ -1543,7 +1558,7 @@ export default function LearningWorkspace() {
       return (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-5 py-6">
           <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Chưa có bài trắc nghiệm</h3>
-          <p className="mt-2 text-sm text-zinc-300">Tạo bộ 10 câu hỏi tự động bằng AI để luyện tập ngay trên tài liệu này.</p>
+          <p className="mt-2 text-sm text-zinc-300">Tạo bộ 10 câu hỏi tự động bằng AI để luyện tập ngày trên tài liệu này.</p>
           <button
             onClick={() => void handleGenerateQuiz()}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-5 py-3 text-sm text-white"
@@ -1581,8 +1596,8 @@ export default function LearningWorkspace() {
     return (
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-zinc-400">Cau {quizState.currentIndex + 1}/{quizQuestions.length}</p>
-          <p className="text-xs text-cyan-300">Da chon {Object.keys(quizState.selectedAnswers).length} dap an</p>
+          <p className="text-sm text-zinc-400">Câu {quizState.currentIndex + 1}/{quizQuestions.length}</p>
+          <p className="text-xs text-cyan-300">Đã chọn {Object.keys(quizState.selectedAnswers).length} đáp án</p>
         </div>
 
         {isRegenerateDisabled && (
@@ -1600,7 +1615,7 @@ export default function LearningWorkspace() {
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-950/60 p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-indigo-500/40 bg-indigo-500/15 px-2.5 py-1 text-xs text-indigo-200" style={{ fontWeight: 600 }}>
+            <span className={`rounded-full border px-2.5 py-1 text-xs ${getQuizTypeStyle(currentQuizQuestion?.type)}`} style={{ fontWeight: 600 }}>
               {getQuizTypeLabel(currentQuizQuestion?.type)}
             </span>
             <span
@@ -1641,8 +1656,8 @@ export default function LearningWorkspace() {
           style={{ fontWeight: 600 }}
         >
           {quizState.currentIndex < quizQuestions.length - 1
-            ? 'Cau tiep theo'
-            : (isQuizSubmitting ? 'Dang nop quiz...' : 'Nop quiz')}
+            ? 'Câu tiếp theo'
+            : (isQuizSubmitting ? 'Đang nộp quiz...' : 'Nộp quiz')}
         </button>
 
         {quizSubmitError && (
@@ -1657,9 +1672,9 @@ export default function LearningWorkspace() {
   const renderFlashcardPanel = () => {
     if (!lessonDetail?.contentMarkdown && (isLoading || isGeneratingContent)) {
       return (
-        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-5 flex items-center gap-3">
-          <Loader2 size={18} className="text-violet-300 animate-spin" />
-          <p className="text-sm text-violet-200">Dang chuan bi noi dung de tao flashcard...</p>
+        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-5 flex items-center gap-3">
+          <Loader2 size={18} className="text-cyan-300 animate-spin" />
+          <p className="text-sm text-cyan-200">Đang chuẩn bị nội dung để tạo flashcard...</p>
         </div>
       );
     }
@@ -1667,12 +1682,12 @@ export default function LearningWorkspace() {
     if (flashcards.length === 0) {
       return (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
-          <p className="text-sm text-zinc-300">Chua du thong tin de tao flashcard. Hay tao noi dung ly thuyet truoc.</p>
+          <p className="text-sm text-zinc-300">Chưa đủ thông tin để tạo flashcard. Hãy tạo nội dung lý thuyết trước.</p>
           <button
             onClick={() => setLearningTab('theory')}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-500 px-3 py-2 text-xs text-white"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs text-white"
           >
-            <BookOpen size={12} />Den tab Ly thuyet
+            <BookOpen size={12} />Đến tab Lý thuyết
           </button>
         </div>
       );
@@ -1681,15 +1696,15 @@ export default function LearningWorkspace() {
     return (
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-zinc-500">Tong {flashcards.length} the</span>
+          <span className="text-xs text-zinc-500">Tổng {flashcards.length} thẻ</span>
           {lessonDetail?.flashcardCompleted && (
             <span className="text-xs rounded-full px-2.5 py-1 border border-cyan-500/40 bg-cyan-500/15 text-cyan-300">
-              Flashcard da hoan thanh
+              Flashcard đã hoàn thành
             </span>
           )}
           {isMarkingFlashcardComplete && (
-            <span className="text-xs rounded-full px-2.5 py-1 border border-violet-500/40 bg-violet-500/15 text-violet-300 inline-flex items-center gap-1.5">
-              <Loader2 size={12} className="animate-spin" />Dang ghi nhan
+            <span className="text-xs rounded-full px-2.5 py-1 border border-cyan-500/40 bg-cyan-500/15 text-cyan-300 inline-flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" />Đang ghi nhận
             </span>
           )}
         </div>
@@ -1720,8 +1735,8 @@ export default function LearningWorkspace() {
           {qaMessages.length === 0 && !isQASending && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
-                <p className="text-zinc-200 text-sm" style={{ fontWeight: 600 }}>Hoi dap truc tiep voi tai lieu</p>
-                <p className="text-zinc-500 text-xs mt-1">Dat cau hoi va AI se chi tra loi dua tren noi dung tai lieu nay.</p>
+                <p className="text-zinc-200 text-sm" style={{ fontWeight: 600 }}>Hỏi đáp trực tiếp với tài liệu</p>
+                <p className="text-zinc-500 text-xs mt-1">Đặt câu hỏi và AI sẽ chỉ trả lời dựa trên nội dung tài liệu này.</p>
               </div>
             </div>
           )}
@@ -1773,7 +1788,7 @@ export default function LearningWorkspace() {
           {isQASending && (
             <div className="flex justify-start">
               <div className="rounded-2xl px-3.5 py-2.5 text-sm border bg-zinc-800 border-zinc-700 text-zinc-200 inline-flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />AI dang tra loi...
+                <Loader2 size={14} className="animate-spin" />AI đang trả lời...
               </div>
             </div>
           )}
@@ -1796,7 +1811,7 @@ export default function LearningWorkspace() {
             value={qaInput}
             onChange={(event) => setQaInput(event.target.value)}
             disabled={isQASending}
-            placeholder="Dat cau hoi ve tai lieu nay..."
+            placeholder="Đặt câu hỏi về tài liệu này..."
             className="flex-1 rounded-xl bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 disabled:opacity-60"
           />
           <button
@@ -1805,7 +1820,7 @@ export default function LearningWorkspace() {
             className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm text-white"
             style={{ fontWeight: 600 }}
           >
-            <Send size={14} />Gui
+            <Send size={14} />Gửi
           </button>
         </form>
       </div>
@@ -1818,23 +1833,23 @@ export default function LearningWorkspace() {
         <div className="flex-1 overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-zinc-950/90 backdrop-blur-sm border-b border-zinc-800">
             <div className="text-xs text-zinc-500">
-              <span className="text-violet-400">Learning Workspace</span>
+              <span className="text-cyan-400">Learning Workspace</span>
               <span className="mx-1">›</span>
-              <span>{lessonDetail?.title ?? 'Dang tai...'}</span>
+              <span>{lessonDetail?.title ?? 'Đang tải...'}</span>
             </div>
-            <span className="text-[11px] text-zinc-500">NotebookLM Mini</span>
+            <span className="text-[11px] text-zinc-500">NEXL</span>
           </div>
 
           <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
             {/* Lesson title */}
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
               <h1 className="text-3xl text-white" style={{ fontWeight: 700 }}>
-                {lessonDetail?.title ?? 'Bai hoc'}
+                {lessonDetail?.title ?? 'Bài học'}
               </h1>
               <p className="text-zinc-500 text-sm mt-1">
                 {lessonDetail
-                  ? 'Tai lieu dang duoc hoc theo che do NotebookLM Mini.'
-                  : 'Dang tai thong tin bai hoc...'}
+                  ? 'Tài liệu đang được học theo chế độ NEXL.'
+                  : 'Đang tải thông tin bài học...'}
               </p>
             </motion.div>
 
@@ -1845,7 +1860,7 @@ export default function LearningWorkspace() {
                   onClick={() => lessonId && void loadLesson(lessonId)}
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs text-zinc-100"
                 >
-                  <Loader2 size={12} />Thu tai lai
+                  <Loader2 size={12} />Thử tải lại
                 </button>
               </div>
             )}
@@ -1854,10 +1869,10 @@ export default function LearningWorkspace() {
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1.5 sm:p-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <button
                     onClick={() => setLearningTab('theory')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'theory' ? 'bg-violet-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'theory' ? 'bg-cyan-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
                     style={{ fontWeight: 600 }}
                   >
-                    <BookOpen size={15} />Ly thuyet
+                    <BookOpen size={15} />Lý thuyết
                   </button>
                   <button
                     onClick={() => setLearningTab('quiz')}
@@ -1869,7 +1884,7 @@ export default function LearningWorkspace() {
                   </button>
                   <button
                     onClick={() => setLearningTab('flashcard')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'flashcard' ? 'bg-indigo-600 text-white' : lessonDetail.flashcardCompleted ? 'text-cyan-300 hover:bg-cyan-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'flashcard' ? 'bg-cyan-600 text-white' : lessonDetail.flashcardCompleted ? 'text-cyan-300 hover:bg-cyan-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
                     style={{ fontWeight: 600 }}
                   >
                     <CreditCard size={15} />Flashcard
@@ -1880,7 +1895,7 @@ export default function LearningWorkspace() {
                     className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'qa' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
                     style={{ fontWeight: 600 }}
                   >
-                    <MessageSquare size={15} />Hoi dap
+                    <MessageSquare size={15} />Hỏi đáp
                   </button>
                 </div>
               )}
@@ -1901,7 +1916,7 @@ export default function LearningWorkspace() {
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${
                   isCompleted
                     ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 cursor-default'
-                    : 'bg-violet-600 hover:bg-violet-500 text-white'
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-white'
                 }`}
                 style={{ fontWeight: 600 }}
               >
@@ -1958,9 +1973,9 @@ export default function LearningWorkspace() {
               <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-4">
                 <ListChecks size={22} className="text-cyan-300" />
               </div>
-              <h3 className="text-xl text-white" style={{ fontWeight: 700 }}>Hoan thanh bai hoc roi, lam quiz tiep nhe?</h3>
+              <h3 className="text-xl text-white" style={{ fontWeight: 700 }}>Hoàn thành bài học rồi, làm quiz tiếp nhé?</h3>
               <p className="text-sm text-zinc-400 mt-2">
-                Vuot quiz de nhan them EXP va bat icon Quiz Passed cho bai hoc nay.
+                Vượt quiz để nhận thêm EXP và bật icon Quiz Passed cho bài học này.
               </p>
 
               <div className="mt-6 grid grid-cols-2 gap-3">
@@ -1969,7 +1984,7 @@ export default function LearningWorkspace() {
                   className="rounded-xl px-4 py-2.5 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
                   style={{ fontWeight: 600 }}
                 >
-                  De sau
+                  Để sau
                 </button>
                 <button
                   onClick={() => {
@@ -1979,7 +1994,7 @@ export default function LearningWorkspace() {
                   className="rounded-xl px-4 py-2.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white"
                   style={{ fontWeight: 600 }}
                 >
-                  Lam ngay
+                  Làm ngày
                 </button>
               </div>
             </motion.div>
@@ -2004,9 +2019,9 @@ export default function LearningWorkspace() {
               <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mb-4">
                 <RefreshCw size={20} className="text-amber-300" />
               </div>
-              <h3 className="text-xl text-white" style={{ fontWeight: 700 }}>Tao bo cau hoi moi?</h3>
+              <h3 className="text-xl text-white" style={{ fontWeight: 700 }}>Tạo bộ câu hỏi mới?</h3>
               <p className="text-sm text-zinc-300 mt-2">
-                Ban co chac chan muon tao bo cau hoi moi? Toan bo ket qua cua bai lam hien tai se bi xoa.
+                Bạn có chắc chắn muốn tạo bộ câu hỏi mới? Toàn bộ kết quả của bài làm hiện tại sẽ bị xóa.
               </p>
 
               <div className="mt-6 grid grid-cols-2 gap-3">
@@ -2015,7 +2030,7 @@ export default function LearningWorkspace() {
                   className="rounded-xl px-4 py-2.5 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
                   style={{ fontWeight: 600 }}
                 >
-                  Huy
+                  Hủy
                 </button>
                 <button
                   onClick={handleConfirmRegenerateQuiz}
@@ -2024,7 +2039,7 @@ export default function LearningWorkspace() {
                   style={{ fontWeight: 600 }}
                 >
                   <RefreshCw size={14} className={isQuizGenerating ? 'animate-spin' : ''} />
-                  Xac nhan tao lai
+                  Xác nhận tạo lại
                 </button>
               </div>
             </motion.div>
@@ -2034,3 +2049,11 @@ export default function LearningWorkspace() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

@@ -3,13 +3,15 @@ import { NavLink, Outlet, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, BookOpen, Trophy,
-  Zap, Flame, ChevronRight, Menu, Sparkles, Target,
-  Settings, Bell, Star, LogOut, MessageSquare, FilePlus2, LibraryBig
+  Zap, Flame, ChevronRight, Menu, Target,
+  Settings, Bell, Star, LogOut, MessageSquare, FilePlus2, LibraryBig, Sun, Moon
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { UserStats } from '../lib/types';
 import { getMyProfile, logout } from '../../api/auth';
 import { getAccessToken } from '../../api/client';
+import nexlWordmarkDark from '../../assets/branding/nexl-wordmark-dark.svg';
+import nexlWordmarkLight from '../../assets/branding/nexl-wordmark-light.svg';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tổng Quan', end: true },
@@ -24,13 +26,37 @@ export interface LayoutProps {
   activeRoadmapLabel?: string;
 }
 
+type ThemeMode = 'light' | 'dark';
+const THEME_STORAGE_KEY = 'nexl-theme-mode';
+
+function resolveInitialTheme(): ThemeMode {
+  if (typeof window === 'undefined') {
+    return 'dark';
+  }
+
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark') {
+    return stored;
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const app = useApp();
   const user = userData ?? app.user;
   const { resetSessionState, setUserFromAuth } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(resolveInitialTheme);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', themeMode === 'dark');
+    root.setAttribute('data-theme', themeMode);
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -71,7 +97,17 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
 
   const progress = Math.min(100, Math.max(0, user.totalDays));
   const expProgress = Math.round((user.exp / user.expToNextLevel) * 100);
-  const roadmapLabel = activeRoadmapLabel ?? 'NotebookLM Mini Workspace';
+  const roadmapLabel = activeRoadmapLabel ?? 'NEXL Workspace';
+  const isDarkTheme = themeMode === 'dark';
+  const logoWordmark = isDarkTheme ? nexlWordmarkDark : nexlWordmarkLight;
+
+  const topbarButtonClass = isDarkTheme
+    ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors text-sm'
+    : 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-200 transition-colors text-sm';
+
+  const toggleThemeMode = () => {
+    setThemeMode(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   return (
     <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
@@ -79,25 +115,31 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? 260 : 72 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
         className="relative flex flex-col bg-zinc-900 border-r border-zinc-800 z-20 flex-shrink-0"
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-zinc-800">
-          <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0">
-            <Sparkles size={18} className="text-white" />
-          </div>
           <AnimatePresence>
             {sidebarOpen && (
-              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
-                <p className="text-white text-sm" style={{ fontWeight: 700 }}>LearnAI</p>
-                <p className="text-zinc-500 text-xs">Personal Tutor</p>
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center flex-1 min-w-0"
+              >
+                <img
+                  src={logoWordmark}
+                  alt="NEXL"
+                  className={`h-8 w-auto max-w-[156px] object-contain ${isDarkTheme ? 'drop-shadow-[0_0_10px_rgba(125,211,252,0.25)]' : ''}`}
+                />
               </motion.div>
             )}
           </AnimatePresence>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            className={`${sidebarOpen ? 'ml-auto' : 'mx-auto'} p-1.5 rounded-lg transition-colors ${isDarkTheme ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
           >
             {sidebarOpen ? <ChevronRight size={16} /> : <Menu size={16} />}
           </button>
@@ -108,12 +150,12 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
           {sidebarOpen && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3 border-b border-zinc-800">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-violet-700 flex items-center justify-center text-sm flex-shrink-0" style={{ fontWeight: 700 }}>
+                <div className="w-9 h-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm flex-shrink-0" style={{ fontWeight: 700 }}>
                   {user.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate" style={{ fontWeight: 600 }}>{user.name}</p>
-                  <p className="text-xs text-violet-400">Cấp {user.level} · {user.exp} EXP</p>
+                  <p className="text-xs text-cyan-400">Cấp {user.level} · {user.exp} EXP</p>
                 </div>
               </div>
               {/* EXP Bar */}
@@ -124,7 +166,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
                 <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }} animate={{ width: `${expProgress}%` }}
-                    className="h-full bg-violet-500 rounded-full"
+                    className="h-full bg-cyan-500 rounded-full"
                   />
                 </div>
               </div>
@@ -151,34 +193,35 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group relative overflow-hidden ${
-                  isActive
-                    ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`
+                `${sidebarOpen ? 'flex items-center gap-3 px-3 py-2.5 text-sm' : 'mx-auto flex h-10 w-10 items-center justify-center p-0'} rounded-xl transition-all duration-200 group relative overflow-hidden border border-transparent ${isActive
+                  ? (isDarkTheme
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                    : 'bg-cyan-100 text-cyan-700 border-cyan-200')
+                  : (isDarkTheme
+                    ? 'text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-700/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-200')}`
               }
             >
               {({ isActive }) => (
                 <>
-                  {isActive && (
+                  {isActive && sidebarOpen && (
                     <motion.div
                       layoutId="activeNav"
-                      className="absolute inset-0 bg-violet-500/10 rounded-xl"
+                      className="absolute inset-0 bg-cyan-500/10 rounded-xl"
                     />
                   )}
-                  <Icon size={18} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-violet-400' : ''}`} />
-                  <AnimatePresence>
-                    {sidebarOpen && (
-                      <motion.span
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="relative z-10 truncate" style={{ fontWeight: isActive ? 600 : 400 }}
-                      >
-                        {label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {isActive && !sidebarOpen && (
+                    <span className="absolute inset-0 rounded-xl bg-cyan-500/10" />
+                  )}
+                  <Icon size={18} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-cyan-400' : ''}`} />
+                  <span
+                    className={`relative z-10 truncate transition-all duration-200 ${sidebarOpen ? 'max-w-[140px] opacity-100' : 'max-w-0 opacity-0 pointer-events-none'}`}
+                    style={{ fontWeight: isActive ? 600 : 400 }}
+                  >
+                    {label}
+                  </span>
                   {isActive && sidebarOpen && (
-                    <motion.div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0 relative z-10" />
+                    <motion.div className={`ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0 relative z-10 ${isDarkTheme ? 'bg-cyan-400' : 'bg-cyan-600'}`} />
                   )}
                 </>
               )}
@@ -192,15 +235,14 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
             { icon: Bell, label: 'Thông Báo' },
             { icon: Settings, label: 'Cài Đặt' },
           ].map(({ icon: Icon, label }) => (
-            <button key={label} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors">
+            <button
+              key={label}
+              className={`${sidebarOpen ? 'w-full flex items-center gap-3 px-3 py-2.5 text-sm' : 'mx-auto flex h-10 w-10 items-center justify-center p-0'} rounded-xl transition-colors ${isDarkTheme ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+            >
               <Icon size={18} className="flex-shrink-0" />
-              <AnimatePresence>
-                {sidebarOpen && (
-                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    {label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              <span className={`truncate transition-all duration-200 ${sidebarOpen ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0 pointer-events-none'}`}>
+                {label}
+              </span>
             </button>
           ))}
         </div>
@@ -211,27 +253,36 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
         {/* Top bar */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/create')} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-sm text-zinc-300">
-              <Target size={14} className="text-violet-400" />
+            <button onClick={() => navigate('/create')} className={topbarButtonClass}>
+              <Target size={14} className="text-cyan-400" />
               <span className="max-w-xs truncate">{roadmapLabel}</span>
             </button>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleThemeMode}
+              className={topbarButtonClass}
+              aria-label={isDarkTheme ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+              title={isDarkTheme ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+            >
+              {isDarkTheme ? <Sun size={14} /> : <Moon size={14} />}
+              <span>{isDarkTheme ? 'Light mode' : 'Dark mode'}</span>
+            </button>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm">
               <Flame size={14} />
               <span style={{ fontWeight: 700 }}>{user.streak}</span>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 text-sm">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm">
               <Zap size={14} />
               <span style={{ fontWeight: 700 }}>{user.exp} EXP</span>
             </div>
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm"
+              className={`${topbarButtonClass} disabled:opacity-60 disabled:cursor-not-allowed`}
             >
               <LogOut size={14} />
-              {isLoggingOut ? 'Dang xuat...' : 'Dang xuat'}
+              {isLoggingOut ? 'Đăng xuất...' : 'Đăng xuất'}
             </button>
           </div>
         </div>
@@ -244,3 +295,5 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
     </div>
   );
 }
+
+

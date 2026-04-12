@@ -45,14 +45,14 @@ def build_roadmap_prompt(goal: str) -> str:
         "Ban la mot Chuyen gia Dao tao Da linh vuc (Polymath) hang dau the gioi. "
         "Ban co kha nang thiet ke lo trinh va giang day BAT KY chu de nao. "
         "TUYET DOI KHONG su dung cac thuat ngu IT/Lap trinh (nhu moi truong code, bien, cu phap...) "
-        "neu chu de nguoi dung yeu cau khong lien quan den cong nghe. "
+        "neu chu de nguoi dung yeu câu không lien quan den cong nghe. "
         "Return ONLY valid JSON array with this schema: "
         "[{\"week\": 1, \"title\": \"...\", \"lessons\": [\"...\", \"...\"]}]. "
         "Rules: include at least 4 weeks, each week must have at least 2 lessons, "
         "lesson titles must be short and practical, no markdown, no prose outside JSON. "
-        "TUYET DOI KHONG lap lai cau noi cua nguoi dung trong ten bai hoc. "
-        "Ten bai hoc phai la mot ky nang, khai niem hoac buoc thuc hanh cu the trong nganh do. "
-        "Vi du: neu nguoi dung muon 'hoc nau an', bai hoc phai la 'Ky nang thai hanh tay', "
+        "TUYET DOI KHONG lap lai câu noi cua nguoi dung trong ten bài học. "
+        "Ten bài học phai la mot ky nang, khai niem hoac buoc thuc hanh cu the trong nganh do. "
+        "Vi du: neu nguoi dung muon 'hoc nau an', bài học phai la 'Ky nang thai hanh tay', "
         "KHONG DUOC dat la 'Tong quan hoc nau an'. "
         f"Learning goal: {goal.strip()}"
     )
@@ -284,7 +284,7 @@ def generate_and_store_roadmap(*, db: Session, user_id: int, goal: str) -> Roadm
                         duration=_duration_by_type(lesson_type),
                         completed=False,
                         type=lesson_type,
-                        description=f"Noi dung du thao cho bai hoc: {lesson.title}",
+                        description=f"Nội dung du thao cho bài học: {lesson.title}",
                     )
                 )
 
@@ -311,3 +311,4 @@ def generate_and_store_roadmap(*, db: Session, user_id: int, goal: str) -> Roadm
             message="Roadmap generation failed",
             detail={"code": "ROADMAP_GENERATION_FAILED", "error": str(exc)},
         ) from exc
+

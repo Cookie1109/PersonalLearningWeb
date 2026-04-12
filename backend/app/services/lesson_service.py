@@ -120,7 +120,7 @@ def _raise_theory_ai_failure(*, scope: str, exc: Exception) -> None:
 def _build_unique_document_title(*, db: Session, user_id: int, preferred_title: str) -> str:
     base_title = _collapse_whitespace(preferred_title.strip())[:255]
     if not base_title:
-        base_title = f"Tai lieu moi - {datetime.now(UTC).strftime('%d/%m/%Y')}"
+        base_title = f"Tài liệu moi - {datetime.now(UTC).strftime('%d/%m/%Y')}"
 
     candidate = base_title
     counter = 2
@@ -474,9 +474,9 @@ def _is_markdown_truncated(markdown: str, *, finish_reason: str | None) -> bool:
 
 def _build_theory_continuation_prompt(*, partial_markdown: str) -> str:
     return (
-        "Noi dung ly thuyet ban vua tra loi dang bi cat giua chung. "
-        "Hay viet tiep PHAN CON LAI bang Markdown, KHONG lap lai noi dung da co, "
-        "giu nguyen cau truc heading/list/code block, va ket thuc day du.\n\n"
+        "Nội dung lý thuyết ban vua tra loi đang bi cat giua chung. "
+        "Hay viet tiep PHAN CON LAI bang Markdown, KHONG lap lai nội dung da co, "
+        "giu nguyen câu truc heading/list/code block, va ket thuc day du.\n\n"
         "[NOI DUNG DA CO]\n"
         f"{partial_markdown[-7000:]}"
     )
@@ -886,3 +886,4 @@ def complete_lesson_for_user(
     except Exception as exc:
         db.rollback()
         raise AppException(status_code=409, message="Lesson completion failed", detail={"code": "LESSON_COMPLETE_FAILED", "error": str(exc)}) from exc
+

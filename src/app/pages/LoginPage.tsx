@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (consumeAuthExpiredNotice()) {
-      toast.error('Phien dang nhap da het han, vui long dang nhap lai');
+      toast.error('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại');
     }
   }, []);
 
@@ -39,11 +39,11 @@ export default function LoginPage() {
       navigate('/', { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message ?? 'Dang nhap that bai. Vui long thu lai.');
+        setError(err.response?.data?.message ?? 'Đăng nhập thất bại. Vui lòng thử lại.');
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Dang nhap that bai. Vui long thu lai.');
+        setError('Đăng nhập thất bại. Vui lòng thử lại.');
       }
     } finally {
       setIsSubmitting(false);
@@ -53,8 +53,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-7">
-        <h1 className="text-2xl" style={{ fontWeight: 700 }}>Dang nhap</h1>
-        <p className="text-zinc-500 text-sm mt-1">Truy cap khong gian hoc tap cua ban</p>
+        <h1 className="text-2xl" style={{ fontWeight: 700 }}>Đăng nhập</h1>
+        <p className="text-zinc-500 text-sm mt-1">Truy cập không gian học tập của bạn</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
@@ -64,19 +64,19 @@ export default function LoginPage() {
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-violet-500/70"
+              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-cyan-500/70"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-300 mb-1">Mat khau</label>
+            <label className="block text-sm text-zinc-300 mb-1">Mật khẩu</label>
             <input
               type="password"
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-violet-500/70"
+              className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm outline-none focus:border-cyan-500/70"
               placeholder="********"
             />
           </div>
@@ -90,16 +90,16 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm"
+            className="w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm"
             style={{ fontWeight: 600 }}
           >
-            {isSubmitting ? 'Dang dang nhap...' : 'Dang nhap'}
+            {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>
 
           <p className="text-sm text-zinc-400 text-center">
-            Chua co tai khoan?{' '}
-            <Link to="/register" className="text-violet-400 hover:text-violet-300">
-              Dang ky ngay
+            Chưa có tài khoản?{' '}
+            <Link to="/register" className="text-cyan-500 hover:text-cyan-400">
+              Đăng ký ngay
             </Link>
           </p>
         </form>
@@ -107,3 +107,7 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+
+

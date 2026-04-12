@@ -23,9 +23,9 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: 'assistant-welcome',
   role: 'assistant',
   content:
-    '## DocsShare Assistant\n\nXin chao! Minh la **Tro ly hoc tap IT**.\n\nBan co the hoi ve lap trinh, bai tap, hoac xin tu van lo trinh hoc. Minh se tra loi bang Markdown kem code neu can.',
+    '## DocsShare Assistant\n\nXin chào! Mình là **Trợ lý học tập IT**.\n\nBạn có thể hỏi về lập trình, bài tập, hoặc xin tư vấn lộ trình học. Mình sẽ trả lời bằng Markdown kèm code nếu cần.',
   rawContent:
-    '## DocsShare Assistant\n\nXin chao! Minh la **Tro ly hoc tap IT**.\n\nBan co the hoi ve lap trinh, bai tap, hoac xin tu van lo trinh hoc. Minh se tra loi bang Markdown kem code neu can.',
+    '## DocsShare Assistant\n\nXin chào! Mình là **Trợ lý học tập IT**.\n\nBạn có thể hỏi về lập trình, bài tập, hoặc xin tư vấn lộ trình học. Mình sẽ trả lời bằng Markdown kèm code nếu cần.',
 };
 
 function parseAssistantReply(rawContent: string): Pick<ChatMessage, 'content' | 'rawContent' | 'suggestedRoadmapTopic'> {
@@ -139,7 +139,7 @@ export default function ChatPage() {
         if (err instanceof Error) {
           setError(err.message);
         } else {
-          setError('Khong the tai lich su chat. Vui long thu lai.');
+          setError('Không thể tải lịch sử chat. Vui lòng thử lại.');
         }
       } finally {
         if (isMounted) {
@@ -194,7 +194,7 @@ export default function ChatPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Khong the ket noi tro ly AI luc nay. Vui long thu lai.');
+        setError('Không thể kết nối trợ lý AI lúc này. Vui lòng thử lại.');
       }
     } finally {
       setIsLoading(false);
@@ -213,7 +213,7 @@ export default function ChatPage() {
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-5 flex-1 flex flex-col">
         <header className="mb-4">
           <h1 className="text-xl sm:text-2xl" style={{ fontWeight: 700 }}>DocsShare Assistant</h1>
-          <p className="text-sm text-zinc-500 mt-1">Tro ly AI tu van hoc IT, ho tro giai bai tap va giai thich code.</p>
+          <p className="text-sm text-zinc-500 mt-1">Trợ lý AI tư vấn học IT, hỗ trợ giải bài tập và giải thích code.</p>
         </header>
 
         <div className="flex-1 min-h-0 rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden flex flex-col">
@@ -255,7 +255,7 @@ export default function ChatPage() {
           {latestAssistantSuggestion && (
             <div className="mx-3 sm:mx-5 mb-3 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3">
               <p className="text-sm text-amber-100" style={{ fontWeight: 600 }}>
-                Ban co muon AI tao lo trinh hoc {latestAssistantSuggestion} ngay khong?
+                Bạn có muốn AI tạo lộ trình học {latestAssistantSuggestion} ngày không?
               </p>
               <button
                 type="button"
@@ -264,7 +264,7 @@ export default function ChatPage() {
                 style={{ fontWeight: 700 }}
               >
                 <Sparkles size={14} />
-                Tao lo trinh ngay
+                Tạo lộ trình ngày
               </button>
             </div>
           )}
@@ -280,7 +280,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={event => setInput(event.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Hoi DocsShare Assistant..."
+                placeholder="Hỏi DocsShare Assistant..."
                 rows={1}
                 className="flex-1 resize-none rounded-xl bg-zinc-800 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-violet-500/60"
               />
@@ -288,13 +288,13 @@ export default function ChatPage() {
                 type="submit"
                 disabled={!canSend}
                 className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Gui tin nhan"
+                aria-label="Gửi tin nhan"
               >
                 {isLoading ? <Loader2 size={16} className="animate-spin text-white" /> : <Send size={16} className="text-white" />}
               </button>
             </div>
             <p className="text-[11px] text-zinc-500 mt-2">
-              {isBootstrapping ? 'Dang tai lich su chat...' : 'Nhan Enter de gui, Shift+Enter de xuong dong.'}
+              {isBootstrapping ? 'Đang tải lịch sử chat...' : 'Nhấn Enter để gửi, Shift+Enter để xuống dòng.'}
             </p>
           </form>
         </div>
@@ -302,3 +302,6 @@ export default function ChatPage() {
     </div>
   );
 }
+
+
+
