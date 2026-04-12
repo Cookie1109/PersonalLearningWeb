@@ -145,8 +145,8 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
         </div>
 
         {/* User stats mini */}
-        <AnimatePresence>
-          {sidebarOpen && (
+        <AnimatePresence mode="wait">
+          {sidebarOpen ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3 border-b border-zinc-800">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-9 h-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm flex-shrink-0" style={{ fontWeight: 700 }}>
@@ -154,7 +154,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate" style={{ fontWeight: 600 }}>{user.name}</p>
-                  <p className="text-xs text-cyan-400">Cấp {user.level} · {user.exp} EXP</p>
+                  <p className="text-xs text-cyan-400">Cấp {user.level}</p>
                 </div>
               </div>
               {/* EXP Bar */}
@@ -180,6 +180,22 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
                   <Trophy size={12} /><span style={{ fontWeight: 600 }}>{progress}%</span>
                 </div>
               </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="sidebar-user-collapsed"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+              className="px-2 py-3 border-b border-zinc-800"
+            >
+              <div className="mx-auto h-9 w-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm" style={{ fontWeight: 700 }}>
+                {user.name.charAt(0)}
+              </div>
+              <p className="mt-2 text-center text-[10px] text-cyan-400 tracking-wide" style={{ fontWeight: 700 }}>
+                Lv.{user.level}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
