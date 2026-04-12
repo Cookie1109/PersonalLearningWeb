@@ -59,6 +59,8 @@ const QUIZ_TYPE_LABELS: Record<string, string> = {
   theory: 'Ly thuyet',
   fill_code: 'Dien code',
   find_bug: 'Tim loi',
+  general_choice: 'Trac nghiem',
+  fill_blank: 'Dien khuyet',
 };
 
 const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
@@ -1123,6 +1125,8 @@ export default function LearningWorkspace() {
           setQuizLoadError('Quiz AI chua duoc cau hinh. Vui long thiet lap GEMINI_API_KEY trong backend/.env.');
         } else if (errorCode === 'LLM_AUTH_FAILED') {
           setQuizLoadError('Khoa API AI khong hop le. Vui long kiem tra GEMINI_API_KEY.');
+        } else if (errorCode === 'LLM_QUOTA_EXCEEDED') {
+          setQuizLoadError('Da vuot han muc AI hien tai. Vui long kiem tra quota/billing Gemini hoac thu lai sau.');
         } else {
           setQuizLoadError(error.response?.data?.message ?? 'Khong the tai quiz luc nay.');
         }
@@ -1156,7 +1160,10 @@ export default function LearningWorkspace() {
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 429) {
+        const errorCode = error.response?.data?.detail?.code;
+        if (errorCode === 'LLM_QUOTA_EXCEEDED') {
+          setQuizGenerateError('Da vuot han muc AI hien tai. Vui long kiem tra quota/billing Gemini hoac thu lai sau.');
+        } else if (error.response?.status === 429) {
           const retryAfter = parseRetryAfterSeconds(error.response?.data?.detail?.retry_after_seconds);
           setQuizRegenerateRetryAfterSeconds(retryAfter);
           setQuizGenerateError(

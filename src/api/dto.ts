@@ -169,7 +169,7 @@ export interface QuizPublicQuestionDTO {
   question_id: string;
   text: string;
   options: QuizOptionDTO[];
-  type?: 'theory' | 'fill_code' | 'find_bug' | 'english' | null;
+  type?: 'theory' | 'fill_code' | 'find_bug' | 'general_choice' | 'fill_blank' | 'english' | null;
   difficulty?: 'Easy' | 'Medium' | 'Hard' | null;
 }
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,24 +17,53 @@ from app.schemas import QuizResponseDTO
 logger = logging.getLogger("app.quiz_generation")
 QUIZ_TOTAL_QUESTIONS = 10
 
+QUIZ_FALLBACK_MODELS = (
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+)
+
+DOMAIN_TECHNICAL = "technical"
+DOMAIN_GENERAL = "general"
+
+QUIZ_DISTRIBUTION_BY_DOMAIN: dict[str, dict[str, int]] = {
+    DOMAIN_TECHNICAL: {
+        "theory": 4,
+        "fill_code": 3,
+        "find_bug": 3,
+    },
+    DOMAIN_GENERAL: {
+        "general_choice": 7,
+        "fill_blank": 3,
+    },
+}
+
 QUIZ_SYSTEM_PROMPT = (
     "Ban la mot chuyen gia thiet ke chuong trinh giang day va Senior Backend Developer. "
     "Nhiem vu cua ban la doc DU LIEU DAU VAO va tao ra MOT BO TRAC NGHIEM DUNG 10 CAU HOI chuyen sau. "
     "Khong dung kien thuc ngoai le.\n\n"
-    "BAT BUOC PHAN BO 10 CAU HOI NHU SAU:\n"
-    "1. Ly thuyet (4 cau): Danh gia luong thuc thi, ban chat cong nghe.\n"
-    "2. Dien code (fill_code - 3 cau):\n"
-    "QUY TAC RENDER MARKDOWN TRONG JSON: KHI VIET CODE BLOCK (```javascript) BEN TRONG TRUONG question, BAN BAT BUOC PHAI SU DUNG KY TU NGAT DONG \\n THUC SU TRONG CHUOI JSON DE TACH BIET CAC DONG CODE. TUYET DOI KHONG VIET TOAN BO CODE BLOCK DINH LIEN TREN 1 DONG.\n"
-    "BAT BUOC CAU TRUC TRUONG \"question\" PHAI CO 2 PHAN: CAU HUONG DAN VA BLOCK CODE.\n"
-    "VI DU MAU CHUAN BAT BUOC LAM THEO:\n"
+    "BUOC 1: PHAN LOAI TAI LIEU\n"
+    "Hay doc tai lieu va xac dinh no thuoc linh vuc nao:\n"
+    "- NHOM A (IT & Lap trinh): Chua ma nguon, thuat toan, cong nghe web, database, API, framework...\n"
+    "- NHOM B (Phi ky thuat): Lich su, Ngon ngu, Kinh te, Khoa hoc xa hoi, Quan tri...\n\n"
+    "BUOC 2: RE NHANH CAU TRUC 10 CAU HOI\n"
+    "[NEU LA NHOM A - IT & LAP TRINH]:\n"
+    "- Bat buoc sinh DUNG 10 cau gom: 4 cau 'theory', 3 cau 'fill_code', 3 cau 'find_bug'.\n"
+    "- VOI fill_code: cau hoi bat buoc co huong dan ro rang va cho trong ___.\n"
+    "- QUY TAC RENDER MARKDOWN TRONG JSON: KHI VIET CODE BLOCK (```javascript) BEN TRONG TRUONG question, BAN BAT BUOC PHAI SU DUNG KY TU NGAT DONG \\n THUC SU TRONG CHUOI JSON DE TACH BIET CAC DONG CODE. TUYET DOI KHONG VIET TOAN BO CODE BLOCK DINH LIEN TREN 1 DONG.\n"
+    "- BAT BUOC CAU TRUC TRUONG question PHAI CO 2 PHAN: cau huong dan + code block.\n"
+    "- VI DU MAU CHUAN BAT BUOC LAM THEO:\n"
     "\"Dien vao cho trong ___ de hoan thanh doan code sau:\\n```javascript\\nconst app = express();\\napp.get('/', (req, res) => {\\n  ___('Hello');\\n});\\n```\"\n"
-    "- Truong options: Chi chua cac tu khoa, ten ham, hoac doan code RAT NGAN de dien vua van vao cho trong ___ do. Khong nhet toan bo function vao options.\n"
-    "3. Tim loi sai (find_bug - 3 cau):\n"
-    "Dua ra doan code bi sai logic.\n"
-    "QUY TAC SONG CON: Doan code phai trong nhu code that tren Production. TUYET DOI SACH SE, khong chua bat ky comment nao (khong dung `//`).\n"
-    "VI DU DOAN CODE CHUAN (KHONG CO COMMENT RAC):\n"
+    "- Truong options cua fill_code chi chua tu khoa/ten ham/doan code rat ngan de dien vua cho trong.\n"
+    "- VOI find_bug: dua doan code sai logic nhu production, TUYET DOI KHONG CHUA COMMENT GOI Y (khong dung //).\n"
+    "- VI DU DOAN CODE CHUAN (KHONG CO COMMENT RAC):\n"
     "\"```javascript\\napp.use((req, res) => {\\n  console.log('Log');\\n});\\napp.get('/', (req, res) => { res.send('OK'); });\\n```\"\n\n"
-    "TRUONG 'type' BAT BUOC PHAI VIET THUONG TOAN BO: 'theory', 'fill_code', 'find_bug'.\n\n"
+    "[NEU LA NHOM B - PHI KY THUAT]:\n"
+    "- TUYET DOI KHONG SINH CAU HOI CODE.\n"
+    "- Bat buoc sinh DUNG 10 cau gom: 7 cau 'general_choice', 3 cau 'fill_blank'.\n"
+    "- VOI fill_blank: trich 1 cau quan trong trong tai lieu, duc lo 1 tu khoa bang ___, va tao 4 lua chon la 4 tu khoa cung chu de.\n"
+    "- Cac cau hoi phai duoc viet theo ngu canh ly thuyet/doc hieu, khong ep cu phap lap trinh.\n\n"
+    "TRUONG 'type' BAT BUOC PHAI VIET THUONG TOAN BO: 'theory', 'fill_code', 'find_bug', 'general_choice', 'fill_blank'.\n\n"
     "PHAN OPTIONS/CORRECT_ANSWER: TUYET DOI KHONG THEM CAC TIEN TO 'A.', 'B.', 'C.', 'D.' O DAU CHUOI. "
     "HE THONG UI DA TU DONG XU LY VIEC NAY. VI DU CHUAN: \"options\": [\"req.body\", \"req.query\"], \"correct_answer\": \"req.query\".\n\n"
     "RANG BUOC COT LOI:\n"
@@ -44,15 +74,20 @@ QUIZ_SYSTEM_PROMPT = (
     "Tra ve MOT MANG JSON CHUAN chua 10 object. Moi object co cau truc:\n"
     "{\n"
     "  \"id\": 1,\n"
-    "  \"type\": \"theory | fill_code | find_bug\",\n"
+    "  \"type\": \"theory | fill_code | find_bug | general_choice | fill_blank\",\n"
     "  \"difficulty\": \"Easy | Medium | Hard\",\n"
     "  \"question\": \"Noi dung cau hoi...\",\n"
-    "  \"options\": [\"req.body\", \"req.query\", \"req.params\", \"req.headers\"],\n"
-    "  \"correct_answer\": \"req.query\",\n"
+    "  \"options\": [\"Lua chon 1\", \"Lua chon 2\", \"Lua chon 3\", \"Lua chon 4\"],\n"
+    "  \"correct_answer\": \"Lua chon dung\",\n"
     "  \"explanation\": \"Giai thich chi tiet...\"\n"
     "}"
 )
+
 CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
+TECHNICAL_SIGNAL_PATTERN = re.compile(
+    r"\b(express|javascript|typescript|python|java|c\+\+|sql|database|api|endpoint|backend|frontend|middleware|route|controller|class|function|const|let|var|react|node|docker|query|schema|json)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -89,6 +124,7 @@ def _build_quiz_model_candidates(settings) -> list[str]:
         _normalize_model_name(configured_quiz_model),
         configured_flash_model,
         _normalize_model_name(configured_flash_model),
+        *QUIZ_FALLBACK_MODELS,
     ):
         if candidate and candidate not in candidates:
             candidates.append(candidate)
@@ -103,6 +139,55 @@ def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
         "- Nguon su that duy nhat (source_content):\n"
         f"{source_content.strip()[:50000]}"
     )
+
+
+def _classify_document_domain(*, lesson_title: str, source_content: str) -> str:
+    content = f"{lesson_title}\n{source_content}".strip()
+    lowered = content.lower()
+
+    score = 0
+    if "```" in lowered:
+        score += 3
+    score += len(TECHNICAL_SIGNAL_PATTERN.findall(content))
+    if re.search(r"[{}();]|=>", content):
+        score += 1
+
+    return DOMAIN_TECHNICAL if score >= 3 else DOMAIN_GENERAL
+
+
+def _build_domain_distribution_instruction(domain: str) -> str:
+    if domain == DOMAIN_TECHNICAL:
+        return (
+            "RANG BUOC DOMAIN NHOM A (IT): DUNG 10 CAU = 4 theory + 3 fill_code + 3 find_bug. "
+            "Khong duoc sinh general_choice hoac fill_blank."
+        )
+    return (
+        "RANG BUOC DOMAIN NHOM B (Phi ky thuat): DUNG 10 CAU = 7 general_choice + 3 fill_blank. "
+        "TUYET DOI KHONG duoc sinh fill_code hoac find_bug."
+    )
+
+
+def _validate_generated_quiz_for_domain(*, questions: list[GeneratedQuizQuestion], domain: str) -> None:
+    expected_distribution = QUIZ_DISTRIBUTION_BY_DOMAIN.get(domain, QUIZ_DISTRIBUTION_BY_DOMAIN[DOMAIN_TECHNICAL])
+
+    missing_type = [item for item in questions if not item.question_type]
+    if missing_type:
+        raise ValueError("Each generated question must include a valid type")
+
+    actual_distribution = Counter(str(item.question_type) for item in questions)
+
+    for question_type, expected_count in expected_distribution.items():
+        actual_count = actual_distribution.get(question_type, 0)
+        if actual_count != expected_count:
+            raise ValueError(f"Invalid distribution for {question_type}: expected {expected_count}, got {actual_count}")
+
+    disallowed_types = [
+        question_type
+        for question_type, actual_count in actual_distribution.items()
+        if actual_count > 0 and question_type not in expected_distribution
+    ]
+    if disallowed_types:
+        raise ValueError(f"Disallowed question types for domain {domain}: {', '.join(disallowed_types)}")
 
 
 def _extract_gemini_text(payload: dict[str, Any]) -> str:
@@ -144,6 +229,30 @@ def _extract_finish_reason(payload: dict[str, Any]) -> str | None:
 
     finish_reason = first_candidate.get("finishReason")
     return finish_reason if isinstance(finish_reason, str) else None
+
+
+def _extract_provider_error_message(response: httpx.Response) -> str | None:
+    try:
+        response_payload = response.json()
+    except ValueError:
+        return None
+
+    if not isinstance(response_payload, dict):
+        return None
+
+    error_payload = response_payload.get("error")
+    if not isinstance(error_payload, dict):
+        return None
+
+    message = error_payload.get("message")
+    if isinstance(message, str) and message.strip():
+        return message.strip()
+
+    status = error_payload.get("status")
+    if isinstance(status, str) and status.strip():
+        return status.strip()
+
+    return None
 
 
 def _extract_json_candidate_text(raw_text: str) -> str:
@@ -204,15 +313,17 @@ def _build_quiz_generation_payload(*, user_prompt: str) -> dict[str, Any]:
     }
 
 
-def _build_quiz_repair_payload(*, user_prompt: str, invalid_json: str, error_message: str) -> dict[str, Any]:
+def _build_quiz_repair_payload(*, user_prompt: str, invalid_json: str, error_message: str, domain: str) -> dict[str, Any]:
     repair_prompt = (
         "Ban vua tra ve JSON quiz khong hop le. "
         "HAY TRA VE LAI MOT MANG JSON HOP LE DUY NHAT, DUNG 10 OBJECT, KHONG THEM VAN BAN GIAI THICH. "
-        "TRUONG 'type' BAT BUOC PHAI VIET THUONG: 'theory', 'fill_code', 'find_bug'. "
+        "TRUONG 'type' BAT BUOC PHAI VIET THUONG: 'theory', 'fill_code', 'find_bug', 'general_choice', 'fill_blank'. "
+        f"{_build_domain_distribution_instruction(domain)} "
         "TUYET DOI KHONG THEM TIEN TO 'A.', 'B.', 'C.', 'D.' TRONG options va correct_answer. "
         "VOI fill_code, MO DAU question BAT BUOC: 'Dien vao cho trong ___ de hoan thanh doan code sau:'. "
         "KHI VIET CODE BLOCK TRONG question, BAT BUOC DUNG KY TU NGAT DONG \\n THUC SU, KHONG DUOC DINH CODE BLOCK TREN MOT DONG. "
         "VOI find_bug, TUYET DOI KHONG CHEN COMMENT GOI Y LOI TRONG CODE. "
+        "VOI fill_blank, question bat buoc co cho trong ___ va options la 4 tu khoa. "
         "TRUONG 'difficulty' BAT BUOC: 'Easy' | 'Medium' | 'Hard'.\n\n"
         f"Ly do JSON khong hop le: {error_message}\n\n"
         "Du lieu JSON loi can sua:\n"
@@ -296,9 +407,12 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
 
     model_candidates = _build_quiz_model_candidates(settings)
     timeout_seconds = max(30.0, float(settings.gemini_timeout_seconds))
+    document_domain = _classify_document_domain(lesson_title=lesson_title, source_content=source_content)
 
     user_prompt = build_quiz_prompt(lesson_title=lesson_title, source_content=source_content)
     request_payload = _build_quiz_generation_payload(user_prompt=user_prompt)
+    saw_quota_or_rate_limit = False
+    latest_quota_message: str | None = None
 
     with httpx.Client(timeout=timeout_seconds) as client:
         for index, model_name in enumerate(model_candidates):
@@ -323,13 +437,41 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
                     detail={"code": "LLM_AUTH_FAILED"},
                 )
 
+            provider_error_message = _extract_provider_error_message(response)
+
+            if response.status_code == 429:
+                saw_quota_or_rate_limit = True
+                latest_quota_message = provider_error_message or latest_quota_message
+
+                if has_fallback:
+                    logger.warning(
+                        "quiz_generation.rate_limited_try_fallback model=%s error=%s",
+                        model_name,
+                        provider_error_message,
+                    )
+                    continue
+
+                raise AppException(
+                    status_code=503,
+                    message="AI quota exceeded",
+                    detail={
+                        "code": "LLM_QUOTA_EXCEEDED",
+                        "status_code": str(response.status_code),
+                        "provider_message": provider_error_message,
+                    },
+                )
+
             if response.status_code >= 400:
-                if has_fallback and response.status_code in (404, 429, 500, 503):
+                if has_fallback and response.status_code in (404, 500, 503):
                     continue
                 raise AppException(
                     status_code=503,
                     message="AI service unavailable",
-                    detail={"code": "LLM_SERVICE_ERROR", "status_code": str(response.status_code)},
+                    detail={
+                        "code": "LLM_SERVICE_ERROR",
+                        "status_code": str(response.status_code),
+                        "provider_message": provider_error_message,
+                    },
                 )
 
             try:
@@ -357,8 +499,10 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
 
             parse_error: Exception | None = None
             questions: list[GeneratedQuizQuestion] | None = None
+
             try:
                 questions = parse_generated_quiz(generated_text)
+                _validate_generated_quiz_for_domain(questions=questions, domain=document_domain)
             except (ValueError, json.JSONDecodeError, ValidationError) as exc:
                 parse_error = exc
                 logger.error(
@@ -374,6 +518,7 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
                     user_prompt=user_prompt,
                     invalid_json=generated_text,
                     error_message=str(parse_error) if parse_error is not None else "Unknown parse error",
+                    domain=document_domain,
                 )
                 try:
                     repair_response = client.post(endpoint, params={"key": api_key}, json=repair_payload)
@@ -382,6 +527,10 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
                         repaired_text = _extract_gemini_text(repair_payload_json)
                         if repaired_text:
                             questions = parse_generated_quiz(repaired_text)
+                            _validate_generated_quiz_for_domain(questions=questions, domain=document_domain)
+                except (ValueError, json.JSONDecodeError, ValidationError) as repair_parse_exc:
+                    parse_error = repair_parse_exc
+                    questions = None
                 except Exception as repair_exc:
                     logger.warning("quiz_generation.repair_failed model=%s error=%s", model_name, str(repair_exc))
 
@@ -390,9 +539,10 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
 
             if has_fallback:
                 logger.warning(
-                    "quiz_generation.try_fallback_model current_model=%s finish_reason=%s",
+                    "quiz_generation.try_fallback_model current_model=%s finish_reason=%s domain=%s",
                     model_name,
                     finish_reason,
+                    document_domain,
                 )
                 continue
 
@@ -402,8 +552,14 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
                 detail={"code": "LLM_INVALID_QUIZ_JSON", "error": str(parse_error) if parse_error else "Unable to repair quiz JSON"},
             )
 
-    raise AppException(
-        status_code=503,
-        message="AI service unavailable",
-        detail={"code": "LLM_SERVICE_ERROR"},
-    )
+    if saw_quota_or_rate_limit:
+        raise AppException(
+            status_code=503,
+            message="AI quota exceeded",
+            detail={
+                "code": "LLM_QUOTA_EXCEEDED",
+                "provider_message": latest_quota_message,
+            },
+        )
+
+    raise AppException(status_code=503, message="AI service unavailable", detail={"code": "LLM_SERVICE_ERROR"})

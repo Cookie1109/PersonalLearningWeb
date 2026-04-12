@@ -9,15 +9,26 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 import httpx
+import html2text
 import requests
-from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
+from lxml import html as lxml_html
 from PyPDF2 import PdfReader
 
 try:
     from readability import Document as ReadabilityDocument
 except Exception:  # pragma: no cover - runtime fallback when optional dependency is unavailable
     ReadabilityDocument = None
+
+try:
+    from newspaper import Article as NewspaperArticle
+except Exception:  # pragma: no cover - runtime fallback when optional dependency is unavailable
+    NewspaperArticle = None
+
+try:
+    import trafilatura
+except Exception:  # pragma: no cover - runtime fallback when optional dependency is unavailable
+    trafilatura = None
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
@@ -42,13 +53,7 @@ SUPPORTED_DOCX_MIME_TYPES = {
     "application/msword",
 }
 NOISE_HTML_TAGS = ("nav", "header", "footer", "aside", "script", "style", "form", "noscript", "iframe", "svg")
-PRIMARY_CONTENT_SELECTORS = (
-    "article",
-    "main",
-    "div.post-body",
-    "div.entry-content",
-    "div.content",
-)
+MEDIA_NOISE_TAGS = ("script", "style", "noscript", "iframe", "svg", "canvas", "video", "audio", "source", "picture", "img")
 
 
 def _collapse_whitespace(value: str) -> str:
@@ -106,13 +111,25 @@ def _build_title_from_text_excerpt(text: str, *, max_chars: int = 40) -> str | N
 def _extract_title_from_html(html_text: str) -> str | None:
     if not html_text.strip():
         return None
-    soup = BeautifulSoup(html_text, "html.parser")
-    raw_title = (
-        soup.title.string
-        if soup.title and soup.title.string
-        else (soup.title.get_text(separator="\n\n", strip=True) if soup.title else "")
-    )
-    return _normalize_extracted_title(raw_title)
+
+    if ReadabilityDocument is not None:
+        try:
+            readability_title = ReadabilityDocument(html_text).title()
+            normalized_readability_title = _normalize_extracted_title(readability_title)
+            if normalized_readability_title:
+                return normalized_readability_title
+        except Exception as exc:
+            logger.debug("parser.readability_title_failed error=%s", str(exc))
+
+    try:
+        root = lxml_html.fromstring(html_text)
+        title_nodes = root.xpath("//title/text()")
+        if title_nodes:
+            return _normalize_extracted_title(title_nodes[0])
+    except Exception as exc:
+        logger.debug("parser.lxml_title_failed error=%s", str(exc))
+
+    return None
 
 
 def _extract_title_from_file_name(file_name: str | None) -> str | None:
@@ -177,28 +194,57 @@ def _extract_gemini_text(payload: dict[str, Any]) -> str:
     return "\n\n".join(chunks).strip()
 
 
-def _remove_noise_nodes(soup: BeautifulSoup) -> None:
-    for tag_name in NOISE_HTML_TAGS:
-        for node in soup.find_all(tag_name):
-            node.decompose()
+def _strip_unstable_media_blocks(html_text: str) -> str:
+    cleaned = html_text or ""
+    for tag in MEDIA_NOISE_TAGS:
+        cleaned = re.sub(rf"<{tag}[^>]*?>[\s\S]*?</{tag}>", " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(rf"<{tag}[^>]*/>", " ", cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
-def _extract_best_container_text(soup: BeautifulSoup) -> str:
-    for selector in PRIMARY_CONTENT_SELECTORS:
-        containers = soup.select(selector)
-        if not containers:
-            continue
+def _convert_html_to_markdown(html_text: str) -> str:
+    if not (html_text or "").strip():
+        return ""
 
-        best_container = max(containers, key=lambda item: len(item.get_text(separator="\n\n", strip=True)), default=None)
-        if best_container is None:
-            continue
+    converter = html2text.HTML2Text()
+    converter.body_width = 0
+    converter.ignore_images = True
+    converter.ignore_emphasis = False
+    converter.ignore_links = False
+    converter.ignore_tables = False
+    converter.wrap_links = False
+    converter.single_line_break = False
+    converter.skip_internal_links = True
 
-        candidate_text = _normalize_extracted_text(best_container.get_text(separator="\n\n", strip=True))
-        if candidate_text:
-            return candidate_text
+    safe_html = _strip_unstable_media_blocks(html_text)
+    try:
+        markdown = converter.handle(safe_html)
+    except Exception as exc:
+        logger.debug("parser.markdown_convert_failed error=%s", str(exc))
+        return ""
 
-    fallback_container = soup.body or soup
-    return _normalize_extracted_text(fallback_container.get_text(separator="\n\n", strip=True))
+    return _normalize_extracted_text(markdown)
+
+
+def _extract_trafilatura_text(html_text: str) -> str:
+    if trafilatura is None:
+        return ""
+
+    try:
+        extracted = trafilatura.extract(
+            html_text,
+            output_format="txt",
+            include_links=False,
+            include_images=False,
+            include_tables=False,
+            deduplicate=True,
+            favor_precision=True,
+        )
+    except Exception as exc:
+        logger.debug("parser.trafilatura_extract_failed error=%s", str(exc))
+        return ""
+
+    return _normalize_extracted_text(extracted or "")
 
 
 def _extract_readability_text(html_text: str) -> str:
@@ -214,9 +260,71 @@ def _extract_readability_text(html_text: str) -> str:
     if not summary_html:
         return ""
 
-    summary_soup = BeautifulSoup(summary_html, "html.parser")
-    _remove_noise_nodes(summary_soup)
-    return _normalize_extracted_text(summary_soup.get_text(separator="\n\n", strip=True))
+    markdown_text = _convert_html_to_markdown(summary_html)
+    if markdown_text:
+        return markdown_text
+
+    try:
+        root = lxml_html.fromstring(summary_html)
+        return _normalize_extracted_text(root.text_content())
+    except Exception:
+        return ""
+
+
+def _extract_newspaper_text(*, url: str, html_text: str) -> str:
+    if NewspaperArticle is None:
+        return ""
+
+    try:
+        article = NewspaperArticle(url=url)
+        article.set_html(html_text)
+        article.parse()
+    except Exception as exc:
+        logger.debug("parser.newspaper_extract_failed url=%s error=%s", url, str(exc))
+        return ""
+
+    markdown_candidates = [
+        _convert_html_to_markdown(getattr(article, "article_html", "") or ""),
+        _normalize_extracted_text(getattr(article, "text", "") or ""),
+    ]
+    non_empty = [item for item in markdown_candidates if item]
+    if not non_empty:
+        return ""
+    return max(non_empty, key=len)
+
+
+def _extract_lxml_main_text(html_text: str) -> str:
+    try:
+        root = lxml_html.fromstring(html_text)
+    except Exception:
+        return ""
+
+    for xpath in (
+        "//nav",
+        "//header",
+        "//footer",
+        "//aside",
+        "//script",
+        "//style",
+        "//form",
+        "//noscript",
+        "//iframe",
+    ):
+        for node in root.xpath(xpath):
+            parent = node.getparent()
+            if parent is not None:
+                parent.remove(node)
+
+    candidates = root.xpath("//article|//main")
+    if candidates:
+        best = max(candidates, key=lambda item: len((item.text_content() or "").strip()))
+        return _normalize_extracted_text(best.text_content())
+
+    body_nodes = root.xpath("//body")
+    if body_nodes:
+        return _normalize_extracted_text(body_nodes[0].text_content())
+
+    return _normalize_extracted_text(root.text_content())
 
 
 def _validate_url(url: str) -> str:
@@ -239,15 +347,19 @@ def _validate_url(url: str) -> str:
     return normalized_url
 
 
-def _extract_text_from_html(html_text: str) -> str:
+def _extract_text_from_html(html_text: str, *, url: str | None = None) -> str:
+    trafilatura_text = _extract_trafilatura_text(html_text)
     readability_text = _extract_readability_text(html_text)
+    newspaper_text = _extract_newspaper_text(url=url or "https://example.com", html_text=html_text) if url else ""
+    lxml_text = _extract_lxml_main_text(html_text)
 
-    soup = BeautifulSoup(html_text, "html.parser")
-    _remove_noise_nodes(soup)
-    heuristic_text = _extract_best_container_text(soup)
-
-    candidates = [value for value in (readability_text, heuristic_text) if value]
-    normalized = max(candidates, key=len) if candidates else ""
+    ordered_candidates = [
+        trafilatura_text,
+        readability_text,
+        newspaper_text,
+        lxml_text,
+    ]
+    normalized = next((value for value in ordered_candidates if value), "")
 
     if not normalized:
         raise AppException(
@@ -315,7 +427,7 @@ def extract_text_from_url(*, url: str) -> tuple[str, str | None]:
             return normalized, _build_title_from_text_excerpt(normalized)
 
         html_text = response.text or ""
-        extracted_text = _extract_text_from_html(html_text)
+        extracted_text = _extract_text_from_html(html_text, url=normalized_url)
         extracted_title = _extract_title_from_html(html_text) or _build_title_from_text_excerpt(extracted_text)
         return extracted_text, extracted_title
     except AppException:

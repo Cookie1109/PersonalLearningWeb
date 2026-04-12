@@ -243,13 +243,13 @@ class QuizPublicQuestionDTO(BaseModel):
     question_id: str
     text: str
     options: list[QuizOptionDTO]
-    type: Literal["theory", "fill_code", "find_bug"] | None = None
+    type: Literal["theory", "fill_code", "find_bug", "general_choice", "fill_blank"] | None = None
     difficulty: Literal["Easy", "Medium", "Hard"] | None = None
 
 
 class QuizQuestionDTO(BaseModel):
     id: int
-    type: Literal["theory", "fill_code", "find_bug"]
+    type: Literal["theory", "fill_code", "find_bug", "general_choice", "fill_blank"]
     difficulty: Literal["Easy", "Medium", "Hard"]
     question: str
     options: list[str] = Field(..., min_length=4, max_length=4)

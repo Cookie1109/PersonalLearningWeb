@@ -4,8 +4,10 @@ from __future__ import annotations
 def test_extract_text_from_html_filters_layout_noise(monkeypatch) -> None:
     import app.services.parser_service as parser_service
 
-    # Force heuristic path to validate selector/noise cleanup behavior deterministically.
+    # Force deterministic fallback path independent from optional extractor libraries.
     monkeypatch.setattr(parser_service, "ReadabilityDocument", None)
+    monkeypatch.setattr(parser_service, "NewspaperArticle", None)
+    monkeypatch.setattr(parser_service, "trafilatura", None)
 
     html = """
     <html>
@@ -45,6 +47,8 @@ def test_extract_text_from_url_does_not_crash_and_returns_clean_content(monkeypa
     import app.services.parser_service as parser_service
 
     monkeypatch.setattr(parser_service, "ReadabilityDocument", None)
+    monkeypatch.setattr(parser_service, "NewspaperArticle", None)
+    monkeypatch.setattr(parser_service, "trafilatura", None)
 
     class FakeResponse:
         def __init__(self) -> None:
@@ -101,3 +105,32 @@ def test_extract_text_from_uploaded_file_uses_filename_as_title(monkeypatch) -> 
     assert mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     assert extracted == "Core doc content"
     assert extracted_title == "Python Async Notes"
+
+
+def test_extract_text_from_html_prefers_smart_extractor_output(monkeypatch) -> None:
+    import app.services.parser_service as parser_service
+
+    monkeypatch.setattr(parser_service, "ReadabilityDocument", None)
+    monkeypatch.setattr(parser_service, "NewspaperArticle", None)
+
+    class _FakeTrafilatura:
+        @staticmethod
+        def extract(*args, **kwargs):
+            _ = (args, kwargs)
+            return "Noi dung chinh duoc trich xuat thong minh"
+
+    monkeypatch.setattr(parser_service, "trafilatura", _FakeTrafilatura())
+
+    html = """
+    <html>
+      <body>
+        <header>Noise header</header>
+        <article><p>Noi dung chinh duoc trich xuat thong minh</p></article>
+        <footer>Noise footer</footer>
+      </body>
+    </html>
+    """
+
+    extracted = parser_service._extract_text_from_html(html, url="https://example.com")
+
+    assert extracted == "Noi dung chinh duoc trich xuat thong minh"

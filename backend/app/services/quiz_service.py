@@ -22,7 +22,7 @@ from app.services.gamification_service import add_exp_and_check_level, get_curre
 from app.services.quiz_generation_service import GeneratedQuizQuestion, generate_quiz_questions
 
 OPTION_KEYS = ("A", "B", "C", "D")
-QUIZ_TYPE_VALUES = {"theory", "fill_code", "find_bug"}
+QUIZ_TYPE_VALUES = {"theory", "fill_code", "find_bug", "general_choice", "fill_blank"}
 QUIZ_DIFFICULTY_VALUES = {"Easy", "Medium", "Hard"}
 
 
