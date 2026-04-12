@@ -96,6 +96,20 @@ class DocumentCreateResponseDTO(BaseModel):
     message: str
 
 
+class DocumentRenameRequestDTO(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if len(normalized) < 3:
+                raise ValueError("title must be at least 3 characters")
+            return normalized
+        return value
+
+
 class DocumentSummaryDTO(BaseModel):
     id: int
     title: str
@@ -103,6 +117,11 @@ class DocumentSummaryDTO(BaseModel):
     quiz_passed: bool = False
     flashcard_completed: bool = False
     created_at: datetime
+
+
+class DocumentDeleteResponseDTO(BaseModel):
+    document_id: int
+    message: str
 
 
 class DocumentChatHistoryItemDTO(BaseModel):

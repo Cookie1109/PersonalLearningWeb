@@ -281,7 +281,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
               title={isDarkTheme ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
             >
               {isDarkTheme ? <Sun size={14} /> : <Moon size={14} />}
-              <span>{isDarkTheme ? 'Light mode' : 'Dark mode'}</span>
+              <span>{isDarkTheme ? 'Chế độ sáng' : 'Chế độ tối'}</span>
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm">
               <Flame size={14} />

@@ -16,6 +16,8 @@ from app.schemas import (
     DocumentChatResponseDTO,
     DocumentCreateRequestDTO,
     DocumentCreateResponseDTO,
+    DocumentDeleteResponseDTO,
+    DocumentRenameRequestDTO,
     DocumentQuizSubmitRequestDTO,
     DocumentSummaryDTO,
     ErrorResponseDTO,
@@ -23,7 +25,12 @@ from app.schemas import (
     QuizSubmitResponseDTO,
 )
 from app.services import chat_service
-from app.services.lesson_service import create_document_for_user, list_documents_for_user
+from app.services.lesson_service import (
+    create_document_for_user,
+    delete_document_for_user,
+    list_documents_for_user,
+    rename_document_for_user,
+)
 from app.services.quiz_generation_rate_limit_store import QuizGenerationRateLimitStore
 from app.services.quiz_service import (
     ensure_quiz_regeneration_allowed_for_lesson_user,
@@ -83,6 +90,45 @@ def get_my_documents(
     db: Session = Depends(get_db),
 ) -> list[DocumentSummaryDTO]:
     return list_documents_for_user(db=db, user_id=current_user.id)
+
+
+@router.patch(
+    "/{doc_id}",
+    response_model=DocumentSummaryDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def rename_document(
+    doc_id: int,
+    payload: DocumentRenameRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocumentSummaryDTO:
+    return rename_document_for_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=doc_id,
+        title=payload.title,
+    )
+
+
+@router.delete(
+    "/{doc_id}",
+    response_model=DocumentDeleteResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def delete_document(
+    doc_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocumentDeleteResponseDTO:
+    delete_document_for_user(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=doc_id,
+    )
+    return DocumentDeleteResponseDTO(document_id=doc_id, message="Document deleted")
 
 
 @router.post(

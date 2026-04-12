@@ -210,16 +210,94 @@ def list_documents_for_user(*, db: Session, user_id: int) -> list[DocumentSummar
     )
 
     return [
-        DocumentSummaryDTO(
-            id=lesson.id,
-            title=lesson.title,
-            is_completed=lesson.is_completed,
-            quiz_passed=progress_map.get(lesson.id, (False, False))[0],
-            flashcard_completed=progress_map.get(lesson.id, (False, False))[1],
-            created_at=lesson.created_at,
-        )
+        _to_document_summary(lesson=lesson, progress_map=progress_map)
         for lesson in lessons
     ]
+
+
+def _to_document_summary(*, lesson: Lesson, progress_map: dict[int, tuple[bool, bool]]) -> DocumentSummaryDTO:
+    quiz_passed, flashcard_completed = progress_map.get(lesson.id, (False, False))
+    return DocumentSummaryDTO(
+        id=lesson.id,
+        title=lesson.title,
+        is_completed=lesson.is_completed,
+        quiz_passed=quiz_passed,
+        flashcard_completed=flashcard_completed,
+        created_at=lesson.created_at,
+    )
+
+
+def _normalize_document_title_for_update(raw_title: str) -> str:
+    normalized = _collapse_whitespace(raw_title.strip())[:255]
+    if len(normalized) < 3:
+        raise AppException(
+            status_code=409,
+            message="Document title must be at least 3 characters",
+            detail={"code": "DOCUMENT_TITLE_TOO_SHORT"},
+        )
+    return normalized
+
+
+def rename_document_for_user(*, db: Session, user_id: int, lesson_id: int, title: str) -> DocumentSummaryDTO:
+    normalized_title = _normalize_document_title_for_update(title)
+
+    try:
+        lesson = _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id, lock=True)
+
+        duplicate_lesson_id = db.scalar(
+            select(Lesson.id).where(
+                and_(
+                    Lesson.user_id == user_id,
+                    Lesson.id != lesson.id,
+                    Lesson.title == normalized_title,
+                )
+            )
+        )
+        if duplicate_lesson_id is not None:
+            raise AppException(
+                status_code=409,
+                message="Document title already exists",
+                detail={"code": "DOCUMENT_TITLE_CONFLICT"},
+            )
+
+        if lesson.title != normalized_title:
+            lesson.title = normalized_title
+            lesson.version = (lesson.version or 1) + 1
+            db.commit()
+            db.refresh(lesson)
+        else:
+            db.commit()
+            db.refresh(lesson)
+
+        progress_map = get_lesson_sub_indicators_for_user(db=db, user_id=user_id, lesson_ids=[lesson.id])
+        return _to_document_summary(lesson=lesson, progress_map=progress_map)
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=409,
+            message="Document rename failed",
+            detail={"code": "DOCUMENT_RENAME_FAILED", "error": str(exc)},
+        ) from exc
+
+
+def delete_document_for_user(*, db: Session, user_id: int, lesson_id: int) -> None:
+    try:
+        lesson = _get_owned_lesson(db=db, user_id=user_id, lesson_id=lesson_id, lock=True)
+        db.delete(lesson)
+        db.commit()
+    except AppException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=409,
+            message="Document delete failed",
+            detail={"code": "DOCUMENT_DELETE_FAILED", "error": str(exc)},
+        ) from exc
 
 
 def get_lesson_sub_indicators_for_user(

@@ -70,6 +70,10 @@ export interface DocumentCreateResponseDTO {
   message: string;
 }
 
+export interface DocumentRenameRequestDTO {
+  title: string;
+}
+
 export interface DocumentSummaryDTO {
   id: number;
   title: string;
@@ -77,6 +81,11 @@ export interface DocumentSummaryDTO {
   quiz_passed: boolean;
   flashcard_completed: boolean;
   created_at: string;
+}
+
+export interface DocumentDeleteResponseDTO {
+  document_id: number;
+  message: string;
 }
 
 export interface DocumentChatHistoryItemDTO {

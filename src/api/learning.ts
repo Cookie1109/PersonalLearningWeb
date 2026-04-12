@@ -5,6 +5,8 @@ import {
   DocumentChatResponseDTO,
   DocumentCreateRequestDTO,
   DocumentCreateResponseDTO,
+  DocumentDeleteResponseDTO,
+  DocumentRenameRequestDTO,
   DocumentSummaryDTO,
   FlashcardCompleteResponseDTO,
   LessonCompleteResponseDTO,
@@ -184,6 +186,86 @@ export async function getMyDocuments(): Promise<MyDocument[]> {
   });
 
   return (response.data ?? []).map(mapDocumentSummary);
+}
+
+function normalizeDocumentMutationError(error: unknown, action: 'rename' | 'delete'): Error {
+  const fallbackMessage = action === 'rename'
+    ? 'Không thể đổi tên tài liệu lúc này.'
+    : 'Không thể xóa tài liệu lúc này.';
+
+  if (!axios.isAxiosError(error)) {
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error(fallbackMessage);
+  }
+
+  const status = error.response?.status;
+  const code = error.response?.data?.detail?.code as string | undefined;
+
+  if (status === 404 || code === 'LESSON_NOT_FOUND' || code === 'DOCUMENT_NOT_FOUND') {
+    return new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
+  }
+
+  if (action === 'rename' && status === 409 && code === 'DOCUMENT_TITLE_CONFLICT') {
+    return new Error('Tên tài liệu đã tồn tại. Vui lòng chọn tên khác.');
+  }
+
+  if (action === 'rename' && status === 409 && code === 'DOCUMENT_TITLE_TOO_SHORT') {
+    return new Error('Tên tài liệu cần tối thiểu 3 ký tự.');
+  }
+
+  return new Error(error.response?.data?.message ?? fallbackMessage);
+}
+
+export async function renameDocument(documentId: string | number, title: string): Promise<MyDocument> {
+  const normalizedTitle = title.trim();
+  if (normalizedTitle.length < 3) {
+    throw new Error('Tên tài liệu cần tối thiểu 3 ký tự.');
+  }
+
+  const payload: DocumentRenameRequestDTO = {
+    title: normalizedTitle,
+  };
+
+  try {
+    const response = await apiClient.patch<DocumentSummaryDTO>(
+      `/documents/${encodeURIComponent(String(documentId))}`,
+      payload,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    if (response.status !== 200) {
+      throw new Error('Không thể đổi tên tài liệu lúc này.');
+    }
+
+    return mapDocumentSummary(response.data);
+  } catch (error) {
+    throw normalizeDocumentMutationError(error, 'rename');
+  }
+}
+
+export async function deleteDocument(documentId: string | number): Promise<void> {
+  try {
+    const response = await apiClient.delete<DocumentDeleteResponseDTO>(
+      `/documents/${encodeURIComponent(String(documentId))}`,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    if (response.status !== 200) {
+      throw new Error('Không thể xóa tài liệu lúc này.');
+    }
+  } catch (error) {
+    throw normalizeDocumentMutationError(error, 'delete');
+  }
 }
 
 function normalizeDocumentChatError(error: unknown): Error {

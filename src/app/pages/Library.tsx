@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { BookOpen, CalendarDays, CheckSquare, LibraryBig, Loader2, Sparkles } from 'lucide-react';
+import { BookOpen, CalendarDays, CheckSquare, LibraryBig, Loader2, MoreVertical, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getMyDocuments, MyDocument } from '../../api/learning';
+import { deleteDocument, getMyDocuments, MyDocument, renameDocument } from '../../api/learning';
 
 const shortDateFormatter = new Intl.DateTimeFormat('vi-VN', {
   day: '2-digit',
@@ -38,10 +38,17 @@ function LoadingState() {
 
 export default function Library() {
   const navigate = useNavigate();
+  const editInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<MyDocument[]>([]);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
+  const [selectedDoc, setSelectedDoc] = useState<MyDocument | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const selectedSet = useMemo(() => new Set(selectedDocuments), [selectedDocuments]);
 
@@ -67,6 +74,21 @@ export default function Library() {
     void loadDocuments();
   }, [loadDocuments]);
 
+  useEffect(() => {
+    if (!activeMenuDocId) return;
+
+    const closeMenu = () => setActiveMenuDocId(null);
+    window.addEventListener('click', closeMenu);
+    return () => window.removeEventListener('click', closeMenu);
+  }, [activeMenuDocId]);
+
+  useEffect(() => {
+    if (isEditModalOpen) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [isEditModalOpen]);
+
   const toggleSelection = (documentId: string) => {
     setSelectedDocuments(prev => (
       prev.includes(documentId)
@@ -77,6 +99,75 @@ export default function Library() {
 
   const handleMegaQuizClick = () => {
     toast.info('Tính năng đang được phát triển');
+  };
+
+  const openEditModal = (doc: MyDocument) => {
+    setSelectedDoc(doc);
+    setEditTitle(doc.title);
+    setIsDeleteModalOpen(false);
+    setIsEditModalOpen(true);
+    setActiveMenuDocId(null);
+  };
+
+  const openDeleteModal = (doc: MyDocument) => {
+    setSelectedDoc(doc);
+    setIsEditModalOpen(false);
+    setIsDeleteModalOpen(true);
+    setActiveMenuDocId(null);
+  };
+
+  const closeModals = () => {
+    if (isActionLoading) return;
+    setIsEditModalOpen(false);
+    setIsDeleteModalOpen(false);
+    setSelectedDoc(null);
+    setEditTitle('');
+  };
+
+  const handleConfirmEdit = async () => {
+    if (!selectedDoc) return;
+
+    const normalized = editTitle.trim();
+    if (normalized.length < 3) {
+      toast.error('Tên tài liệu cần tối thiểu 3 ký tự.');
+      return;
+    }
+
+    if (normalized === selectedDoc.title) {
+      closeModals();
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const updatedDocument = await renameDocument(selectedDoc.id, normalized);
+      setDocuments(prev => prev.map(doc => (doc.id === updatedDocument.id ? updatedDocument : doc)));
+      toast.success('Đổi tên tài liệu thành công.');
+      closeModals();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không thể đổi tên tài liệu lúc này.';
+      toast.error(`Lỗi: ${message}`);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedDoc) return;
+
+    setIsActionLoading(true);
+    try {
+      await deleteDocument(selectedDoc.id);
+      setDocuments(prev => prev.filter(doc => doc.id !== selectedDoc.id));
+      setSelectedDocuments(prev => prev.filter(id => id !== selectedDoc.id));
+      toast.success('Xóa tài liệu thành công.');
+      closeModals();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không thể xóa tài liệu lúc này.';
+      toast.error(`Lỗi: ${message}`);
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   return (
@@ -149,7 +240,7 @@ export default function Library() {
                 <div
                   onClick={event => event.stopPropagation()}
                   onKeyDown={event => event.stopPropagation()}
-                  className="absolute right-3 top-3"
+                  className="absolute right-3 top-3 flex items-center gap-2"
                 >
                   <label className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white/95 dark:bg-zinc-950/80 px-2 py-1 text-xs text-slate-700 dark:text-zinc-200">
                     <input
@@ -161,9 +252,52 @@ export default function Library() {
                     />
                     Chọn
                   </label>
+
+                  <div className="relative" data-library-menu>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setActiveMenuDocId(prev => (prev === document.id ? null : document.id));
+                      }}
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white/95 dark:bg-zinc-950/80 text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                      aria-label={`Tùy chọn tài liệu ${document.title}`}
+                    >
+                      <MoreVertical size={15} />
+                    </button>
+
+                    {activeMenuDocId === document.id && (
+                      <div
+                        className="absolute right-0 mt-1 w-40 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-1 z-20"
+                        onClick={event => event.stopPropagation()}
+                        onKeyDown={event => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEditModal(document);
+                          }}
+                          className="w-full inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                        >
+                          <Pencil size={14} />Đổi tên
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDeleteModal(document);
+                          }}
+                          className="w-full inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg text-red-500 hover:bg-red-500/10"
+                        >
+                          <Trash2 size={14} />Xóa
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <h3 className="text-base text-slate-900 dark:text-white pr-16 leading-snug" style={{ fontWeight: 600 }}>
+                <h3 className="text-base text-slate-900 dark:text-white pr-28 leading-snug" style={{ fontWeight: 600 }}>
                   {document.title}
                 </h3>
 
@@ -215,6 +349,100 @@ export default function Library() {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isEditModalOpen && selectedDoc && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-5"
+              onClick={event => event.stopPropagation()}
+            >
+              <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Đổi tên tài liệu</h3>
+              <p className="text-sm text-gray-400 mt-1">Cập nhật tên mới cho tài liệu đã chọn.</p>
+              <input
+                ref={editInputRef}
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                className="mt-4 w-full rounded-xl border border-gray-700 bg-zinc-900 px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-cyan-500/70"
+                disabled={isActionLoading}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  disabled={isActionLoading}
+                  className="rounded-xl border border-gray-700 bg-zinc-900 hover:bg-zinc-800 px-4 py-2 text-sm text-gray-200"
+                  style={{ fontWeight: 600 }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmEdit()}
+                  disabled={isActionLoading}
+                  className="rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-sm text-white"
+                  style={{ fontWeight: 700 }}
+                >
+                  {isActionLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isDeleteModalOpen && selectedDoc && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={closeModals}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-800 p-5"
+              onClick={event => event.stopPropagation()}
+            >
+              <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Xóa tài liệu</h3>
+              <p className="text-sm text-gray-300 mt-2">Bạn có chắc chắn muốn xóa <span style={{ fontWeight: 700 }}>{selectedDoc.title}</span>?</p>
+              <p className="text-sm text-red-400 mt-2">Hành động này không thể hoàn tác.</p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  disabled={isActionLoading}
+                  className="rounded-xl border border-gray-700 bg-zinc-900 hover:bg-zinc-800 px-4 py-2 text-sm text-gray-200"
+                  style={{ fontWeight: 600 }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmDelete()}
+                  disabled={isActionLoading}
+                  className="rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-sm text-white"
+                  style={{ fontWeight: 700 }}
+                >
+                  {isActionLoading ? 'Đang xóa...' : 'Xác nhận xóa'}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
