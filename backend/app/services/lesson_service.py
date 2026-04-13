@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import re
 from typing import Any
 
@@ -14,7 +15,10 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models import ExpLedger, FlashcardProgress, Lesson, Quiz, QuizAttempt, Roadmap, User
 from app.schemas import DocumentSummaryDTO, FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
+from app.services.cloudinary_service import delete_original_document, upload_original_document
 from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
+from app.services.parser_service import extract_text_from_uploaded_file
+from app.services.quiz_service import generate_quiz_for_lesson_user
 
 LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
 STREAK_BONUS_REWARD_TYPE = "streak_bonus"
@@ -39,7 +43,7 @@ def _collapse_whitespace(text: str) -> str:
 
 
 def _build_lesson_model_candidates(settings) -> list[str]:
-    configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-1.5-pro"
+    configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-2.5-flash"
     configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
 
     stable_fallbacks = (
@@ -191,6 +195,200 @@ def create_document_for_user(
             status_code=409,
             message="Document creation failed",
             detail={"code": "DOCUMENT_CREATE_FAILED", "error": str(exc)},
+        ) from exc
+
+
+def create_document_draft_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    title: str,
+    source_content: str,
+) -> Lesson:
+    normalized_title = _build_unique_document_title(db=db, user_id=user_id, preferred_title=title)
+    normalized_source = source_content.strip()
+    if not normalized_source:
+        raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
+
+    try:
+        lesson = Lesson(
+            user_id=user_id,
+            roadmap_id=None,
+            week_number=1,
+            position=1,
+            title=normalized_title,
+            source_content=normalized_source,
+            content_markdown=None,
+            youtube_video_id=None,
+            version=1,
+            is_completed=False,
+        )
+        db.add(lesson)
+        db.commit()
+        db.refresh(lesson)
+        return lesson
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=409,
+            message="Document draft creation failed",
+            detail={"code": "DOCUMENT_DRAFT_CREATE_FAILED", "error": str(exc)},
+        ) from exc
+
+
+def _is_theory_generation_failure(exc: AppException) -> bool:
+    if not isinstance(exc.detail, dict):
+        return False
+
+    code = str(exc.detail.get("code") or "")
+    return code in {
+        "THEORY_AI_FAILED",
+        "THEORY_AI_EMPTY_RESPONSE",
+        "LLM_SERVICE_ERROR",
+        "LLM_TIMEOUT",
+        "LLM_NETWORK_ERROR",
+        "LLM_AUTH_FAILED",
+        "LLM_QUOTA_EXCEEDED",
+    }
+
+
+def _build_document_title_from_upload(
+    *,
+    db: Session,
+    user_id: int,
+    title_override: str | None,
+    extracted_title: str | None,
+    file_name: str | None,
+) -> str:
+    preferred_title = (title_override or "").strip()
+
+    if len(preferred_title) < 3:
+        preferred_title = (extracted_title or "").strip()
+
+    if len(preferred_title) < 3 and file_name:
+        preferred_title = Path(file_name).stem.strip()
+
+    if len(preferred_title) < 3:
+        preferred_title = f"Tài liệu mới - {datetime.now(UTC).strftime('%d/%m/%Y')}"
+
+    return _build_unique_document_title(db=db, user_id=user_id, preferred_title=preferred_title)
+
+
+def _best_effort_delete_lesson(*, db: Session, user_id: int, lesson_id: int) -> None:
+    try:
+        lesson = db.scalar(select(Lesson).where(and_(Lesson.id == lesson_id, Lesson.user_id == user_id)))
+        if lesson is not None:
+            db.delete(lesson)
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("document.upload_cleanup_lesson_failed lesson_id=%s", lesson_id, exc_info=True)
+
+
+def create_document_from_uploaded_file_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    file_name: str | None,
+    content_type: str | None,
+    file_bytes: bytes,
+    title_override: str | None = None,
+) -> Lesson:
+    extracted_text, _, extracted_mime_type, extracted_title = extract_text_from_uploaded_file(
+        file_name=file_name,
+        content_type=content_type,
+        file_bytes=file_bytes,
+    )
+
+    resolved_title = _build_document_title_from_upload(
+        db=db,
+        user_id=user_id,
+        title_override=title_override,
+        extracted_title=extracted_title,
+        file_name=file_name,
+    )
+
+    upload_result = upload_original_document(
+        user_id=user_id,
+        file_name=file_name,
+        content_type=content_type or extracted_mime_type,
+        file_bytes=file_bytes,
+    )
+
+    lesson: Lesson | None = None
+    used_draft_fallback = False
+    try:
+        try:
+            lesson = create_document_for_user(
+                db=db,
+                user_id=user_id,
+                title=resolved_title,
+                source_content=extracted_text,
+            )
+        except AppException as exc:
+            if not _is_theory_generation_failure(exc):
+                raise
+
+            logger.warning(
+                "document.upload_theory_fallback_to_draft user_id=%s file_name=%s reason=%s",
+                user_id,
+                file_name,
+                exc.detail.get("code") if isinstance(exc.detail, dict) else "unknown",
+            )
+            used_draft_fallback = True
+            lesson = create_document_draft_for_user(
+                db=db,
+                user_id=user_id,
+                title=resolved_title,
+                source_content=extracted_text,
+            )
+
+        lesson.source_file_url = upload_result.secure_url
+        lesson.source_file_public_id = upload_result.public_id
+        lesson.source_file_name = file_name or upload_result.original_filename
+        lesson.source_file_mime_type = extracted_mime_type or content_type
+        db.commit()
+        db.refresh(lesson)
+
+        try:
+            generate_quiz_for_lesson_user(db=db, user_id=user_id, lesson_id=lesson.id)
+        except AppException as exc:
+            logger.warning(
+                "document.upload_quiz_generation_skipped user_id=%s lesson_id=%s reason=%s",
+                user_id,
+                lesson.id,
+                exc.detail.get("code") if isinstance(exc.detail, dict) else "unknown",
+            )
+        except Exception as exc:
+            logger.warning(
+                "document.upload_quiz_generation_unexpected user_id=%s lesson_id=%s error=%s",
+                user_id,
+                lesson.id,
+                str(exc),
+            )
+
+        if used_draft_fallback:
+            logger.info(
+                "document.upload_created_as_draft user_id=%s lesson_id=%s",
+                user_id,
+                lesson.id,
+            )
+        return lesson
+    except AppException:
+        db.rollback()
+        if lesson is not None:
+            _best_effort_delete_lesson(db=db, user_id=user_id, lesson_id=lesson.id)
+        delete_original_document(public_id=upload_result.public_id, resource_type=upload_result.resource_type)
+        raise
+    except Exception as exc:
+        db.rollback()
+        if lesson is not None:
+            _best_effort_delete_lesson(db=db, user_id=user_id, lesson_id=lesson.id)
+        delete_original_document(public_id=upload_result.public_id, resource_type=upload_result.resource_type)
+        raise AppException(
+            status_code=500,
+            message="Workspace creation from upload failed",
+            detail={"code": "DOCUMENT_UPLOAD_CREATE_FAILED", "error": str(exc)},
         ) from exc
 
 
@@ -371,6 +569,9 @@ def _to_lesson_detail(
         quiz_passed=quiz_passed,
         flashcard_completed=flashcard_completed,
         source_content=lesson.source_content,
+        source_file_url=lesson.source_file_url,
+        source_file_name=lesson.source_file_name,
+        source_file_mime_type=lesson.source_file_mime_type,
         content_markdown=content,
         youtube_video_id=lesson.youtube_video_id,
         is_draft=not bool(content),

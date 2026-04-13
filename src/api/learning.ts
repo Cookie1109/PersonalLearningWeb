@@ -7,6 +7,7 @@ import {
   DocumentCreateResponseDTO,
   DocumentDeleteResponseDTO,
   DocumentRenameRequestDTO,
+  DocumentUploadResponseDTO,
   DocumentSummaryDTO,
   FlashcardCompleteResponseDTO,
   LessonCompleteResponseDTO,
@@ -55,6 +56,9 @@ export interface LessonDetail {
   youtubeVideoId: string | null;
   isDraft: boolean;
   sourceContent: string | null;
+  sourceFileUrl: string | null;
+  sourceFileName: string | null;
+  sourceFileMimeType: string | null;
 }
 
 export interface MyDocument {
@@ -118,6 +122,9 @@ function mapLessonDetail(dto: LessonDetailDTO): LessonDetail {
     quizPassed: dto.quiz_passed ?? false,
     flashcardCompleted: dto.flashcard_completed ?? false,
     sourceContent: dto.source_content ?? null,
+    sourceFileUrl: dto.source_file_url ?? null,
+    sourceFileName: dto.source_file_name ?? null,
+    sourceFileMimeType: dto.source_file_mime_type ?? null,
     contentMarkdown: dto.content_markdown ?? null,
     youtubeVideoId: dto.youtube_video_id ?? null,
     isDraft: dto.is_draft,
@@ -174,6 +181,44 @@ export async function createDocument(payload: DocumentCreateRequestDTO): Promise
       throw new Error(backendMessage ?? 'Không thể tạo tài liệu lúc này.');
     }
 
+    throw error;
+  }
+}
+
+export async function createDocumentFromUpload(file: File, title?: string): Promise<DocumentUploadResponseDTO> {
+  if (!file) {
+    throw new Error('Không tìm thấy file để tạo Workspace.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const normalizedTitle = (title ?? '').trim();
+  if (normalizedTitle.length >= 3) {
+    formData.append('title', normalizedTitle);
+  }
+
+  try {
+    const response = await apiClient.post<DocumentUploadResponseDTO>(
+      '/documents/upload',
+      formData,
+      {
+        headers: {
+          ...createAuthHeaders(),
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    if (response.status !== 200) {
+      throw new Error('Không thể tạo Workspace từ file lúc này.');
+    }
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(error.response?.data?.message ?? 'Không thể tạo Workspace từ file lúc này.');
+    }
     throw error;
   }
 }

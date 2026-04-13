@@ -63,14 +63,6 @@ const QUIZ_TYPE_LABELS: Record<string, string> = {
   fill_blank: 'Điền khuyết',
 };
 
-const QUIZ_TYPE_BADGE_STYLES: Record<string, string> = {
-  theory: 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200',
-  fill_code: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
-  find_bug: 'border-red-200 bg-red-100 text-red-800',
-  general_choice: 'border-blue-200 bg-blue-100 text-blue-800',
-  fill_blank: 'border-orange-200 bg-orange-100 text-orange-800',
-};
-
 const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
   Easy: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
   Medium: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
@@ -80,13 +72,6 @@ const QUIZ_DIFFICULTY_STYLES: Record<string, string> = {
 function getQuizTypeLabel(type: string | null | undefined): string {
   if (!type) return 'Khác';
   return QUIZ_TYPE_LABELS[type] ?? type;
-}
-
-function getQuizTypeStyle(type: string | null | undefined): string {
-  if (!type) {
-    return 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200';
-  }
-  return QUIZ_TYPE_BADGE_STYLES[type] ?? 'border-zinc-500/60 bg-zinc-500/15 text-zinc-200';
 }
 
 function getQuizDifficultyStyle(difficulty: string | null | undefined): string {
@@ -218,16 +203,16 @@ function _isNoiseSentence(raw: string): boolean {
 
   const folded = _foldForMatch(text);
   const lowSignalStarters = [
-    'trong bai hoc nay',
-    'chung ta se',
-    'muc tieu la',
-    'ban co the',
-    'hay nho rang',
-    'duoi day la',
-    'moi ban',
+    'trong bài học này',
+    'chúng ta sẽ',
+    'mục tiêu là',
+    'bạn có thể',
+    'hãy nhớ rằng',
+    'dưới đây là',
+    'mời bạn',
   ];
 
-  if (lowSignalStarters.some(prefix => folded.startsWith(prefix)) && !_hasTechnicalSignal(folded)) {
+  if (lowSignalStarters.some(prefix => folded.startsWith(_foldForMatch(prefix))) && !_hasTechnicalSignal(folded)) {
     return true;
   }
 
@@ -274,7 +259,7 @@ function _splitAtomicIdeas(raw: string): string[] {
 function _extractKnowledgeEntries(markdown: string): KnowledgeEntry[] {
   const lines = markdown.split('\n');
   const entries: KnowledgeEntry[] = [];
-  let currentSection = 'Tổng quan';
+  let currentSection = 'Tong quan';
   let inCodeBlock = false;
 
   for (const rawLine of lines) {
@@ -543,29 +528,29 @@ function _buildContextSeed(seeds: FlashcardSeed[], entries: KnowledgeEntry[]): F
   const ruleMatches: Array<{ pattern: RegExp; front: string; back: string }> = [
     {
       pattern: /\b(compiler|gcc|clang|msvc|bien dich|build)\b/,
-      front: 'Tinh huong IT: Khi nao ban can chay compiler trong project C++?',
-      back: 'Khi can bien ma nguon thanh ma may va bat loi cu phap/type truoc khi chay chuong trinh.',
+      front: 'Tình huống IT: Khi nào bạn cần chạy compiler trong project C++?',
+      back: 'Khi cần biên mã nguồn thành mã máy và bắt lỗi cú pháp/type trước khi chạy chương trình.',
     },
     {
       pattern: /\b(ide|editor|vs code|vscode|debug)\b/,
-      front: 'Tinh huong IT: IDE giup gi khi ban debug mot loi kho?',
-      back: 'IDE cho phep đạt breakpoint, theo doi bien, va trace tung buoc de khoanh vung nguyen nhan nhanh hon.',
+      front: 'Tình huống IT: IDE giúp gì khi bạn debug một lỗi khó?',
+      back: 'IDE cho phép đặt breakpoint, theo dõi biến, và trace từng bước để khoanh vùng nguyên nhân nhanh hơn.',
     },
     {
       pattern: /\b(index|database|sql)\b/,
-      front: 'Tinh huong IT: Khi nao viec danh index co the lam giam hieu nang?',
-      back: 'Khi bang ghi/cap nhat lien tuc hoac cot co do chon loc thap, chi phi cap nhat index lon hon loi ich truy van.',
+      front: 'Tình huống IT: Khi nào việc đánh index có thể làm giảm hiệu năng?',
+      back: 'Khi bảng ghi/cập nhật liên tục hoặc cột có độ chọn lọc thấp, chi phí cập nhật index lớn hơn lợi ích truy vấn.',
     },
     {
       pattern: /\b(api|http|request|response|endpoint)\b/,
-      front: 'Tinh huong IT: Khi tich hop API, can kiem tra gi de tranh loi runtime?',
-      back: 'Kiem tra hop dong input/output, ma loi HTTP, timeout va retry de he thong on dinh trong thuc te.',
+      front: 'Tình huống IT: Khi tích hợp API, cần kiểm tra gì để tránh lỗi runtime?',
+      back: 'Kiểm tra hợp đồng input/output, mã lỗi HTTP, timeout và retry để hệ thống ổn định trong thực tế.',
     },
   ];
 
   for (const rule of ruleMatches) {
     if (rule.pattern.test(foldedCorpus)) {
-      return _buildSeed('context', rule.front, rule.back, 'Tinh huong IT', rule.back);
+      return _buildSeed('context', rule.front, rule.back, 'Tình huống IT', rule.back);
     }
   }
 
@@ -574,10 +559,10 @@ function _buildContextSeed(seeds: FlashcardSeed[], entries: KnowledgeEntry[]): F
     return null;
   }
 
-  const topic = _extractTopic(fallbackSeed.section, 'kien thuc nay');
+  const topic = _extractTopic(fallbackSeed.section, 'kiến thức này');
   return _buildSeed(
     'context',
-    `Tinh huong IT: Trong du an that, ban ap dung "${topic}" khi nao?`,
+    `Tình huống IT: Trong dự án thật, bạn áp dụng "${topic}" khi nào?`,
     fallbackSeed.back,
     fallbackSeed.section,
     fallbackSeed.sourceText,
@@ -651,10 +636,10 @@ export function buildFlashcardsFromMarkdown(markdown: string | null, maxCards: n
     }
 
     if (entry.isList) {
-      const stepLabel = entry.order ? `buoc ${entry.order}` : 'mot buoc quan trong';
+      const stepLabel = entry.order ? `bước ${entry.order}` : 'một bước quan trọng';
       const seed = _buildSeed(
         'process',
-        `Trong "${entry.section}", ${stepLabel} can lam gi?`,
+        `Trong "${entry.section}", ${stepLabel} cần làm gì?`,
         entry.text,
         entry.section,
         entry.text,
@@ -668,7 +653,7 @@ export function buildFlashcardsFromMarkdown(markdown: string | null, maxCards: n
     const topic = _extractTopic(entry.section === 'Tổng quan' ? entry.text : entry.section, 'nội dung này');
     const seed = _buildSeed(
       'fact',
-      `Y chinh can nho ve "${topic}" la gi?`,
+      `Ý chính cần nhớ về "${topic}" là gì?`,
       entry.text,
       entry.section,
       entry.text,
@@ -780,7 +765,7 @@ export function QuizResultDisplay({
         </p>
         <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} câu đúng</p>
         {quizResult.is_passed ? (
-          <p className="text-emerald-300 text-sm mt-2">Bạn đã đạt quiz. Icon Quiz sẽ sáng ngày lập tức.</p>
+          <p className="text-emerald-300 text-sm mt-2">Bạn đã đạt quiz. Icon Quiz sẽ sáng ngay lập tức.</p>
         ) : (
           <p className="text-amber-300 text-sm mt-2">Chưa đạt ngưỡng. Hãy ôn lại lý thuyết và thử lại.</p>
         )}
@@ -1184,7 +1169,7 @@ export default function LearningWorkspace() {
           setQuizGenerateError(
             retryAfter
               ? `Bạn tạo quiz quá nhanh. Vui lòng thử lại sau ${retryAfter} giây.`
-              : 'Bạn tạo quiz quá nhanh. Vui lòng thử lại sau it phut.'
+              : 'Bạn tạo quiz quá nhanh. Vui lòng thử lại sau ít phút.'
           );
         } else if (error.response?.status === 403 || error.response?.data?.detail?.code === 'QUIZ_REGENERATION_REQUIRES_SUBMISSION') {
           setQuizGenerateError(error.response?.data?.message ?? 'Vui lòng nộp bài để có thể tạo đề mới.');
@@ -1337,11 +1322,11 @@ export default function LearningWorkspace() {
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setFlashcardError(error.response?.data?.message ?? 'Không thể ghi nhan flashcard luc nay.');
+        setFlashcardError(error.response?.data?.message ?? 'Không thể ghi nhận flashcard lúc này.');
       } else if (error instanceof Error) {
         setFlashcardError(error.message);
       } else {
-        setFlashcardError('Không thể ghi nhan flashcard luc nay.');
+        setFlashcardError('Không thể ghi nhận flashcard lúc này.');
       }
     } finally {
       setIsMarkingFlashcardComplete(false);
@@ -1435,7 +1420,7 @@ export default function LearningWorkspace() {
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <BookOpen size={48} className="text-zinc-700" />
         <p className="text-zinc-400">Chưa có tài liệu nào được chọn</p>
-        <button onClick={() => navigate('/create')} className="px-4 py-2 rounded-xl bg-cyan-600 text-white text-sm">
+        <button onClick={() => navigate('/create')} className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm">
           Tạo tài liệu mới
         </button>
       </div>
@@ -1503,7 +1488,7 @@ export default function LearningWorkspace() {
             onClick={() => void retryGeneration()}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs text-white"
           >
-            <Zap size={12} />Tạo nội dung ngày
+            <Zap size={12} />Tạo nội dung ngay
           </button>
         </div>
       );
@@ -1529,7 +1514,7 @@ export default function LearningWorkspace() {
             <Loader2 size={13} className="animate-spin" />AI đang tạo bộ 10 câu hỏi...
           </div>
           <p className="text-sm text-cyan-100/90">
-            Qua trinh sinh quiz co thẻ mat khoang 10-20 giây. Vui lòng đợi trong giây lát.
+            Quá trình sinh quiz có thể mất khoảng 10-20 giây. Vui lòng đợi trong giây lát.
           </p>
           <div className="space-y-2">
             {[...Array(3)].map((_, index) => (
@@ -1558,7 +1543,7 @@ export default function LearningWorkspace() {
       return (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-5 py-6">
           <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Chưa có bài trắc nghiệm</h3>
-          <p className="mt-2 text-sm text-zinc-300">Tạo bộ 10 câu hỏi tự động bằng AI để luyện tập ngày trên tài liệu này.</p>
+          <p className="mt-2 text-sm text-zinc-300">Tạo bộ 10 câu hỏi tự động bằng AI để luyện tập ngay trên tài liệu này.</p>
           <button
             onClick={() => void handleGenerateQuiz()}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-5 py-3 text-sm text-white"
@@ -1615,7 +1600,7 @@ export default function LearningWorkspace() {
 
         <div className="rounded-xl border border-zinc-700 bg-zinc-950/60 p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2.5 py-1 text-xs ${getQuizTypeStyle(currentQuizQuestion?.type)}`} style={{ fontWeight: 600 }}>
+            <span className="rounded-full border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1 text-xs text-cyan-200" style={{ fontWeight: 600 }}>
               {getQuizTypeLabel(currentQuizQuestion?.type)}
             </span>
             <span
@@ -1994,7 +1979,7 @@ export default function LearningWorkspace() {
                   className="rounded-xl px-4 py-2.5 text-sm bg-cyan-600 hover:bg-cyan-500 text-white"
                   style={{ fontWeight: 600 }}
                 >
-                  Làm ngày
+                  Làm ngay
                 </button>
               </div>
             </motion.div>
@@ -2049,11 +2034,3 @@ export default function LearningWorkspace() {
     </div>
   );
 }
-
-
-
-
-
-
-
-

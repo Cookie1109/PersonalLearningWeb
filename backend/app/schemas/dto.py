@@ -96,6 +96,14 @@ class DocumentCreateResponseDTO(BaseModel):
     message: str
 
 
+class DocumentUploadResponseDTO(BaseModel):
+    document_id: int
+    title: str
+    message: str
+    source_file_url: str | None = None
+    source_file_name: str | None = None
+
+
 class DocumentRenameRequestDTO(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
 
@@ -244,6 +252,9 @@ class LessonDetailDTO(BaseModel):
     quiz_passed: bool = False
     flashcard_completed: bool = False
     source_content: str | None = None
+    source_file_url: str | None = None
+    source_file_name: str | None = None
+    source_file_mime_type: str | None = None
     content_markdown: str | None = None
     youtube_video_id: str | None = None
     is_draft: bool = True

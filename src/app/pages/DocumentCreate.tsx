@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { FileImage, FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { createDocument, extractTextFromParser } from '../../api/learning';
+import { createDocument, createDocumentFromUpload, extractTextFromParser } from '../../api/learning';
 
 type InputMode = 'text' | 'url' | 'file' | 'image';
 
@@ -119,12 +119,17 @@ export default function DocumentCreate() {
     setSubmitPhase('extracting');
 
     try {
+      if (inputMode === 'file' || inputMode === 'image') {
+        setSubmitPhase('creating');
+        const result = await createDocumentFromUpload(selectedFile as File);
+        navigate(`/learn/${result.document_id}`, { replace: true });
+        return;
+      }
+
       let contentForCreate = normalizedContent;
       let extractedTitleFromSource = '';
-      if (!isTextMode) {
-        const extractionResult = inputMode === 'url'
-          ? await extractTextFromParser({ mode: 'url', url: normalizedUrl })
-          : await extractTextFromParser({ mode: 'file', file: selectedFile as File });
+      if (inputMode === 'url') {
+        const extractionResult = await extractTextFromParser({ mode: 'url', url: normalizedUrl });
 
         contentForCreate = ensureExtractedContent(extractionResult.extracted_text);
         extractedTitleFromSource = extractionResult.extracted_title?.trim() ?? '';

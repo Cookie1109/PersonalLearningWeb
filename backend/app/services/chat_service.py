@@ -85,7 +85,7 @@ def build_document_chat_system_prompt(*, source_content: str) -> str:
         "Nhiem vu cua ban la tra loi câu hỏi CHI dua tren tài liệu nguon được cung cap ben duoi. "
         "Tài liệu nguon la su that DUY NHAT. TUYET DOI KHONG bo sung kien thuc ben ngoai tài liệu, KHONG suy doan. "
         "Neu nguoi dung hoi ngoai pham vi tài liệu, không được tu dien giai them. "
-        "Neu tài liệu không co thong tin de tra loi, phai nội dung nguyen van: 'Tài liệu không de cap den van de nay'. "
+        "Neu tài liệu không co thong tin de tra loi, phai noi nguyen van: 'Tai lieu khong de cap den van de nay'. "
         "Tra loi ngan gon, ro rang, uu tien giai thich theo bullet neu can. "
         "Neu tài liệu co code, command hoac bang bieu thi trinh bay bang Markdown GFM tuong ung.\n\n"
         "Tài liệu nguon:\n"

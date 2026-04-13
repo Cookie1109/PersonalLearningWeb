@@ -423,16 +423,7 @@ def test_generate_quiz_questions_falls_back_to_secondary_model_on_404(monkeypatc
 
         def post(self, endpoint: str, *, params: dict[str, str], json: dict[str, object]):
             _ = (params, json)
-            if "gemini-2.5-flash" in endpoint:
-                return FakeResponse(
-                    404,
-                    {
-                        "error": {
-                            "message": "Model not found",
-                        }
-                    },
-                )
-            if "gemini-2.0-flash" in endpoint:
+            if "gemini-2.5-flash-lite" in endpoint:
                 return FakeResponse(
                     200,
                     {
@@ -445,6 +436,15 @@ def test_generate_quiz_questions_falls_back_to_secondary_model_on_404(monkeypatc
                         ]
                     },
                 )
+            if "gemini-2.5-flash" in endpoint:
+                return FakeResponse(
+                    404,
+                    {
+                        "error": {
+                            "message": "Model not found",
+                        }
+                    },
+                )
             return FakeResponse(500, {"error": {"message": "Unexpected model"}})
 
     monkeypatch.setattr(quiz_generation_service, "get_settings", lambda: FakeSettings())
@@ -455,7 +455,7 @@ def test_generate_quiz_questions_falls_back_to_secondary_model_on_404(monkeypatc
         source_content="Express route middleware async request response",
     )
 
-    assert model_name == "gemini-2.0-flash"
+    assert model_name == "gemini-2.5-flash-lite"
     assert len(questions) == 10
 
 
@@ -503,3 +503,27 @@ def test_generate_quiz_questions_returns_quota_exceeded_code_on_429(monkeypatch:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail["code"] == "LLM_QUOTA_EXCEEDED"
+
+
+def test_classify_document_domain_detects_technical_content() -> None:
+    domain = quiz_generation_service._classify_document_domain(
+        lesson_title="Express Middleware",
+        source_content=(
+            "const app = express(); app.use((req, res, next) => next()); "
+            "API endpoint router controller database query JSON"
+        ),
+    )
+
+    assert domain == quiz_generation_service.DOMAIN_TECHNICAL
+
+
+def test_classify_document_domain_detects_general_content() -> None:
+    domain = quiz_generation_service._classify_document_domain(
+        lesson_title="Lich su The gioi hien dai",
+        source_content=(
+            "Tai lieu trinh bay boi canh chinh tri chau Au, su kien ngoai giao, "
+            "va tac dong xa hoi trong giai doan 1939-1945."
+        ),
+    )
+
+    assert domain == quiz_generation_service.DOMAIN_GENERAL

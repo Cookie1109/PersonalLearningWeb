@@ -151,7 +151,7 @@ def _normalize_model_name(raw_model: str) -> str:
 
 def _build_model_candidates(settings) -> list[str]:
     configured_flash_model = (settings.gemini_model or "").strip() or "gemini-2.5-flash"
-    configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-2.5-pro"
+    configured_pro_model = (settings.gemini_pro_model or "").strip() or "gemini-2.5-flash"
 
     candidates: list[str] = []
     for candidate in (

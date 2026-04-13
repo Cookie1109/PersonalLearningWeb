@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from redis import Redis
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from app.schemas import (
     DocumentCreateResponseDTO,
     DocumentDeleteResponseDTO,
     DocumentRenameRequestDTO,
+    DocumentUploadResponseDTO,
     DocumentQuizSubmitRequestDTO,
     DocumentSummaryDTO,
     ErrorResponseDTO,
@@ -27,6 +28,7 @@ from app.schemas import (
 from app.services import chat_service
 from app.services.lesson_service import (
     create_document_for_user,
+    create_document_from_uploaded_file_for_user,
     delete_document_for_user,
     list_documents_for_user,
     rename_document_for_user,
@@ -47,6 +49,7 @@ ERROR_RESPONSES = {
     401: {"model": ErrorResponseDTO, "description": "Unauthorized"},
     403: {"model": ErrorResponseDTO, "description": "Forbidden"},
     404: {"model": ErrorResponseDTO, "description": "Not Found"},
+    413: {"model": ErrorResponseDTO, "description": "Payload Too Large"},
     500: {"model": ErrorResponseDTO, "description": "Internal Server Error"},
     409: {"model": ErrorResponseDTO, "description": "Conflict"},
     429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
@@ -76,6 +79,41 @@ def create_document(
         document_id=lesson.id,
         title=lesson.title,
         message="Document created",
+    )
+
+
+@router.post(
+    "/upload",
+    response_model=DocumentUploadResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+async def create_document_from_upload(
+    file: UploadFile = File(...),
+    title: str | None = Form(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocumentUploadResponseDTO:
+    try:
+        file_bytes = await file.read()
+    finally:
+        await file.close()
+
+    lesson = create_document_from_uploaded_file_for_user(
+        db=db,
+        user_id=current_user.id,
+        file_name=file.filename,
+        content_type=file.content_type,
+        file_bytes=file_bytes,
+        title_override=title,
+    )
+
+    return DocumentUploadResponseDTO(
+        document_id=lesson.id,
+        title=lesson.title,
+        message="Workspace created from upload",
+        source_file_url=lesson.source_file_url,
+        source_file_name=lesson.source_file_name,
     )
 
 

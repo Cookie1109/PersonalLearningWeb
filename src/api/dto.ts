@@ -70,6 +70,14 @@ export interface DocumentCreateResponseDTO {
   message: string;
 }
 
+export interface DocumentUploadResponseDTO {
+  document_id: number;
+  title: string;
+  message: string;
+  source_file_url?: string | null;
+  source_file_name?: string | null;
+}
+
 export interface DocumentRenameRequestDTO {
   title: string;
 }
@@ -259,6 +267,9 @@ export interface LessonDetailDTO {
   quiz_passed: boolean;
   flashcard_completed: boolean;
   source_content?: string | null;
+  source_file_url?: string | null;
+  source_file_name?: string | null;
+  source_file_mime_type?: string | null;
   content_markdown?: string | null;
   youtube_video_id?: string | null;
   is_draft: boolean;

@@ -50,9 +50,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GEMINI_MODEL", "GEMINI_FLASH_MODEL"),
     )
     gemini_quiz_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_QUIZ_MODEL")
-    gemini_pro_model: str = Field(default="gemini-1.5-pro", alias="GEMINI_PRO_MODEL")
+    gemini_pro_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_PRO_MODEL")
     gemini_timeout_seconds: float = Field(default=120.0, alias="GEMINI_TIMEOUT_SECONDS")
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
+    cloudinary_cloud_name: str | None = Field(default=None, alias="CLOUDINARY_CLOUD_NAME")
+    cloudinary_api_key: str | None = Field(default=None, alias="CLOUDINARY_API_KEY")
+    cloudinary_api_secret: str | None = Field(default=None, alias="CLOUDINARY_API_SECRET")
+    cloudinary_upload_folder: str = Field(default="personal-learning/documents", alias="CLOUDINARY_UPLOAD_FOLDER")
 
 
 @lru_cache
