@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { BookOpen, CalendarDays, CheckSquare, LibraryBig, Loader2, MoreVertical, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, CalendarDays, LibraryBig, Loader2, MoreVertical, Pencil, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { deleteDocument, getMyDocuments, MyDocument, renameDocument } from '../../api/learning';
 
@@ -17,6 +17,34 @@ function formatDocumentDate(value: string): string {
     return 'Không rõ ngày tạo';
   }
   return shortDateFormatter.format(date);
+}
+
+const LIBRARY_TITLE_MAX_LENGTH = 48;
+
+function formatLibraryTitle(value: string): string {
+  const normalized = (value || '').trim();
+  if (normalized.length <= LIBRARY_TITLE_MAX_LENGTH) {
+    return normalized;
+  }
+
+  const [headRaw, ...tailParts] = normalized.split(' - ');
+  const head = (headRaw || '').trim();
+  const tail = tailParts.join(' - ').trim();
+
+  // Keep the course/module prefix and show a concise hint of the topic.
+  if (head && tail) {
+    const tailPreview = tail
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(' ');
+
+    if (tailPreview) {
+      return `${head} - ${tailPreview}...`;
+    }
+  }
+
+  return `${normalized.slice(0, LIBRARY_TITLE_MAX_LENGTH - 3).trimEnd()}...`;
 }
 
 function LoadingState() {
@@ -40,7 +68,6 @@ export default function Library() {
   const navigate = useNavigate();
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<MyDocument[]>([]);
-  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
@@ -50,15 +77,12 @@ export default function Library() {
   const [editTitle, setEditTitle] = useState('');
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const selectedSet = useMemo(() => new Set(selectedDocuments), [selectedDocuments]);
-
   const loadDocuments = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const data = await getMyDocuments();
       setDocuments(data);
-      setSelectedDocuments(prev => prev.filter(id => data.some(doc => doc.id === id)));
     } catch (error) {
       if (error instanceof Error) {
         setLoadError(error.message);
@@ -88,18 +112,6 @@ export default function Library() {
       editInputRef.current?.select();
     }
   }, [isEditModalOpen]);
-
-  const toggleSelection = (documentId: string) => {
-    setSelectedDocuments(prev => (
-      prev.includes(documentId)
-        ? prev.filter(id => id !== documentId)
-        : [...prev, documentId]
-    ));
-  };
-
-  const handleMegaQuizClick = () => {
-    toast.info('Tính năng đang được phát triển');
-  };
 
   const openEditModal = (doc: MyDocument) => {
     setSelectedDoc(doc);
@@ -159,7 +171,6 @@ export default function Library() {
     try {
       await deleteDocument(selectedDoc.id);
       setDocuments(prev => prev.filter(doc => doc.id !== selectedDoc.id));
-      setSelectedDocuments(prev => prev.filter(id => id !== selectedDoc.id));
       toast.success('Xóa tài liệu thành công.');
       closeModals();
     } catch (error) {
@@ -215,7 +226,7 @@ export default function Library() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {documents.map(document => {
-            const isSelected = selectedSet.has(document.id);
+            const displayedTitle = formatLibraryTitle(document.title);
 
             return (
               <motion.div
@@ -231,28 +242,13 @@ export default function Library() {
                     navigate(`/learn/${document.id}`);
                   }
                 }}
-                className={`relative cursor-pointer rounded-2xl border p-5 transition-all duration-200 ${
-                  isSelected
-                    ? 'border-cyan-300 dark:border-cyan-500/60 bg-cyan-50 dark:bg-cyan-500/10 shadow-[0_0_0_1px_rgba(8,145,178,0.2)] dark:shadow-[0_0_0_1px_rgba(34,211,238,0.15)]'
-                    : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-slate-300 dark:hover:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-900/90'
-                }`}
+                className="relative cursor-pointer rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 transition-all duration-200 hover:border-slate-300 dark:hover:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-900/90"
               >
                 <div
                   onClick={event => event.stopPropagation()}
                   onKeyDown={event => event.stopPropagation()}
                   className="absolute right-3 top-3 flex items-center gap-2"
                 >
-                  <label className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-white/95 dark:bg-zinc-950/80 px-2 py-1 text-xs text-slate-700 dark:text-zinc-200">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleSelection(document.id)}
-                      className="h-3.5 w-3.5 accent-cyan-500"
-                      aria-label={`Chọn tài liệu ${document.title}`}
-                    />
-                    Chọn
-                  </label>
-
                   <div className="relative" data-library-menu>
                     <button
                       type="button"
@@ -297,8 +293,12 @@ export default function Library() {
                   </div>
                 </div>
 
-                <h3 className="text-base text-slate-900 dark:text-white pr-28 leading-snug" style={{ fontWeight: 600 }}>
-                  {document.title}
+                <h3
+                  className="text-base text-slate-900 dark:text-white pr-12 leading-snug"
+                  style={{ fontWeight: 600 }}
+                  title={document.title}
+                >
+                  {displayedTitle}
                 </h3>
 
                 <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500">
@@ -315,43 +315,6 @@ export default function Library() {
           })}
         </div>
       )}
-
-      <AnimatePresence>
-        {selectedDocuments.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-[min(95vw,720px)]"
-          >
-            <div className="rounded-2xl border border-cyan-300 dark:border-cyan-500/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur px-4 py-3 shadow-2xl">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="inline-flex items-center gap-2 text-cyan-700 dark:text-cyan-200 text-sm" style={{ fontWeight: 600 }}>
-                  <CheckSquare size={16} />Đã chọn {selectedDocuments.length} tài liệu
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDocuments([])}
-                    className="rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 px-3 py-2 text-xs text-slate-700 dark:text-zinc-200"
-                    style={{ fontWeight: 600 }}
-                  >
-                    Bỏ chọn
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleMegaQuizClick}
-                    className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-4 py-2 text-sm text-white"
-                    style={{ fontWeight: 700 }}
-                  >
-                    Tạo Mega Quiz (Sắp ra mắt)
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {isEditModalOpen && selectedDoc && (
