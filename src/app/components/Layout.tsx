@@ -27,6 +27,7 @@ export interface LayoutProps {
 
 type ThemeMode = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'nexl-theme-mode';
+const SIDEBAR_AUTO_COLLAPSE_BREAKPOINT = 1024;
 
 function resolveInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') {
@@ -80,6 +81,20 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
       mounted = false;
     };
   }, [navigate, setUserFromAuth]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_BREAKPOINT - 1}px)`);
+
+    const handleViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      if (event.matches) {
+        setSidebarOpen(false);
+      }
+    };
+
+    handleViewportChange(mediaQuery);
+    mediaQuery.addEventListener('change', handleViewportChange);
+    return () => mediaQuery.removeEventListener('change', handleViewportChange);
+  }, []);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);

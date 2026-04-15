@@ -1,11 +1,11 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { FileImage, FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
+import { FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { createDocument, createDocumentFromUpload, extractTextFromParser } from '../../api/learning';
 
-type InputMode = 'text' | 'url' | 'file' | 'image';
+type InputMode = 'text' | 'url' | 'file';
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -16,7 +16,6 @@ function buildDefaultDocumentTitle(): string {
 export default function DocumentCreate() {
   const navigate = useNavigate();
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
-  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [sourceContent, setSourceContent] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('text');
@@ -42,7 +41,7 @@ export default function DocumentCreate() {
     if (mode === 'url') {
       setSelectedFile(null);
     }
-    if (mode === 'file' || mode === 'image') {
+    if (mode === 'file') {
       setSourceUrl('');
     }
   };
@@ -84,12 +83,6 @@ export default function DocumentCreate() {
     selectInputFile(file);
   };
 
-  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    selectInputFile(file);
-  };
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) {
@@ -107,7 +100,7 @@ export default function DocumentCreate() {
       return;
     }
 
-    if ((inputMode === 'file' || inputMode === 'image') && !selectedFile) {
+    if (inputMode === 'file' && !selectedFile) {
       const message = 'Vui lòng chọn file trước khi tạo Workspace.';
       setSubmitError(message);
       toast.error(message);
@@ -119,7 +112,7 @@ export default function DocumentCreate() {
     setSubmitPhase('extracting');
 
     try {
-      if (inputMode === 'file' || inputMode === 'image') {
+      if (inputMode === 'file') {
         setSubmitPhase('creating');
         const result = await createDocumentFromUpload(selectedFile as File);
         navigate(`/learn/${result.document_id}`, { replace: true });
@@ -187,12 +180,11 @@ export default function DocumentCreate() {
             Nguồn tài liệu
           </label>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
             {[
               { mode: 'text' as const, icon: Type, label: 'Nhập Text' },
               { mode: 'url' as const, icon: Link2, label: 'Gắn Link' },
               { mode: 'file' as const, icon: FileText, label: 'Tải PDF/DOCX' },
-              { mode: 'image' as const, icon: FileImage, label: 'Tải Ảnh/Chụp Ảnh' },
             ].map(item => {
               const Icon = item.icon;
               const isActive = inputMode === item.mode;
@@ -250,30 +242,6 @@ export default function DocumentCreate() {
               >
                 <FileText size={14} />Chọn file PDF/DOCX
               </button>
-            </div>
-          )}
-
-          {inputMode === 'image' && (
-            <div className="mb-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/70 p-3">
-              <p className="text-xs text-slate-600 dark:text-zinc-400 mb-2">Tải ảnh JPG/PNG/WEBP để OCR.</p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  ref={imageFileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  onChange={handleImageFileChange}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => imageFileInputRef.current?.click()}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-slate-700 dark:text-zinc-100"
-                  style={{ fontWeight: 600 }}
-                >
-                  <FileImage size={14} />Tải ảnh lên
-                </button>
-              </div>
             </div>
           )}
 

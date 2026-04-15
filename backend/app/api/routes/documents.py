@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from redis import Redis
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from app.schemas import (
     DocumentCreateRequestDTO,
     DocumentCreateResponseDTO,
     DocumentDeleteResponseDTO,
+    DocumentPageDTO,
     DocumentRenameRequestDTO,
     DocumentUploadResponseDTO,
     DocumentQuizSubmitRequestDTO,
@@ -30,6 +31,7 @@ from app.services.lesson_service import (
     create_document_for_user,
     create_document_from_uploaded_file_for_user,
     delete_document_for_user,
+    list_documents_page_for_user,
     list_documents_for_user,
     rename_document_for_user,
 )
@@ -128,6 +130,28 @@ def get_my_documents(
     db: Session = Depends(get_db),
 ) -> list[DocumentSummaryDTO]:
     return list_documents_for_user(db=db, user_id=current_user.id)
+
+
+@router.get(
+    "/paged",
+    response_model=DocumentPageDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_my_documents_paged(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=9, ge=1, le=50),
+    search: str | None = Query(default=None, max_length=255),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DocumentPageDTO:
+    return list_documents_page_for_user(
+        db=db,
+        user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        search=search,
+    )
 
 
 @router.patch(

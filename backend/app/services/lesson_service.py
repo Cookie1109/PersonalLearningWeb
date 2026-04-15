@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 import re
 from typing import Any
@@ -8,13 +9,14 @@ from typing import Any
 import httpx
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models import ExpLedger, FlashcardProgress, Lesson, Quiz, QuizAttempt, Roadmap, User
-from app.schemas import DocumentSummaryDTO, FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
+from app.models.lesson import normalize_lesson_title_for_search
+from app.schemas import DocumentPageDTO, DocumentSummaryDTO, FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
 from app.services.cloudinary_service import delete_original_document, upload_original_document
 from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
 from app.services.parser_service import extract_text_from_uploaded_file
@@ -411,6 +413,61 @@ def list_documents_for_user(*, db: Session, user_id: int) -> list[DocumentSummar
         _to_document_summary(lesson=lesson, progress_map=progress_map)
         for lesson in lessons
     ]
+
+
+def list_documents_page_for_user(
+    *,
+    db: Session,
+    user_id: int,
+    page: int,
+    page_size: int,
+    search: str | None = None,
+) -> DocumentPageDTO:
+    safe_page = max(1, int(page))
+    safe_page_size = max(1, min(int(page_size), 50))
+    normalized_search = normalize_lesson_title_for_search(_collapse_whitespace((search or "").strip()))
+
+    where_conditions = [Lesson.user_id == user_id]
+    if normalized_search:
+        where_conditions.append(Lesson.title_normalized.like(f"%{normalized_search}%"))
+
+    total_items = int(
+        db.scalar(
+            select(func.count(Lesson.id)).where(and_(*where_conditions))
+        )
+        or 0
+    )
+    total_pages = math.ceil(total_items / safe_page_size) if total_items > 0 else 0
+
+    if total_pages > 0:
+        safe_page = min(safe_page, total_pages)
+    else:
+        safe_page = 1
+
+    offset = (safe_page - 1) * safe_page_size
+    lessons = list(
+        db.scalars(
+            select(Lesson)
+            .where(and_(*where_conditions))
+            .order_by(Lesson.created_at.desc(), Lesson.id.desc())
+            .offset(offset)
+            .limit(safe_page_size)
+        )
+    )
+
+    progress_map = get_lesson_sub_indicators_for_user(
+        db=db,
+        user_id=user_id,
+        lesson_ids=[lesson.id for lesson in lessons],
+    )
+
+    return DocumentPageDTO(
+        items=[_to_document_summary(lesson=lesson, progress_map=progress_map) for lesson in lessons],
+        page=safe_page,
+        page_size=safe_page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+    )
 
 
 def _to_document_summary(*, lesson: Lesson, progress_map: dict[int, tuple[bool, bool]]) -> DocumentSummaryDTO:

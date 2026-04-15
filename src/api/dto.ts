@@ -91,6 +91,14 @@ export interface DocumentSummaryDTO {
   created_at: string;
 }
 
+export interface DocumentPageDTO {
+  items: DocumentSummaryDTO[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+}
+
 export interface DocumentDeleteResponseDTO {
   document_id: number;
   message: string;

@@ -6,6 +6,7 @@ import {
   DocumentCreateRequestDTO,
   DocumentCreateResponseDTO,
   DocumentDeleteResponseDTO,
+  DocumentPageDTO,
   DocumentRenameRequestDTO,
   DocumentUploadResponseDTO,
   DocumentSummaryDTO,
@@ -68,6 +69,18 @@ export interface MyDocument {
   quizPassed: boolean;
   flashcardCompleted: boolean;
   createdAt: string;
+}
+
+export interface MyDocumentPage {
+  items: MyDocument[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export function isRequestCanceledError(error: unknown): boolean {
+  return axios.isCancel(error) || (axios.isAxiosError(error) && error.code === 'ERR_CANCELED');
 }
 
 export interface DocumentChatHistoryItem {
@@ -231,6 +244,38 @@ export async function getMyDocuments(): Promise<MyDocument[]> {
   });
 
   return (response.data ?? []).map(mapDocumentSummary);
+}
+
+export async function getMyDocumentsPaged(params: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  signal?: AbortSignal;
+}): Promise<MyDocumentPage> {
+  const normalizedPage = Math.max(1, Math.trunc(params.page || 1));
+  const normalizedPageSize = Math.min(50, Math.max(1, Math.trunc(params.pageSize || 9)));
+  const normalizedSearch = (params.search ?? '').trim();
+
+  const response = await apiClient.get<DocumentPageDTO>('/documents/paged', {
+    headers: {
+      ...createAuthHeaders(),
+    },
+    signal: params.signal,
+    params: {
+      page: normalizedPage,
+      page_size: normalizedPageSize,
+      ...(normalizedSearch ? { search: normalizedSearch } : {}),
+    },
+  });
+
+  const payload = response.data;
+  return {
+    items: (payload?.items ?? []).map(mapDocumentSummary),
+    page: payload?.page ?? normalizedPage,
+    pageSize: payload?.page_size ?? normalizedPageSize,
+    totalItems: payload?.total_items ?? 0,
+    totalPages: payload?.total_pages ?? 0,
+  };
 }
 
 function normalizeDocumentMutationError(error: unknown, action: 'rename' | 'delete'): Error {

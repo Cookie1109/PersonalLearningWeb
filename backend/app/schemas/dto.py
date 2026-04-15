@@ -127,6 +127,14 @@ class DocumentSummaryDTO(BaseModel):
     created_at: datetime
 
 
+class DocumentPageDTO(BaseModel):
+    items: list[DocumentSummaryDTO] = Field(default_factory=list)
+    page: int = Field(..., ge=1)
+    page_size: int = Field(..., ge=1, le=50)
+    total_items: int = Field(..., ge=0)
+    total_pages: int = Field(..., ge=0)
+
+
 class DocumentDeleteResponseDTO(BaseModel):
     document_id: int
     message: str

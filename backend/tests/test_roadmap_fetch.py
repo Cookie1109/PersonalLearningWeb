@@ -72,3 +72,68 @@ def test_get_my_documents_returns_only_owner_documents(
     assert isinstance(outsider_payload, list)
     assert len(outsider_payload) == 1
     assert outsider_payload[0]["title"] == "Outsider Doc"
+
+
+def test_get_my_documents_paged_supports_page_size_and_search(
+    client,
+    db_session: Session,
+    create_user,
+) -> None:
+    owner_user, _ = create_user(email="paged-owner@example.com", display_name="Paged Owner")
+
+    lessons = [
+        Lesson(
+            user_id=owner_user.id,
+            roadmap_id=None,
+            week_number=1,
+            position=index,
+            title=f"Langbiang {index}",
+            source_content=f"Source {index}",
+            is_completed=False,
+        )
+        for index in range(1, 13)
+    ]
+    lessons.append(
+        Lesson(
+            user_id=owner_user.id,
+            roadmap_id=None,
+            week_number=1,
+            position=99,
+            title="Lập trình Node.js",
+            source_content="Source accent",
+            is_completed=False,
+        )
+    )
+    db_session.add_all(lessons)
+    db_session.commit()
+
+    owner_token, _ = create_access_token(user_id=owner_user.id, email=owner_user.email)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    paged_response = client.get("/api/documents/paged?page=1&page_size=9", headers=owner_headers)
+    assert paged_response.status_code == 200
+    paged_payload = paged_response.json()
+
+    assert paged_payload["page"] == 1
+    assert paged_payload["page_size"] == 9
+    assert paged_payload["total_items"] == 13
+    assert paged_payload["total_pages"] == 2
+    assert len(paged_payload["items"]) == 9
+
+    search_response = client.get("/api/documents/paged?page=1&page_size=9&search=langbiang%2012", headers=owner_headers)
+    assert search_response.status_code == 200
+    search_payload = search_response.json()
+
+    assert search_payload["total_items"] == 1
+    assert search_payload["total_pages"] == 1
+    assert len(search_payload["items"]) == 1
+    assert search_payload["items"][0]["title"] == "Langbiang 12"
+
+    unaccent_response = client.get("/api/documents/paged?page=1&page_size=9&search=lap%20trinh", headers=owner_headers)
+    assert unaccent_response.status_code == 200
+    unaccent_payload = unaccent_response.json()
+
+    assert unaccent_payload["total_items"] == 1
+    assert unaccent_payload["total_pages"] == 1
+    assert len(unaccent_payload["items"]) == 1
+    assert unaccent_payload["items"][0]["title"] == "Lập trình Node.js"
