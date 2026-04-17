@@ -114,3 +114,5 @@ def test_create_document_returns_ai_error_when_llm_raises_unexpected_error(
 
     created_lesson = db_session.scalar(select(Lesson).where(Lesson.title == "Fallback LLM Error"))
     assert created_lesson is None
+
+#zzz
