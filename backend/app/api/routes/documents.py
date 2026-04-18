@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from redis import Redis
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -47,6 +47,11 @@ from app.services.quiz_service import (
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 settings = get_settings()
+MAX_RAW_TEXT_CHARS = 45000
+RAW_TEXT_TOO_LONG_DETAIL_MESSAGE = (
+    "Văn bản quá dài (vượt quá 45.000 ký tự). "
+    "Vui lòng cắt nhỏ nội dung theo từng chương để AI xử lý chính xác nhất."
+)
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponseDTO, "description": "Bad Request"},
@@ -72,11 +77,15 @@ def create_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DocumentCreateResponseDTO:
+    normalized_source_content = (payload.source_content or "").strip()
+    if len(normalized_source_content) > MAX_RAW_TEXT_CHARS:
+        raise HTTPException(status_code=400, detail=RAW_TEXT_TOO_LONG_DETAIL_MESSAGE)
+
     lesson = create_document_for_user(
         db=db,
         user_id=current_user.id,
         title=payload.title,
-        source_content=payload.source_content,
+        source_content=normalized_source_content,
     )
 
     return DocumentCreateResponseDTO(

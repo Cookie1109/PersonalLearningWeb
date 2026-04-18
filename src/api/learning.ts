@@ -189,12 +189,22 @@ export async function createDocument(payload: DocumentCreateRequestDTO): Promise
     }
 
     if (axios.isAxiosError(error)) {
-      const backendMessage = error.response?.data?.message as string | undefined;
-      const backendDetailError = error.response?.data?.detail?.error as string | undefined;
+      const backendPayload = error.response?.data as Record<string, unknown> | undefined;
+      const detailField = backendPayload?.detail;
+      const backendDetailMessage =
+        typeof detailField === 'string'
+          ? detailField
+          : detailField && typeof detailField === 'object' && typeof (detailField as Record<string, unknown>).detail === 'string'
+            ? ((detailField as Record<string, unknown>).detail as string)
+            : undefined;
+      const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : undefined;
+      const backendDetailError = detailField && typeof detailField === 'object'
+        ? (detailField as Record<string, unknown>).error as string | undefined
+        : undefined;
       if (backendMessage === 'Internal Server Error' && backendDetailError) {
         throw new Error(`Internal Server Error: ${backendDetailError}`);
       }
-      throw new Error(backendMessage ?? 'Không thể tạo tài liệu lúc này.');
+      throw new Error(backendDetailMessage ?? backendMessage ?? 'Không thể tạo tài liệu lúc này.');
     }
 
     throw error;
@@ -233,7 +243,17 @@ export async function createDocumentFromUpload(file: File, title?: string): Prom
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      throw new Error(error.response?.data?.message ?? 'Không thể tạo Workspace từ file lúc này.');
+      const backendPayload = error.response?.data as Record<string, unknown> | undefined;
+      const detailField = backendPayload?.detail;
+      const backendDetailMessage =
+        typeof detailField === 'string'
+          ? detailField
+          : detailField && typeof detailField === 'object' && typeof (detailField as Record<string, unknown>).detail === 'string'
+            ? ((detailField as Record<string, unknown>).detail as string)
+            : undefined;
+      const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : undefined;
+
+      throw new Error(backendDetailMessage ?? backendMessage ?? 'Không thể tạo Workspace từ file lúc này.');
     }
     throw error;
   }
@@ -432,7 +452,21 @@ function normalizeParserError(error: unknown): Error {
   }
 
   const status = error.response?.status;
-  const code = error.response?.data?.detail?.code as string | undefined;
+  const backendPayload = error.response?.data as Record<string, unknown> | undefined;
+  const detailField = backendPayload?.detail;
+  const backendDetailMessage =
+    typeof detailField === 'string'
+      ? detailField
+      : detailField && typeof detailField === 'object' && typeof (detailField as Record<string, unknown>).detail === 'string'
+        ? ((detailField as Record<string, unknown>).detail as string)
+        : undefined;
+  const code = detailField && typeof detailField === 'object'
+    ? (detailField as Record<string, unknown>).code as string | undefined
+    : undefined;
+
+  if (backendDetailMessage && backendDetailMessage.includes('45.000')) {
+    return new Error(backendDetailMessage);
+  }
 
   if (status === 413 || code === 'PARSER_FILE_TOO_LARGE' || code === 'PARSER_URL_TOO_LARGE') {
     return new Error('Dữ liệu quá lớn. Vui lòng thử với tài liệu nhỏ hơn.');
@@ -466,7 +500,8 @@ function normalizeParserError(error: unknown): Error {
     return new Error('Dịch vụ OCR AI tạm thời quá tải. Vui lòng thử lại sau ít phút.');
   }
 
-  return new Error(error.response?.data?.message ?? 'Không thể trích xuất nội dung lúc này.');
+  const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : undefined;
+  return new Error(backendDetailMessage ?? backendMessage ?? 'Không thể trích xuất nội dung lúc này.');
 }
 
 export async function extractTextFromParser(input: ParserInput): Promise<ParserExtractResponseDTO> {

@@ -8,6 +8,8 @@ import { createDocument, createDocumentFromUpload, extractTextFromParser } from 
 type InputMode = 'text' | 'url' | 'file';
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_RAW_TEXT_CHARS = 45000;
+const TEXT_LIMIT_WARNING_THRESHOLD = 40000;
 
 function buildDefaultDocumentTitle(): string {
   return `Tài liệu mới - ${new Date().toLocaleDateString('vi-VN')}`;
@@ -28,6 +30,9 @@ export default function DocumentCreate() {
   const normalizedContent = sourceContent.trim();
   const normalizedUrl = sourceUrl.trim();
   const isTextMode = inputMode === 'text';
+  const sourceCharCount = sourceContent.length;
+  const isNearTextLimit = sourceCharCount > TEXT_LIMIT_WARNING_THRESHOLD;
+  const isAtTextLimit = sourceCharCount >= MAX_RAW_TEXT_CHARS;
   const isContentInvalid = normalizedContent.length > 0 && normalizedContent.length < 30;
   const hasInputForMode = isTextMode
     ? normalizedContent.length > 0
@@ -142,7 +147,10 @@ export default function DocumentCreate() {
     } catch (error) {
       if (error instanceof Error) {
         setSubmitError(error.message);
-        toast.error(error.message);
+        const isTooLongError = error.message.includes('45.000') || error.message.toLowerCase().includes('quá dài');
+        if (!isTooLongError) {
+          toast.error(error.message);
+        }
       } else {
         const message = 'Không thể tạo Workspace lúc này.';
         setSubmitError(message);
@@ -226,6 +234,7 @@ export default function DocumentCreate() {
           {inputMode === 'file' && (
             <div className="mb-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/70 p-3">
               <p className="text-xs text-slate-600 dark:text-zinc-400 mb-2">Chọn file PDF hoặc DOCX. Hệ thống sẽ tự động trích xuất ngay sau khi chọn.</p>
+              <p className="text-xs text-amber-600 dark:text-amber-300 mb-2">Khuyên dùng: Tài liệu dưới 20 trang để có trải nghiệm AI tốt nhất.</p>
               <input
                 ref={docFileInputRef}
                 type="file"
@@ -262,13 +271,29 @@ export default function DocumentCreate() {
                   value={sourceContent}
                   onChange={event => setSourceContent(event.target.value)}
                   disabled={isSubmitting}
+                  maxLength={MAX_RAW_TEXT_CHARS}
                   rows={16}
                   placeholder="Dán nội dung đề cương/slide/tài liệu vào đây..."
                   className="w-full rounded-xl bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 px-4 py-3 text-slate-900 dark:text-zinc-100 text-sm leading-relaxed placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 resize-y min-h-[320px]"
                 />
-                {isContentInvalid && (
-                  <p className="mt-2 text-xs text-amber-300">Nội dung tài liệu cần tối thiểu 30 ký tự.</p>
-                )}
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  {isContentInvalid ? (
+                    <p className="text-xs text-amber-300">Nội dung tài liệu cần tối thiểu 30 ký tự.</p>
+                  ) : (
+                    <span className="text-xs text-transparent select-none">.</span>
+                  )}
+                  <p
+                    className={`text-xs ${
+                      isAtTextLimit
+                        ? 'text-red-500 dark:text-red-400'
+                        : isNearTextLimit
+                          ? 'text-amber-500 dark:text-amber-300'
+                          : 'text-slate-500 dark:text-zinc-500'
+                    }`}
+                  >
+                    {sourceCharCount.toLocaleString('en-US')} / 45,000 ký tự
+                  </p>
+                </div>
               </>
             )}
         </div>

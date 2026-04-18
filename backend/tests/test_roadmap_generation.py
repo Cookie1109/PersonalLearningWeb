@@ -115,4 +115,39 @@ def test_create_document_returns_ai_error_when_llm_raises_unexpected_error(
     created_lesson = db_session.scalar(select(Lesson).where(Lesson.title == "Fallback LLM Error"))
     assert created_lesson is None
 
+
+def test_create_document_rejects_raw_text_over_45000_chars(
+    client,
+    db_session: Session,
+    auth_headers,
+    monkeypatch,
+) -> None:
+    _, headers = auth_headers
+
+    import app.services.lesson_service as lesson_service
+
+    def _should_not_generate(*, prompt: str) -> str:
+        _ = prompt
+        raise AssertionError("generate_grounded_markdown must not be called for oversized raw text")
+
+    monkeypatch.setattr(lesson_service, "generate_grounded_markdown", _should_not_generate)
+
+    response = client.post(
+        "/api/documents",
+        json={
+            "title": "Too Long Raw Text",
+            "source_content": "A" * 45001,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Văn bản quá dài (vượt quá 45.000 ký tự). "
+        "Vui lòng cắt nhỏ nội dung theo từng chương để AI xử lý chính xác nhất."
+    )
+
+    created_lesson = db_session.scalar(select(Lesson).where(Lesson.title == "Too Long Raw Text"))
+    assert created_lesson is None
+
 #zzz

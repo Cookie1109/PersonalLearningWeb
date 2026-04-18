@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from fastapi import HTTPException
 import httpx
 import html2text
 import requests
@@ -40,6 +41,15 @@ ParserSourceType = Literal["url", "pdf", "docx", "image"]
 MAX_UPLOAD_FILE_BYTES = 15 * 1024 * 1024
 MAX_URL_DOWNLOAD_BYTES = 5 * 1024 * 1024
 MAX_EXTRACTED_TITLE_LENGTH = 180
+MAX_EXTRACTED_TEXT_CHARS = 45000
+DOCUMENT_TOO_LONG_DETAIL_MESSAGE = (
+    "Tài liệu quá dài (vượt quá giới hạn an toàn ~20 trang/45.000 ký tự). "
+    "Vui lòng cắt nhỏ tài liệu theo từng chương để AI xử lý chính xác nhất."
+)
+URL_TOO_LONG_DETAIL_MESSAGE = (
+    "Nội dung trang web quá dài (vượt quá 45.000 ký tự). "
+    "Vui lòng chọn một đường dẫn khác chứa ít nội dung hơn để đảm bảo AI xử lý tốt nhất."
+)
 
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -417,7 +427,10 @@ def extract_text_from_url(*, url: str) -> tuple[str, str | None]:
     try:
         if "text/plain" in content_type:
             text = (response.text or "").strip()
-            normalized = _normalize_extracted_text(text)
+            normalized = _enforce_extracted_text_length_limit(
+                _normalize_extracted_text(text),
+                detail_message=URL_TOO_LONG_DETAIL_MESSAGE,
+            )
             if not normalized:
                 raise AppException(
                     status_code=409,
@@ -427,9 +440,14 @@ def extract_text_from_url(*, url: str) -> tuple[str, str | None]:
             return normalized, _build_title_from_text_excerpt(normalized)
 
         html_text = response.text or ""
-        extracted_text = _extract_text_from_html(html_text, url=normalized_url)
+        extracted_text = _enforce_extracted_text_length_limit(
+            _extract_text_from_html(html_text, url=normalized_url),
+            detail_message=URL_TOO_LONG_DETAIL_MESSAGE,
+        )
         extracted_title = _extract_title_from_html(html_text) or _build_title_from_text_excerpt(extracted_text)
         return extracted_text, extracted_title
+    except HTTPException:
+        raise
     except AppException:
         raise
     except Exception as exc:
@@ -634,6 +652,17 @@ def _detect_uploaded_source_type(*, file_name: str | None, content_type: str | N
     )
 
 
+def _enforce_extracted_text_length_limit(
+    extracted_text: str,
+    *,
+    detail_message: str = DOCUMENT_TOO_LONG_DETAIL_MESSAGE,
+) -> str:
+    normalized = (extracted_text or "").strip()
+    if len(normalized) > MAX_EXTRACTED_TEXT_CHARS:
+        raise HTTPException(status_code=400, detail=detail_message)
+    return normalized
+
+
 def extract_text_from_uploaded_file(
     *,
     file_name: str | None,
@@ -659,12 +688,16 @@ def extract_text_from_uploaded_file(
     extracted_title = _extract_title_from_file_name(file_name)
 
     if source_type == "pdf":
-        return extract_text_from_pdf_bytes(file_bytes=file_bytes), "pdf", normalized_content_type, extracted_title
+        extracted_text = _enforce_extracted_text_length_limit(extract_text_from_pdf_bytes(file_bytes=file_bytes))
+        return extracted_text, "pdf", normalized_content_type, extracted_title
 
     if source_type == "docx":
-        return extract_text_from_docx_bytes(file_bytes=file_bytes), "docx", normalized_content_type, extracted_title
+        extracted_text = _enforce_extracted_text_length_limit(extract_text_from_docx_bytes(file_bytes=file_bytes))
+        return extracted_text, "docx", normalized_content_type, extracted_title
 
     mime_type = normalized_content_type if normalized_content_type in SUPPORTED_IMAGE_MIME_TYPES else "image/jpeg"
-    extracted_text = extract_text_from_image_bytes_via_gemini(file_bytes=file_bytes, mime_type=mime_type)
+    extracted_text = _enforce_extracted_text_length_limit(
+        extract_text_from_image_bytes_via_gemini(file_bytes=file_bytes, mime_type=mime_type)
+    )
     image_title = extracted_title or _build_title_from_text_excerpt(extracted_text)
     return extracted_text, "image", mime_type, image_title

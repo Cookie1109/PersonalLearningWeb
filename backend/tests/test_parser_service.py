@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+from fastapi import HTTPException
+
 
 def test_extract_text_from_html_filters_layout_noise(monkeypatch) -> None:
     import app.services.parser_service as parser_service
@@ -86,6 +89,40 @@ def test_extract_text_from_url_does_not_crash_and_returns_clean_content(monkeypa
     assert extracted_title == "My test title"
 
 
+
+def test_extract_text_from_url_rejects_text_over_45000_chars(monkeypatch) -> None:
+    import app.services.parser_service as parser_service
+
+    class FakeResponse:
+        def __init__(self) -> None:
+            self.content = b"<html>ok</html>"
+            self.headers = {"content-type": "text/html; charset=utf-8"}
+            self.text = "<html><body><article>Long content</article></body></html>"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def _fake_get(url: str, timeout: int, headers: dict[str, str], allow_redirects: bool):
+        _ = (url, timeout, headers, allow_redirects)
+        return FakeResponse()
+
+    monkeypatch.setattr(parser_service.requests, "get", _fake_get)
+    monkeypatch.setattr(
+        parser_service,
+        "_extract_text_from_html",
+        lambda html_text, *, url=None: "A" * 45001,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        parser_service.extract_text_from_url(url="https://example.com/very-long")
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == (
+        "Nội dung trang web quá dài (vượt quá 45.000 ký tự). "
+        "Vui lòng chọn một đường dẫn khác chứa ít nội dung hơn để đảm bảo AI xử lý tốt nhất."
+    )
+
+
 def test_extract_text_from_uploaded_file_uses_filename_as_title(monkeypatch) -> None:
     import app.services.parser_service as parser_service
 
@@ -134,3 +171,27 @@ def test_extract_text_from_html_prefers_smart_extractor_output(monkeypatch) -> N
     extracted = parser_service._extract_text_from_html(html, url="https://example.com")
 
     assert extracted == "Noi dung chinh duoc trich xuat thong minh"
+
+
+
+def test_extract_text_from_uploaded_file_rejects_text_over_45000_chars(monkeypatch) -> None:
+    import app.services.parser_service as parser_service
+
+    monkeypatch.setattr(
+        parser_service,
+        "extract_text_from_pdf_bytes",
+        lambda *, file_bytes: "A" * 45001,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        parser_service.extract_text_from_uploaded_file(
+            file_name="long.pdf",
+            content_type="application/pdf",
+            file_bytes=b"fake-pdf",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == (
+        "Tài liệu quá dài (vượt quá giới hạn an toàn ~20 trang/45.000 ký tự). "
+        "Vui lòng cắt nhỏ tài liệu theo từng chương để AI xử lý chính xác nhất."
+    )
