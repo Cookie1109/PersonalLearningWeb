@@ -10,7 +10,10 @@ import {
   DocumentRenameRequestDTO,
   DocumentUploadResponseDTO,
   DocumentSummaryDTO,
+  FlashcardDTO,
   FlashcardCompleteResponseDTO,
+  FlashcardExplainResponseDTO,
+  FlashcardStatusUpdateRequestDTO,
   LessonCompleteResponseDTO,
   LessonDetailDTO,
   LessonGenerateResponseDTO,
@@ -580,6 +583,117 @@ export async function completeFlashcardProgress(lessonId: string): Promise<Flash
   );
 
   return response.data;
+}
+
+function normalizeFlashcardMutationError(error: unknown, action: 'load' | 'generate' | 'update' | 'explain'): Error {
+  const fallbackByAction: Record<'load' | 'generate' | 'update' | 'explain', string> = {
+    load: 'Không thể tải flashcard lúc này.',
+    generate: 'Không thể tạo flashcard lúc này.',
+    update: 'Không thể cập nhật trạng thái flashcard lúc này.',
+    explain: 'Không thể tạo giải thích lúc này.',
+  };
+
+  if (!axios.isAxiosError(error)) {
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error(fallbackByAction[action]);
+  }
+
+  const status = error.response?.status;
+  const code = error.response?.data?.detail?.code as string | undefined;
+
+  if (code === 'DOCUMENT_NOT_FOUND' || (status === 404 && action !== 'update')) {
+    return new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
+  }
+
+  if (code === 'FLASHCARD_NOT_FOUND') {
+    return new Error('Flashcard không tồn tại hoặc bạn không có quyền truy cập.');
+  }
+
+  if (action === 'generate' && code === 'DOCUMENT_SOURCE_EMPTY') {
+    return new Error('Tài liệu chưa có nội dung nguồn để tạo flashcard.');
+  }
+
+  return new Error(error.response?.data?.message ?? fallbackByAction[action]);
+}
+
+export async function getFlashcards(documentId: string | number): Promise<FlashcardDTO[]> {
+  try {
+    const response = await apiClient.get<FlashcardDTO[]>(
+      `/documents/${encodeURIComponent(String(documentId))}/flashcards`,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data ?? [];
+  } catch (error) {
+    throw normalizeFlashcardMutationError(error, 'load');
+  }
+}
+
+export async function generateFlashcards(documentId: string | number): Promise<FlashcardDTO[]> {
+  try {
+    const response = await apiClient.post<FlashcardDTO[]>(
+      `/documents/${encodeURIComponent(String(documentId))}/flashcards/generate`,
+      {},
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data ?? [];
+  } catch (error) {
+    throw normalizeFlashcardMutationError(error, 'generate');
+  }
+}
+
+export async function updateFlashcardStatus(
+  cardId: string | number,
+  status: FlashcardStatusUpdateRequestDTO['status'],
+): Promise<FlashcardDTO> {
+  const payload: FlashcardStatusUpdateRequestDTO = {
+    status,
+  };
+
+  try {
+    const response = await apiClient.patch<FlashcardDTO>(
+      `/flashcards/${encodeURIComponent(String(cardId))}/status`,
+      payload,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw normalizeFlashcardMutationError(error, 'update');
+  }
+}
+
+export async function explainFlashcard(cardId: string | number): Promise<string> {
+  try {
+    const response = await apiClient.post<FlashcardExplainResponseDTO>(
+      `/flashcards/${encodeURIComponent(String(cardId))}/explain`,
+      {},
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data?.explanation ?? '';
+  } catch (error) {
+    throw normalizeFlashcardMutationError(error, 'explain');
+  }
 }
 
 export async function getMyRoadmaps(): Promise<MyRoadmap[]> {

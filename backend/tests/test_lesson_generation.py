@@ -149,6 +149,7 @@ def test_build_document_theory_prompt_enforces_grounding_contract() -> None:
     assert "BƯỚC 4: ĐỊNH DẠNG HIỂN THỊ (WHITESPACE FORMATTING)" in prompt
     assert "2 DẤU XUỐNG DÒNG (\\n\\n)" in prompt
     assert "tuyệt đối không bịa đặt thêm kiến thức ngoài" in prompt
+    assert "QUY TẮC BẮT BUỘC (CRITICAL): KHÔNG ĐƯỢC sử dụng các câu chào hỏi" in prompt
 
 
 def test_generate_grounded_markdown_maps_prompt_to_payload_parts_text(monkeypatch) -> None:
@@ -214,6 +215,106 @@ def test_generate_grounded_markdown_maps_prompt_to_payload_parts_text(monkeypatc
             "maxOutputTokens": 8192,
         },
     }
+
+
+def test_generate_grounded_markdown_strips_chatty_preamble_and_extends_truncated_output(monkeypatch) -> None:
+    import app.services.lesson_service as lesson_service
+
+    class FakeSettings:
+        gemini_api_key = "test-key"
+        gemini_timeout_seconds = 120.0
+        gemini_model = "gemini-2.5-flash"
+        gemini_pro_model = "gemini-1.5-pro"
+
+    class FakeResponse:
+        def __init__(self, payload: dict):
+            self.status_code = 200
+            self._payload = payload
+
+        def json(self) -> dict:
+            return self._payload
+
+    payloads_sent: list[dict[str, object]] = []
+
+    class FakeClient:
+        def __init__(self, timeout: float):
+            _ = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            _ = (exc_type, exc, tb)
+            return False
+
+        def post(self, endpoint: str, *, params: dict[str, str], json: dict[str, object]):
+            _ = (endpoint, params)
+            payloads_sent.append(json)
+
+            if len(payloads_sent) == 1:
+                return FakeResponse(
+                    {
+                        "candidates": [
+                            {
+                                "finishReason": "MAX_TOKENS",
+                                "content": {
+                                    "parts": [
+                                        {
+                                            "text": (
+                                                "Tuyet voi! Duoi day la bai giang cua ban.\n\n"
+                                                "# Chiến tranh thế giới thứ nhất\n\n"
+                                                "## Boi canh\n\n"
+                                                "Chiến tranh thế giới thứ nhất diễn ra từ năm 1914 đến"
+                                            )
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                )
+
+            return FakeResponse(
+                {
+                    "candidates": [
+                        {
+                            "finishReason": "STOP",
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": (
+                                            "năm 1918.\n\n"
+                                            "## He qua\n\n"
+                                            "Ban do chinh tri chau Au thay doi sau rong."
+                                        )
+                                    }
+                                ]
+                            },
+                        }
+                    ]
+                }
+            )
+
+    monkeypatch.setattr(lesson_service, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(lesson_service.httpx, "Client", FakeClient)
+
+    ww1_text = (
+        "Chiến tranh thế giới thứ nhất là cuộc xung đột quân sự toàn cầu từ năm 1914 đến 1918, "
+        "chủ yếu diễn ra tại châu Âu và có sự tham gia của nhiều cường quốc."
+    )
+    prompt = lesson_service.build_document_theory_prompt(
+        title="Chiến tranh thế giới thứ nhất",
+        source_content=ww1_text,
+    )
+
+    output = lesson_service.generate_grounded_markdown(prompt=prompt)
+
+    assert output.startswith("# Chiến tranh thế giới thứ nhất")
+    assert output.endswith("Ban do chinh tri chau Au thay doi sau rong.")
+    assert "Tuyet voi!" not in output
+    assert len(payloads_sent) >= 2
+    assert payloads_sent[0]["generationConfig"]["maxOutputTokens"] == 8192
+    assert payloads_sent[1]["generationConfig"]["maxOutputTokens"] == 8192
 
 
 def test_generate_lesson_returns_controlled_error_when_llm_fails(

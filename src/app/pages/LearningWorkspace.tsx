@@ -964,10 +964,6 @@ export default function LearningWorkspace() {
   const [isQASending, setIsQASending] = useState(false);
   const qaScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const flashcards = useMemo(
-    () => buildFlashcardsFromMarkdown(lessonDetail?.contentMarkdown ?? null),
-    [lessonDetail?.contentMarkdown]
-  );
   const quizQuestions = quizData?.questions ?? [];
   const currentQuizQuestion = quizQuestions[quizState.currentIndex];
   const hasRegenerateCooldown = quizRegenerateRetryAfterSeconds > 0;
@@ -1655,33 +1651,10 @@ export default function LearningWorkspace() {
   };
 
   const renderFlashcardPanel = () => {
-    if (!lessonDetail?.contentMarkdown && (isLoading || isGeneratingContent)) {
-      return (
-        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-5 flex items-center gap-3">
-          <Loader2 size={18} className="text-cyan-300 animate-spin" />
-          <p className="text-sm text-cyan-200">Đang chuẩn bị nội dung để tạo flashcard...</p>
-        </div>
-      );
-    }
-
-    if (flashcards.length === 0) {
-      return (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-4">
-          <p className="text-sm text-zinc-300">Chưa đủ thông tin để tạo flashcard. Hãy tạo nội dung lý thuyết trước.</p>
-          <button
-            onClick={() => setLearningTab('theory')}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs text-white"
-          >
-            <BookOpen size={12} />Đến tab Lý thuyết
-          </button>
-        </div>
-      );
-    }
-
     return (
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="text-xs text-zinc-500">Tổng {flashcards.length} thẻ</span>
+          <span className="text-xs text-zinc-500">Flashcard từ dữ liệu backend</span>
           {lessonDetail?.flashcardCompleted && (
             <span className="text-xs rounded-full px-2.5 py-1 border border-cyan-500/40 bg-cyan-500/15 text-cyan-300">
               Flashcard đã hoàn thành
@@ -1695,7 +1668,7 @@ export default function LearningWorkspace() {
         </div>
 
         <FlashCardDeck
-          cards={flashcards}
+          documentId={lessonId}
           onComplete={(known, total) => {
             void handleFlashcardComplete(known, total);
           }}

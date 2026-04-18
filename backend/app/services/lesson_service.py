@@ -26,6 +26,13 @@ LESSON_COMPLETE_REWARD_TYPE = "lesson_complete"
 STREAK_BONUS_REWARD_TYPE = "streak_bonus"
 logger = logging.getLogger("app.lesson")
 INCOMPLETE_TRAILING_PATTERN = re.compile(r"[:\-\(\[/,;]$")
+THEORY_MAX_OUTPUT_TOKENS = 8192
+THEORY_RETRY_MAX_OUTPUT_TOKENS = 4096
+THEORY_NEGATIVE_PROMPT_RULE = (
+    "QUY TẮC BẮT BUỘC (CRITICAL): KHÔNG ĐƯỢC sử dụng các câu chào hỏi, mở bài hay kết luận giao tiếp "
+    "(như 'Tuyệt vời', 'Dưới đây là...', 'Chúc bạn học tốt'). KHÔNG ĐƯỢC xưng hô hay xác nhận lại yêu cầu. "
+    "Hãy in ra trực tiếp nội dung bài giảng Markdown ngay lập tức, bắt đầu bằng ký tự '#'."
+)
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -88,6 +95,7 @@ def build_document_theory_prompt(*, title: str, source_content: str) -> str:
         "- BẮT BUỘC bọc tất cả chúng trong Markdown Code Block ( ```ngôn ngữ...``` ). Ví dụ kết quả bảng SQL thì bọc trong ```text hoặc ```sql. Tuyệt đối không để code nằm lẫn với văn bản thường.\n\n"
         "BƯỚC 4: ĐỊNH DẠNG HIỂN THỊ (WHITESPACE FORMATTING)\n"
         "- Đảm bảo luôn có 2 DẤU XUỐNG DÒNG (\\n\\n) ngăn cách giữa các đoạn văn và giữa đoạn văn với Code Block.\n\n"
+        f"{THEORY_NEGATIVE_PROMPT_RULE}\n\n"
         "QUY TẮC CỐT LÕI: Chỉ dùng thông tin từ văn bản gốc, tuyệt đối không bịa đặt thêm kiến thức ngoài.\n\n"
         f"Tiêu đề tài liệu: {title.strip()}\n\n"
         "Tài liệu gốc (nguồn sự thật duy nhất):\n"
@@ -812,10 +820,25 @@ def _build_theory_continuation_prompt(*, partial_markdown: str) -> str:
     return (
         "Nội dung lý thuyết ban vua tra loi đang bi cat giua chung. "
         "Hay viet tiep PHAN CON LAI bang Markdown, KHONG lap lai nội dung da co, "
-        "giu nguyen câu truc heading/list/code block, va ket thuc day du.\n\n"
+        "giu nguyen câu truc heading/list/code block, va ket thuc day du thanh cau tron ven.\n\n"
         "[NOI DUNG DA CO]\n"
         f"{partial_markdown[-7000:]}"
     )
+
+
+def _sanitize_theory_markdown_output(markdown: str) -> str:
+    content = (markdown or "").strip()
+    if not content:
+        return ""
+
+    heading_match = re.search(r"(?m)^\s*#\s+\S", content)
+    if heading_match:
+        content = content[heading_match.start() :].lstrip()
+
+    if not content.lstrip().startswith("#"):
+        content = f"# Bài giảng\n\n{content}"
+
+    return content.strip()
 
 
 def _extend_truncated_markdown(
@@ -835,7 +858,7 @@ def _extend_truncated_markdown(
 
     logger.warning("lesson.llm_detected_truncation finish_reason=%s", finish_reason)
 
-    for _ in range(2):
+    for _ in range(4):
         continuation_payload = {
             "contents": [
                 {
@@ -853,7 +876,7 @@ def _extend_truncated_markdown(
             ],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 4096,
+                "maxOutputTokens": THEORY_MAX_OUTPUT_TOKENS,
             },
         }
 
@@ -886,7 +909,7 @@ def _extend_truncated_markdown(
         if not _is_markdown_truncated(combined, finish_reason=finish_reason):
             break
 
-    return combined
+    return _sanitize_theory_markdown_output(combined)
 
 
 def _extract_llm_error_message(response: httpx.Response) -> str:
@@ -933,8 +956,8 @@ def generate_grounded_markdown(*, prompt: str) -> str:
 
     model_candidates = _build_lesson_model_candidates(settings)
     timeout_seconds = max(120.0, float(settings.gemini_timeout_seconds))
-    max_output_tokens = 8192
-    retry_max_output_tokens = 4096
+    max_output_tokens = THEORY_MAX_OUTPUT_TOKENS
+    retry_max_output_tokens = THEORY_RETRY_MAX_OUTPUT_TOKENS
 
     with httpx.Client(timeout=timeout_seconds) as client:
         for index, model_name in enumerate(model_candidates):
@@ -992,14 +1015,14 @@ def generate_grounded_markdown(*, prompt: str) -> str:
                         generation_text = _extract_gemini_text(retry_payload_json).strip()
                         if generation_text:
                             finish_reason = _extract_finish_reason(retry_payload_json)
-                            return _extend_truncated_markdown(
+                            return _sanitize_theory_markdown_output(_extend_truncated_markdown(
                                 client=client,
                                 endpoint=endpoint,
                                 api_key=api_key,
                                 prompt=prompt,
                                 initial_markdown=generation_text,
                                 initial_finish_reason=finish_reason,
-                            )
+                            ))
                         raise AppException(
                             status_code=503,
                             message="AI service returned empty response",
@@ -1050,14 +1073,14 @@ def generate_grounded_markdown(*, prompt: str) -> str:
             generation_text = _extract_gemini_text(response_payload).strip()
             if generation_text:
                 finish_reason = _extract_finish_reason(response_payload)
-                return _extend_truncated_markdown(
+                return _sanitize_theory_markdown_output(_extend_truncated_markdown(
                     client=client,
                     endpoint=endpoint,
                     api_key=api_key,
                     prompt=prompt,
                     initial_markdown=generation_text,
                     initial_finish_reason=finish_reason,
-                )
+                ))
 
             if has_fallback:
                 continue

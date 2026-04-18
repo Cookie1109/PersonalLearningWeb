@@ -23,10 +23,12 @@ from app.schemas import (
     DocumentQuizSubmitRequestDTO,
     DocumentSummaryDTO,
     ErrorResponseDTO,
+    FlashcardDTO,
     QuizPublicResponseDTO,
     QuizSubmitResponseDTO,
 )
 from app.services import chat_service
+from app.services.flashcard_service import generate_flashcards_for_document_user, get_flashcards_for_document_user
 from app.services.lesson_service import (
     create_document_for_user,
     create_document_from_uploaded_file_for_user,
@@ -226,6 +228,66 @@ def chat_with_document(
         history=[item.model_dump() for item in payload.history],
     )
     return DocumentChatResponseDTO(reply=reply)
+
+
+@router.post(
+    "/{document_id}/flashcards/generate",
+    response_model=list[FlashcardDTO],
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def generate_document_flashcards(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[FlashcardDTO]:
+    cards = generate_flashcards_for_document_user(
+        db=db,
+        user_id=current_user.id,
+        document_id=document_id,
+    )
+    return [
+        FlashcardDTO(
+            id=card.id,
+            document_id=card.document_id,
+            front_text=card.front_text,
+            back_text=card.back_text,
+            status=card.status,
+            created_at=card.created_at,
+            updated_at=card.updated_at,
+        )
+        for card in cards
+    ]
+
+
+@router.get(
+    "/{document_id}/flashcards",
+    response_model=list[FlashcardDTO],
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_document_flashcards(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[FlashcardDTO]:
+    cards = get_flashcards_for_document_user(
+        db=db,
+        user_id=current_user.id,
+        document_id=document_id,
+    )
+    return [
+        FlashcardDTO(
+            id=card.id,
+            document_id=card.document_id,
+            front_text=card.front_text,
+            back_text=card.back_text,
+            status=card.status,
+            created_at=card.created_at,
+            updated_at=card.updated_at,
+        )
+        for card in cards
+    ]
 
 
 @router.post(

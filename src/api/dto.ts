@@ -264,6 +264,26 @@ export interface FlashcardCompleteResponseDTO {
   message: string;
 }
 
+export type FlashcardStatusDTO = 'new' | 'got_it' | 'missed_it';
+
+export interface FlashcardDTO {
+  id: number;
+  document_id: number;
+  front_text: string;
+  back_text: string;
+  status: FlashcardStatusDTO;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FlashcardStatusUpdateRequestDTO {
+  status: Extract<FlashcardStatusDTO, 'got_it' | 'missed_it'>;
+}
+
+export interface FlashcardExplainResponseDTO {
+  explanation: string;
+}
+
 export interface LessonDetailDTO {
   id: number;
   title: string;

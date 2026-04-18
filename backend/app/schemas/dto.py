@@ -183,6 +183,38 @@ class FlashcardCompleteResponseDTO(BaseModel):
     message: str
 
 
+class FlashcardDTO(BaseModel):
+    id: int
+    document_id: int
+    front_text: str
+    back_text: str
+    status: Literal["new", "got_it", "missed_it"]
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
+class FlashcardStatusUpdateRequestDTO(BaseModel):
+    status: Literal["got_it", "missed_it"]
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
+class FlashcardExplainResponseDTO(BaseModel):
+    explanation: str
+
+
 class LessonDTO(BaseModel):
     id: str
     title: str

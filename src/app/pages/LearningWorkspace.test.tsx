@@ -122,10 +122,16 @@ Compiler: GCC hoac Clang.
     expect(cards.length).toBeGreaterThan(0);
     expect(cards.some(card => /\?$/.test(card.front) || card.front.startsWith('Điền vào chỗ trống:'))).toBe(true);
     expect(cards.some(card => /Khai niem/i.test(card.front))).toBe(true);
-    expect(cards.some(card => /buoc\s+1|mot buoc quan trong/i.test(card.front))).toBe(true);
+    const normalizedFronts = cards.map(card => card.front
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase());
+    expect(normalizedFronts.some(front => /buoc\s+1|mot buoc quan trong/.test(front))).toBe(true);
     expect(cards.some(card => /Neu .*dieu gi xay ra\?/i.test(card.front))).toBe(true);
     expect(cards.some(card => card.front.startsWith('Điền vào chỗ trống:'))).toBe(true);
-    expect(cards.some(card => /Tinh huong IT/i.test(card.front))).toBe(true);
+    expect(normalizedFronts.some(front => /tinh huong it/.test(front))).toBe(true);
     expect(cards.every(card => !/Trong bài học này, chung ta se/i.test(card.back))).toBe(true);
   });
 
