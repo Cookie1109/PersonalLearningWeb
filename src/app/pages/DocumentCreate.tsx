@@ -1,6 +1,7 @@
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import React, { FormEvent, useCallback, useState } from 'react';
 import { motion } from 'motion/react';
-import { FilePlus2, FileText, Link2, Loader2, Sparkles, Type } from 'lucide-react';
+import { FilePlus2, FileText, Link2, Loader2, Sparkles, Type, UploadCloud, X } from 'lucide-react';
+import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { createDocument, createDocumentFromUpload, extractTextFromParser } from '../../api/learning';
@@ -10,14 +11,30 @@ type InputMode = 'text' | 'url' | 'file';
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_RAW_TEXT_CHARS = 45000;
 const TEXT_LIMIT_WARNING_THRESHOLD = 40000;
+const DROPZONE_ACCEPT = {
+  'application/pdf': ['.pdf'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+};
 
 function buildDefaultDocumentTitle(): string {
   return `Tài liệu mới - ${new Date().toLocaleDateString('vi-VN')}`;
 }
 
+function formatFileSize(sizeInBytes: number): string {
+  if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0) {
+    return '0 B';
+  }
+  if (sizeInBytes < 1024) {
+    return `${sizeInBytes} B`;
+  }
+  if (sizeInBytes < 1024 * 1024) {
+    return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function DocumentCreate() {
   const navigate = useNavigate();
-  const docFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [sourceContent, setSourceContent] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('text');
@@ -59,7 +76,7 @@ export default function DocumentCreate() {
     return normalized;
   };
 
-  const selectInputFile = (file: File | undefined) => {
+  const selectInputFile = useCallback((file: File | undefined) => {
     if (!file) {
       return;
     }
@@ -80,13 +97,30 @@ export default function DocumentCreate() {
 
     setSubmitError(null);
     setSelectedFile(file);
-  };
+  }, []);
 
-  const handleDocFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    selectInputFile(file);
-  };
+  const handleDropAccepted = useCallback((acceptedFiles: File[]) => {
+    selectInputFile(acceptedFiles[0]);
+  }, [selectInputFile]);
+
+  const handleDropRejected = useCallback(() => {
+    const message = 'Chỉ hỗ trợ file PDF hoặc DOCX. Vui lòng chọn lại file hợp lệ.';
+    setSubmitError(message);
+    toast.error(message);
+  }, []);
+
+  const handleClearSelectedFile = useCallback(() => {
+    setSelectedFile(null);
+    setSubmitError(null);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDropAccepted: handleDropAccepted,
+    onDropRejected: handleDropRejected,
+    accept: DROPZONE_ACCEPT,
+    multiple: false,
+    disabled: isSubmitting,
+  });
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -232,31 +266,56 @@ export default function DocumentCreate() {
           )}
 
           {inputMode === 'file' && (
-            <div className="mb-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/70 p-3">
-              <p className="text-xs text-slate-600 dark:text-zinc-400 mb-2">Chọn file PDF hoặc DOCX. Hệ thống sẽ tự động trích xuất ngay sau khi chọn.</p>
-              <p className="text-xs text-amber-600 dark:text-amber-300 mb-2">Khuyên dùng: Tài liệu dưới 20 trang để có trải nghiệm AI tốt nhất.</p>
-              <input
-                ref={docFileInputRef}
-                type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={handleDocFileChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => docFileInputRef.current?.click()}
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 dark:border-zinc-600 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm text-slate-700 dark:text-zinc-100"
-                style={{ fontWeight: 600 }}
-              >
-                <FileText size={14} />Chọn file PDF/DOCX
-              </button>
+            <div className="mb-3">
+              {selectedFile ? (
+                <div className="relative rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/70 px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 rounded-lg bg-cyan-100 p-2 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
+                      <FileText size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-slate-900 dark:text-zinc-100" style={{ fontWeight: 600 }}>
+                        {selectedFile.name}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                        {formatFileSize(selectedFile.size)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleClearSelectedFile}
+                    disabled={isSubmitting}
+                    className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                    aria-label="Xóa file đã chọn"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  {...getRootProps()}
+                  className={`rounded-2xl border-2 border-dashed py-12 px-6 text-center transition-colors ${
+                    isDragActive
+                      ? 'border-cyan-500 bg-cyan-50/20 dark:bg-cyan-900/20'
+                      : 'border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/70'
+                  } ${isSubmitting ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <input {...getInputProps()} />
+                  <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">
+                    <UploadCloud size={28} />
+                  </div>
+                  <p className="text-sm text-slate-900 dark:text-zinc-100" style={{ fontWeight: 700 }}>
+                    Kéo thả file PDF/DOCX vào đây, hoặc click để chọn
+                  </p>
+                  <p className="mt-2 text-sm text-slate-500/90 dark:text-zinc-400/90">
+                    Khuyên dùng: Tài liệu dưới 20 trang để có trải nghiệm AI tốt nhất.
+                  </p>
+                </div>
+              )}
             </div>
           )}
-
-            {selectedFile && !isTextMode && (
-              <p className="mb-3 text-xs text-slate-500 dark:text-zinc-500">Đã chọn: {selectedFile.name}</p>
-            )}
 
             {isSubmitting && submitPhase === 'extracting' && !isTextMode && (
             <div className="mb-3 rounded-xl border border-cyan-400/40 bg-cyan-100 dark:bg-cyan-500/10 px-3 py-2 text-sm text-cyan-700 dark:text-cyan-200 inline-flex items-center gap-2">
