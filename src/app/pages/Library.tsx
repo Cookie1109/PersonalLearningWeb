@@ -488,7 +488,7 @@ export default function Library() {
                     </div>
 
                     <h3
-                      className="text-base text-slate-900 dark:text-white pr-12 leading-snug"
+                      className="text-base text-slate-900 dark:text-white pr-12 leading-snug line-clamp-2 break-all"
                       style={{ fontWeight: 600 }}
                       title={document.title}
                     >
