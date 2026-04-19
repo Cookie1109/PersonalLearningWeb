@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { Clock, FilePlus2, Flame, Sparkles, Star, TrendingUp } from 'lucide-react';
+import { Clock, FilePlus2, Flame, Star, TrendingUp } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import DailyQuestsWidget from '../components/DailyQuestsWidget';
 import ProgressHeatmap from '../components/ProgressHeatmap';
 import { fetchMyActivity } from '../../api/auth';
 
@@ -29,8 +30,6 @@ export default function Dashboard() {
     };
   }, [syncActivityData]);
 
-  const expProgress = Math.round((user.exp / user.expToNextLevel) * 100);
-
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}>
@@ -53,12 +52,11 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { icon: Flame, label: 'Streak', value: `${user.streak} ngày`, sub: 'Chuỗi học liên tục', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
           { icon: Clock, label: 'Ngày học', value: `${user.totalDays}`, sub: 'Tổng số ngày học', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
           { icon: Star, label: 'Cấp độ', value: `Lv.${user.level}`, sub: `${user.exp}/${user.expToNextLevel} EXP`, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
-          { icon: Sparkles, label: 'EXP', value: `${expProgress}%`, sub: 'Tiến độ', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
         ].map(({ icon: Icon, label, value, sub, color, bg }) => (
           <div key={label} className={`rounded-2xl border p-4 ${bg}`}>
             <div className="flex items-center justify-between mb-2">
@@ -69,6 +67,10 @@ export default function Dashboard() {
             <p className="text-xs text-zinc-500 mt-1">{sub}</p>
           </div>
         ))}
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+        <DailyQuestsWidget />
       </motion.div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18 }} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">

@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { UserStats } from '../lib/types';
 import { getMyProfile } from '../../api/auth';
+import { getGamificationProfile } from '../../api/gamification';
 import ProfileModal from './ProfileModal';
 import nexlWordmarkDark from '../../assets/branding/nexl-wordmark-dark.svg';
 import nexlWordmarkLight from '../../assets/branding/nexl-wordmark-light.svg';
@@ -47,7 +48,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const app = useApp();
   const { currentUser, authLoading, signOutUser } = useAuth();
   const user = userData ?? app.user;
-  const { resetSessionState, setUserFromAuth } = app;
+  const { resetSessionState, setUserFromAuth, syncGamificationProfile } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -87,8 +88,23 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
       }
     };
 
+    const hydrateGamification = async (): Promise<void> => {
+      try {
+        const profile = await getGamificationProfile();
+        if (!mounted) {
+          return;
+        }
+
+        syncGamificationProfile(profile);
+      } catch {
+        // Sidebar can fall back to auth profile-derived values.
+      }
+    };
+
     const loadProfile = async () => {
       const hydrated = await hydrateProfile();
+      await hydrateGamification();
+
       if (hydrated || !currentUser) {
         return;
       }
@@ -100,13 +116,14 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
       }
 
       await hydrateProfile();
+      await hydrateGamification();
     };
 
     void loadProfile();
     return () => {
       mounted = false;
     };
-  }, [authLoading, currentUser, navigate, setUserFromAuth]);
+  }, [authLoading, currentUser, navigate, setUserFromAuth, syncGamificationProfile]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_BREAKPOINT - 1}px)`);
@@ -136,7 +153,8 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   };
 
   const progress = Math.min(100, Math.max(0, user.totalDays));
-  const expProgress = Math.round((user.exp / user.expToNextLevel) * 100);
+  const safeTargetExp = Math.max(1, user.expToNextLevel || 1);
+  const expProgress = Math.min(100, Math.max(0, Math.round((user.exp / safeTargetExp) * 100)));
   const roadmapLabel = activeRoadmapLabel ?? 'NEXL Workspace';
   const isDarkTheme = themeMode === 'dark';
   const logoWordmark = isDarkTheme ? nexlWordmarkDark : nexlWordmarkLight;

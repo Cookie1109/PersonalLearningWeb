@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { UserProfileDTO } from '../../api/dto';
+import { GamificationProfileDTO, UserProfileDTO } from '../../api/dto';
 import { WeekModule, Lesson, UserStats, ActivityDay } from '../lib/types';
 
 const DEFAULT_USER_STATS: UserStats = {
@@ -27,6 +27,7 @@ interface AppContextType {
   completeLesson: (lessonId: string) => void;
   applyServerExp: (expEarned: number) => void;
   syncServerGamification: (payload: { totalExp: number; level: number; currentStreak: number }) => void;
+  syncGamificationProfile: (payload: GamificationProfileDTO) => void;
   syncActivityData: (activity: ActivityDay[]) => void;
   setUserFromAuth: (userProfile: UserProfileDTO) => void;
   resetSessionState: () => void;
@@ -62,6 +63,24 @@ export function AppProvider({
     new Set(initialRoadmap.flatMap(w => w.lessons.filter(l => l.completed).map(l => l.id)))
   );
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
+
+  const getProgressiveExpSnapshot = useCallback((totalExpInput: number) => {
+    const safeTotalExp = Math.max(0, Math.floor(totalExpInput || 0));
+    let level = 1;
+    let remainingExp = safeTotalExp;
+
+    while (remainingExp >= level * 1000) {
+      remainingExp -= level * 1000;
+      level += 1;
+    }
+
+    return {
+      level,
+      currentExp: remainingExp,
+      targetExp: level * 1000,
+      totalExp: safeTotalExp,
+    };
+  }, []);
 
   const getActiveDaysCount = useCallback((items: ActivityDay[]) => items.filter(day => day.count > 0).length, []);
 
@@ -131,20 +150,31 @@ export function AppProvider({
   }, [recordActivityToday]);
 
   const syncServerGamification = useCallback((payload: { totalExp: number; level: number; currentStreak: number }) => {
-    setUser(prev => {
-      const safeLevel = Math.max(1, payload.level || 1);
-      const safeTotalExp = Math.max(0, payload.totalExp || 0);
-      const levelBaseExp = (safeLevel - 1) * 1000;
-      const expIntoLevel = Math.max(0, safeTotalExp - levelBaseExp) % 1000;
+    const snapshot = getProgressiveExpSnapshot(payload.totalExp);
 
+    setUser(prev => {
       return {
         ...prev,
-        level: safeLevel,
-        exp: expIntoLevel,
-        expToNextLevel: 1000,
+        level: snapshot.level,
+        exp: snapshot.currentExp,
+        expToNextLevel: snapshot.targetExp,
         streak: Math.max(0, payload.currentStreak || 0),
       };
     });
+  }, [getProgressiveExpSnapshot]);
+
+  const syncGamificationProfile = useCallback((payload: GamificationProfileDTO) => {
+    const safeLevel = Math.max(1, Math.floor(payload.level || 1));
+    const safeTargetExp = Math.max(1, Math.floor(payload.target_exp || safeLevel * 1000));
+    const safeCurrentExp = Math.max(0, Math.min(Math.floor(payload.current_exp || 0), safeTargetExp));
+
+    setUser(prev => ({
+      ...prev,
+      level: safeLevel,
+      exp: safeCurrentExp,
+      expToNextLevel: safeTargetExp,
+      streak: Math.max(0, Math.floor(payload.current_streak || 0)),
+    }));
   }, []);
 
   const syncActivityData = useCallback((activity: ActivityDay[]) => {
@@ -163,9 +193,7 @@ export function AppProvider({
   }, [getActiveDaysCount]);
 
   const setUserFromAuth = useCallback((userProfile: UserProfileDTO) => {
-    const safeLevel = Math.max(1, userProfile.level || 1);
-    const levelBaseExp = (safeLevel - 1) * 1000;
-    const expIntoLevel = Math.max(0, userProfile.total_exp - levelBaseExp) % 1000;
+    const snapshot = getProgressiveExpSnapshot(userProfile.total_exp || 0);
     const resolvedFullName = (userProfile.full_name || userProfile.display_name || '').trim();
 
     setUser(prev => ({
@@ -173,13 +201,13 @@ export function AppProvider({
       name: resolvedFullName || prev.name,
       email: userProfile.email,
       avatarUrl: userProfile.avatar_url ?? null,
-      level: safeLevel,
-      exp: expIntoLevel,
-      expToNextLevel: 1000,
+      level: snapshot.level,
+      exp: snapshot.currentExp,
+      expToNextLevel: snapshot.targetExp,
       streak: Math.max(0, userProfile.current_streak ?? prev.streak),
       totalDays: Math.max(0, userProfile.total_study_days ?? prev.totalDays),
     }));
-  }, []);
+  }, [getProgressiveExpSnapshot]);
 
   const toggleWeekExpand = useCallback((weekId: string) => {
     setRoadmapState(prev =>
@@ -254,7 +282,7 @@ export function AppProvider({
       user, roadmap, currentGoal, activityData, completedLessons,
       currentLessonId, setRoadmap, setCurrentGoal, setCurrentLessonId,
       completeLesson, toggleWeekExpand, deleteWeek, deleteLesson,
-      applyServerExp, syncServerGamification, syncActivityData, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
+      applyServerExp, syncServerGamification, syncGamificationProfile, syncActivityData, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
     }}>
       {children}
     </AppContext.Provider>

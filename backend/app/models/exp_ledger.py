@@ -11,12 +11,21 @@ class ExpLedger(Base):
     __tablename__ = "exp_ledger"
     __table_args__ = (
         UniqueConstraint("user_id", "quiz_id", "reward_type", name="uq_exp_ledger_user_quiz_reward"),
+        UniqueConstraint(
+            "user_id",
+            "action_type",
+            "target_id",
+            "reward_type",
+            name="uq_exp_ledger_user_action_target_reward",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     lesson_id: Mapped[int | None] = mapped_column(ForeignKey("lessons.id", ondelete="SET NULL"), nullable=True)
     quiz_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    action_type: Mapped[str] = mapped_column(String(64), nullable=False, default="legacy", index=True)
+    target_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     reward_type: Mapped[str] = mapped_column(String(50), nullable=False)
     exp_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

@@ -1,5 +1,6 @@
 from app.models.audit_log import AuditLog
 from app.models.chat_message import ChatMessage
+from app.models.daily_quest import DailyQuest
 from app.models.exp_ledger import ExpLedger
 from app.models.flashcard import Flashcard
 from app.models.flashcard_progress import FlashcardProgress
@@ -11,6 +12,7 @@ from app.models.user import User
 __all__ = [
     "AuditLog",
     "ChatMessage",
+    "DailyQuest",
     "User",
     "Roadmap",
     "Lesson",

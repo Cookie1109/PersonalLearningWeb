@@ -574,6 +574,8 @@ def submit_quiz_for_user(
                 user_id=user_id,
                 lesson_id=quiz.lesson_id,
                 quiz_id=str(quiz.id),
+                action_type="PASS_QUIZ",
+                target_id=str(quiz.id),
                 reward_type=reward_type,
                 exp_amount=exp_gained,
                 metadata_json={"source": reward_type, "score": score},

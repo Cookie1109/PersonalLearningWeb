@@ -67,6 +67,80 @@ class ActivityDayDTO(BaseModel):
     count: int = Field(default=0, ge=0)
 
 
+class GamificationProfileDTO(BaseModel):
+    level: int = Field(..., ge=1)
+    current_exp: int = Field(..., ge=0)
+    target_exp: int = Field(..., ge=1)
+    total_exp: int = Field(..., ge=0)
+    current_streak: int = Field(..., ge=0)
+
+
+class DailyQuestDTO(BaseModel):
+    id: str
+    quest_code: str
+    title: str
+    difficulty: Literal["easy", "medium", "hard"]
+    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    target_value: int = Field(..., ge=1)
+    current_progress: int = Field(default=0, ge=0)
+    is_completed: bool = False
+    exp_reward: int = Field(..., ge=0)
+    quest_date: str
+
+
+class DailyQuestListResponseDTO(BaseModel):
+    quest_date: str
+    timezone: str
+    all_clear_bonus_exp: int = Field(..., ge=0)
+    all_clear_completed: bool = False
+    quests: list[DailyQuestDTO] = Field(default_factory=list)
+
+
+class GamificationTrackRequestDTO(BaseModel):
+    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    target_id: str = Field(..., min_length=1, max_length=128)
+    value: int = Field(..., ge=1, le=1000)
+
+    @field_validator("target_id", mode="before")
+    @classmethod
+    def normalize_target_id(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                raise ValueError("target_id must not be empty")
+            return normalized
+        return value
+
+
+class QuestProgressUpdateDTO(BaseModel):
+    quest_id: str
+    quest_code: str
+    previous_progress: int = Field(..., ge=0)
+    current_progress: int = Field(..., ge=0)
+    target_value: int = Field(..., ge=1)
+    is_completed: bool
+    just_completed: bool = False
+    completion_exp_awarded: int = Field(default=0, ge=0)
+
+
+class GamificationTrackResponseDTO(BaseModel):
+    accepted: bool
+    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    target_id: str
+    value: int = Field(..., ge=1)
+    exp_gained: int = Field(..., ge=0)
+    completion_exp_gained: int = Field(..., ge=0)
+    all_clear_awarded: bool = False
+    all_clear_bonus_exp: int = Field(default=0, ge=0)
+    blocked_reason: str | None = None
+    quest_updates: list[QuestProgressUpdateDTO] = Field(default_factory=list)
+    total_exp: int = Field(..., ge=0)
+    level: int = Field(..., ge=1)
+    current_exp: int = Field(..., ge=0)
+    target_exp: int = Field(..., ge=1)
+    current_streak: int = Field(..., ge=0)
+
+
 class LoginResponseDTO(BaseModel):
     access_token: str
     token_type: str = "bearer"

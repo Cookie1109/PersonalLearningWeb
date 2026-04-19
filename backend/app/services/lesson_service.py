@@ -18,7 +18,13 @@ from app.models import ExpLedger, FlashcardProgress, Lesson, Quiz, QuizAttempt, 
 from app.models.lesson import normalize_lesson_title_for_search
 from app.schemas import DocumentPageDTO, DocumentSummaryDTO, FlashcardCompleteResponseDTO, LessonCompleteResponseDTO, LessonDetailDTO
 from app.services.cloudinary_service import delete_original_document, upload_original_document
-from app.services.gamification_service import add_exp_and_check_level, get_current_streak, get_total_exp, update_study_streak
+from app.services.gamification_service import (
+    add_exp_and_check_level,
+    get_current_streak,
+    get_level_progress,
+    get_total_exp,
+    update_study_streak,
+)
 from app.services.parser_service import extract_text_from_uploaded_file
 from app.services.quiz_service import generate_quiz_for_lesson_user
 
@@ -1178,7 +1184,7 @@ def complete_lesson_for_user(
 
             total_exp = get_total_exp(locked_user)
             current_streak = get_current_streak(locked_user)
-            level = (total_exp // 1000) + 1
+            level, _, _ = get_level_progress(locked_user)
 
             return LessonCompleteResponseDTO(
                 lesson_id=lesson_id,
@@ -1201,6 +1207,8 @@ def complete_lesson_for_user(
             user_id=user_id,
             lesson_id=lesson_id,
             quiz_id=None,
+            action_type="COMPLETE_LESSON",
+            target_id=str(lesson_id),
             reward_type=LESSON_COMPLETE_REWARD_TYPE,
             exp_amount=exp_gained,
             metadata_json={"source": LESSON_COMPLETE_REWARD_TYPE},
@@ -1214,6 +1222,8 @@ def complete_lesson_for_user(
                 user_id=user_id,
                 lesson_id=lesson_id,
                 quiz_id=None,
+                action_type="STREAK_BONUS",
+                target_id=str(lesson_id),
                 reward_type=STREAK_BONUS_REWARD_TYPE,
                 exp_amount=streak_bonus_exp,
                 metadata_json={

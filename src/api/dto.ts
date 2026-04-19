@@ -42,6 +42,73 @@ export interface ActivityDayDTO {
   count: number;
 }
 
+export interface GamificationProfileDTO {
+  level: number;
+  current_exp: number;
+  target_exp: number;
+  total_exp: number;
+  current_streak: number;
+}
+
+export type QuestDifficulty = 'easy' | 'medium' | 'hard';
+export type GamificationActionType = 'READ_DOCUMENT' | 'LEARN_FLASHCARD' | 'SUMMARY_CREATED';
+
+export interface DailyQuestDTO {
+  id: string;
+  quest_code: string;
+  title: string;
+  difficulty: QuestDifficulty;
+  action_type: GamificationActionType;
+  target_value: number;
+  current_progress: number;
+  is_completed: boolean;
+  exp_reward: number;
+  quest_date: string;
+}
+
+export interface DailyQuestListResponseDTO {
+  quest_date: string;
+  timezone: string;
+  all_clear_bonus_exp: number;
+  all_clear_completed: boolean;
+  quests: DailyQuestDTO[];
+}
+
+export interface GamificationTrackRequestDTO {
+  action_type: GamificationActionType;
+  target_id: string;
+  value: number;
+}
+
+export interface QuestProgressUpdateDTO {
+  quest_id: string;
+  quest_code: string;
+  previous_progress: number;
+  current_progress: number;
+  target_value: number;
+  is_completed: boolean;
+  just_completed: boolean;
+  completion_exp_awarded: number;
+}
+
+export interface GamificationTrackResponseDTO {
+  accepted: boolean;
+  action_type: GamificationActionType;
+  target_id: string;
+  value: number;
+  exp_gained: number;
+  completion_exp_gained: number;
+  all_clear_awarded: boolean;
+  all_clear_bonus_exp: number;
+  blocked_reason?: string | null;
+  quest_updates: QuestProgressUpdateDTO[];
+  total_exp: number;
+  level: number;
+  current_exp: number;
+  target_exp: number;
+  current_streak: number;
+}
+
 export interface LoginResponseDTO {
   access_token: string;
   token_type: string;

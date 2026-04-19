@@ -2,6 +2,7 @@ from .documents import router as documents_router
 from .auth import router as auth_router
 from .chat import router as chat_router
 from .flashcards import router as flashcards_router
+from .gamification import router as gamification_router
 from .health import router as health_router
 from .lessons import router as lessons_router
 from .parser import router as parser_router
@@ -12,6 +13,7 @@ __all__ = [
 	"auth_router",
 	"chat_router",
 	"flashcards_router",
+	"gamification_router",
 	"health_router",
 	"lessons_router",
 	"parser_router",
