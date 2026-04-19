@@ -11,6 +11,7 @@ interface Props {
   documentId?: string | number;
   cards?: LegacyFlashcard[];
   onComplete?: (known: number, total: number) => void;
+  onMarkLearned?: (cardId: string | number) => Promise<void> | void;
   titleFront?: string;
   titleBack?: string;
 }
@@ -55,6 +56,7 @@ export default function FlashCardDeck({
   documentId,
   cards = EMPTY_CARDS,
   onComplete,
+  onMarkLearned,
   titleFront = 'Câu hỏi · Nhấn để lật',
   titleBack = 'Đáp án',
 }: Props) {
@@ -245,6 +247,10 @@ export default function FlashCardDeck({
       setCardsState(updatedCards);
       reportCompleteIfNeeded(updatedCards, previousStatus);
 
+      if (isApiMode && nextStatus === 'got_it' && onMarkLearned) {
+        void onMarkLearned(current.id);
+      }
+
       const nextDeckCards = studyMode === 'missed'
         ? updatedCards.filter(card => card.status === 'missed_it')
         : updatedCards;
@@ -265,7 +271,7 @@ export default function FlashCardDeck({
     } finally {
       setIsUpdatingStatus(false);
     }
-  }, [cardsState, current, currentIndex, isApiMode, isLoading, isUpdatingStatus, reportCompleteIfNeeded, studyMode]);
+  }, [cardsState, current, currentIndex, isApiMode, isLoading, isUpdatingStatus, onMarkLearned, reportCompleteIfNeeded, studyMode]);
 
   const handleExplainCurrent = useCallback(async () => {
     if (!current || !isFlipped || isExplaining) {

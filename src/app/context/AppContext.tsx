@@ -19,6 +19,7 @@ interface AppContextType {
   roadmap: WeekModule[];
   currentGoal: string;
   activityData: ActivityDay[];
+  gamificationRefreshTick: number;
   completedLessons: Set<string>;
   currentLessonId: string | null;
   setRoadmap: (roadmap: WeekModule[]) => void;
@@ -28,6 +29,7 @@ interface AppContextType {
   applyServerExp: (expEarned: number) => void;
   syncServerGamification: (payload: { totalExp: number; level: number; currentStreak: number }) => void;
   syncGamificationProfile: (payload: GamificationProfileDTO) => void;
+  requestGamificationRefresh: () => void;
   syncActivityData: (activity: ActivityDay[]) => void;
   setUserFromAuth: (userProfile: UserProfileDTO) => void;
   resetSessionState: () => void;
@@ -59,6 +61,7 @@ export function AppProvider({
   const [roadmap, setRoadmapState] = useState<WeekModule[]>(initialRoadmap);
   const [currentGoal, setCurrentGoal] = useState(initialGoal);
   const [activityData, setActivityData] = useState<ActivityDay[]>(initialActivityData);
+  const [gamificationRefreshTick, setGamificationRefreshTick] = useState(0);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(
     new Set(initialRoadmap.flatMap(w => w.lessons.filter(l => l.completed).map(l => l.id)))
   );
@@ -177,6 +180,10 @@ export function AppProvider({
     }));
   }, []);
 
+  const requestGamificationRefresh = useCallback(() => {
+    setGamificationRefreshTick(prev => prev + 1);
+  }, []);
+
   const syncActivityData = useCallback((activity: ActivityDay[]) => {
     const normalized = activity
       .filter(day => Boolean(day.date))
@@ -240,6 +247,7 @@ export function AppProvider({
     setRoadmapState([]);
     setCurrentGoal('');
     setActivityData([]);
+    setGamificationRefreshTick(0);
     setCompletedLessons(new Set());
     setCurrentLessonId(null);
   }, []);
@@ -279,10 +287,10 @@ export function AppProvider({
 
   return (
     <AppContext.Provider value={{
-      user, roadmap, currentGoal, activityData, completedLessons,
+      user, roadmap, currentGoal, activityData, gamificationRefreshTick, completedLessons,
       currentLessonId, setRoadmap, setCurrentGoal, setCurrentLessonId,
       completeLesson, toggleWeekExpand, deleteWeek, deleteLesson,
-      applyServerExp, syncServerGamification, syncGamificationProfile, syncActivityData, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
+      applyServerExp, syncServerGamification, syncGamificationProfile, requestGamificationRefresh, syncActivityData, setUserFromAuth, resetSessionState, resetRoadmap, addCustomLesson,
     }}>
       {children}
     </AppContext.Provider>

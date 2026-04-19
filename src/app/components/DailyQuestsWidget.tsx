@@ -3,6 +3,7 @@ import { CheckCircle2, ClipboardList, Gift } from 'lucide-react';
 
 import { getDailyQuests } from '../../api/gamification';
 import { DailyQuestDTO, DailyQuestListResponseDTO } from '../../api/dto';
+import { useApp } from '../context/AppContext';
 
 function getDifficultyLabel(difficulty: DailyQuestDTO['difficulty']): string {
   if (difficulty === 'easy') return 'Dễ';
@@ -17,6 +18,7 @@ function getDifficultyTone(difficulty: DailyQuestDTO['difficulty']): string {
 }
 
 export default function DailyQuestsWidget() {
+  const { gamificationRefreshTick } = useApp();
   const [state, setState] = useState<DailyQuestListResponseDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -43,7 +45,7 @@ export default function DailyQuestsWidget() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [gamificationRefreshTick]);
 
   const completionCount = useMemo(() => {
     if (!state) return 0;

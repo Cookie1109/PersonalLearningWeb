@@ -22,10 +22,12 @@ import {
   getLessonDetail,
   LessonDetail,
 } from '../../api/learning';
+import { trackGamification } from '../../api/gamification';
 import FlashCardDeck from '../components/FlashCard';
 import { Flashcard } from '../lib/types';
-import { QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
+import { GamificationTrackResponseDTO, QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
 import { fetchQuizByDocument, generateQuizByDocument, submitQuizByDocument } from '../../api/quiz';
+import useReadingTracker from '../hooks/useReadingTracker';
 
 type LearningTab = 'theory' | 'quiz' | 'flashcard' | 'qa';
 
@@ -926,7 +928,13 @@ export default function LearningWorkspace() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { completeLesson, applyServerExp, syncServerGamification } = useApp();
+  const {
+    completeLesson,
+    applyServerExp,
+    syncServerGamification,
+    syncGamificationProfile,
+    requestGamificationRefresh,
+  } = useApp();
 
   const [lessonDetail, setLessonDetail] = useState<LessonDetail | null>(null);
   const [activeTab, setActiveTab] = useState<LearningTab>('theory');
@@ -998,6 +1006,61 @@ export default function LearningWorkspace() {
     const nextTab: LearningTab = isLearningTab(requestedTab) ? requestedTab : 'theory';
     setActiveTab(prev => (prev === nextTab ? prev : nextTab));
   }, [searchParams]);
+
+  const applyTrackResponseToContext = useCallback((result: GamificationTrackResponseDTO) => {
+    syncGamificationProfile({
+      level: result.level,
+      current_exp: result.current_exp,
+      target_exp: result.target_exp,
+      total_exp: result.total_exp,
+      current_streak: result.current_streak,
+    });
+
+    if (result.accepted) {
+      requestGamificationRefresh();
+    }
+  }, [requestGamificationRefresh, syncGamificationProfile]);
+
+  const handleTrackFlashcardLearned = useCallback(async (flashcardId: string | number) => {
+    try {
+      const result = await trackGamification({
+        action_type: 'LEARN_FLASHCARD',
+        target_id: String(flashcardId),
+        value: 1,
+      });
+      applyTrackResponseToContext(result);
+    } catch {
+      // Ignore tracking failures to keep flashcard interaction smooth.
+    }
+  }, [applyTrackResponseToContext]);
+
+  const handleTrackReadingMinute = useCallback(async (documentId: string) => {
+    try {
+      const result = await trackGamification({
+        action_type: 'READ_DOCUMENT',
+        target_id: documentId,
+        value: 1,
+      });
+      applyTrackResponseToContext(result);
+    } catch {
+      // Keep reading UX uninterrupted when background tracking fails.
+    }
+  }, [applyTrackResponseToContext]);
+
+  const isReadingTrackingEnabled = Boolean(
+    lessonId
+    && activeTab === 'theory'
+    && !isLoading
+    && !isGeneratingContent
+    && !loadError
+    && lessonDetail?.contentMarkdown,
+  );
+
+  const readingTracker = useReadingTracker({
+    enabled: isReadingTrackingEnabled,
+    documentId: lessonId,
+    onTrackMinute: handleTrackReadingMinute,
+  });
 
   const loadLesson = useCallback(async (targetLessonId: string) => {
     setIsLoading(true);
@@ -1468,6 +1531,16 @@ export default function LearningWorkspace() {
               </div>
               <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Nội dung bài học</h2>
             </div>
+            {isReadingTrackingEnabled && (
+              <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${readingTracker.isIdle
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}
+              >
+                {readingTracker.isIdle
+                  ? 'Tạm dừng ghi nhận đọc vì không có tương tác trong 2 phút.'
+                  : `Đang ghi nhận đọc chủ động: ${readingTracker.activeMinutes} phút`}
+              </div>
+            )}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
               <MarkdownContent content={lessonDetail.contentMarkdown} />
             </div>
@@ -1671,6 +1744,9 @@ export default function LearningWorkspace() {
           documentId={lessonId}
           onComplete={(known, total) => {
             void handleFlashcardComplete(known, total);
+          }}
+          onMarkLearned={(flashcardId) => {
+            void handleTrackFlashcardLearned(flashcardId);
           }}
         />
 
