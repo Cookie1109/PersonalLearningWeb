@@ -37,6 +37,8 @@ export interface QuizQuestion {
   id: QuizPublicQuestionDTO['question_id'];
   question: QuizPublicQuestionDTO['text'];
   options: QuizPublicQuestionDTO['options'];
+  correctIndex?: number;
+  explanation?: string;
 }
 
 export interface Flashcard {

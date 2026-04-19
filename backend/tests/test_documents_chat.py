@@ -3,9 +3,14 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
 from app.models import Lesson, Question, Quiz
 from app.services.quiz_generation_service import GeneratedQuizQuestion
+
+
+def _auth_headers_for_user(*, user) -> dict[str, str]:
+    firebase_uid = user.firebase_uid or f"uid-{user.id}"
+    token = f"test-firebase-token|{firebase_uid}|{user.email}"
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _seed_document(db_session: Session, *, user_id: int, title: str = "Doc Chat") -> Lesson:
@@ -106,8 +111,7 @@ def test_document_chat_endpoint_requires_ownership(client, db_session: Session, 
     outsider, _ = create_user(email="outsider-chat@example.com", display_name="Outsider Chat")
     lesson = _seed_document(db_session, user_id=owner.id, title="Private Doc")
 
-    outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
-    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    outsider_headers = _auth_headers_for_user(user=outsider)
 
     response = client.post(
         f"/api/documents/{lesson.id}/chat",

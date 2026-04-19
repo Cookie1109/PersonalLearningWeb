@@ -3,8 +3,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
-from app.core.security import create_access_token
 from app.models import Lesson, Roadmap
+
+
+def _auth_headers_for_user(*, user) -> dict[str, str]:
+    firebase_uid = user.firebase_uid or f"uid-{user.id}"
+    token = f"test-firebase-token|{firebase_uid}|{user.email}"
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _seed_lesson(db_session: Session, *, user_id: int, title: str = "Lesson Intro") -> Lesson:
@@ -44,10 +49,9 @@ def test_get_lesson_detail_requires_ownership(
 
     lesson = _seed_lesson(db_session, user_id=owner.id)
 
-    owner_token, _ = create_access_token(user_id=owner.id, email=owner.email)
     owner_response = client.get(
         f"/api/lessons/{lesson.id}",
-        headers={"Authorization": f"Bearer {owner_token}"},
+        headers=_auth_headers_for_user(user=owner),
     )
 
     assert owner_response.status_code == 200
@@ -57,10 +61,9 @@ def test_get_lesson_detail_requires_ownership(
     assert owner_payload["content_markdown"] is None
     assert owner_payload["youtube_video_id"] is None
 
-    outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
     outsider_response = client.get(
         f"/api/lessons/{lesson.id}",
-        headers={"Authorization": f"Bearer {outsider_token}"},
+        headers=_auth_headers_for_user(user=outsider),
     )
 
     assert outsider_response.status_code == 404

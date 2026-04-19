@@ -90,7 +90,7 @@ export default function LessonsPage() {
           </div>
           <div>
             <h1 className="text-2xl text-white" style={{ fontWeight: 700 }}>Bài học của tôi</h1>
-            <p className="text-zinc-500 text-sm">Hiển thị theo cấu trúc Lộ trình -> Tuần -> Bài học</p>
+            <p className="text-zinc-500 text-sm">Hiển thị theo cấu trúc Lộ trình -&gt; Tuần -&gt; Bài học</p>
           </div>
         </div>
       </motion.div>

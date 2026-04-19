@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.infra.firebase_client import init_firebase_app
 
 settings = get_settings()
 
@@ -15,6 +16,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
+    init_firebase_app(strict=False)
     yield
 
 

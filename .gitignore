@@ -31,6 +31,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+*-firebase-adminsdk-*.json
 
 # Logs and runtime
 *.log

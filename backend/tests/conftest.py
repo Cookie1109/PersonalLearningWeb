@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,12 +9,48 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.security import create_access_token
+from app.core.exceptions import AppException
 from app.db.base import Base
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
 from app.main import create_app
 from app.models import Lesson, Question, Quiz, Roadmap, User
+
+TEST_FIREBASE_TOKEN_PREFIX = "test-firebase-token"
+
+
+def build_test_firebase_token(*, firebase_uid: str, email: str) -> str:
+    return f"{TEST_FIREBASE_TOKEN_PREFIX}|{firebase_uid}|{email.strip().lower()}"
+
+
+def build_test_auth_headers(*, firebase_uid: str, email: str) -> dict[str, str]:
+    token = build_test_firebase_token(firebase_uid=firebase_uid, email=email)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _fake_verify_firebase_id_token(token: str) -> dict[str, object]:
+    parts = token.split("|", maxsplit=2)
+    if len(parts) != 3 or parts[0] != TEST_FIREBASE_TOKEN_PREFIX:
+        raise AppException(
+            status_code=401,
+            message="Invalid Firebase ID token",
+            detail={"code": "FIREBASE_ID_TOKEN_INVALID"},
+        )
+
+    uid = parts[1].strip()
+    email = parts[2].strip().lower()
+    if not uid or not email:
+        raise AppException(
+            status_code=401,
+            message="Invalid Firebase ID token",
+            detail={"code": "FIREBASE_ID_TOKEN_INVALID"},
+        )
+
+    return {
+        "uid": uid,
+        "email": email,
+        "name": email.split("@")[0],
+    }
 
 
 class FakeRedisPipeline:
@@ -123,13 +160,11 @@ def fake_redis() -> FakeRedis:
 
 @pytest.fixture
 def client(db_session: Session, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
-    import app.services.auth_service as auth_service
-    import app.api.routes.auth as auth_routes
+    import app.api.deps.auth as deps_auth
     import app.api.routes.lessons as lessons_routes
     import app.api.routes.quizzes as quizzes_routes
 
-    monkeypatch.setattr(auth_service, "verify_password", lambda plain, saved: plain == saved)
-    monkeypatch.setattr(auth_routes, "queue_audit_log", lambda *args, **kwargs: None)
+    monkeypatch.setattr(deps_auth, "verify_firebase_id_token", _fake_verify_firebase_id_token)
     monkeypatch.setattr(lessons_routes, "queue_audit_log", lambda *args, **kwargs: None)
     monkeypatch.setattr(quizzes_routes, "queue_audit_log", lambda *args, **kwargs: None)
 
@@ -154,9 +189,13 @@ def create_user(db_session: Session):
         email: str = "learner@example.com",
         password: str = "StrongPass123!",
         display_name: str = "Learner",
+        firebase_uid: str | None = None,
     ) -> tuple[User, str]:
+        resolved_email = email.strip().lower()
+        resolved_uid = firebase_uid or f"uid-{uuid4().hex[:16]}"
         user = User(
-            email=email,
+            email=resolved_email,
+            firebase_uid=resolved_uid,
             password_hash=password,
             display_name=display_name,
             level=1,
@@ -176,8 +215,7 @@ def create_user(db_session: Session):
 @pytest.fixture
 def auth_headers(create_user):
     user, _ = create_user()
-    access_token, _ = create_access_token(user_id=user.id, email=user.email)
-    return user, {"Authorization": f"Bearer {access_token}"}
+    return user, build_test_auth_headers(firebase_uid=user.firebase_uid or "", email=user.email)
 
 
 @pytest.fixture

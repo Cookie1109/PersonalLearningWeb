@@ -1,4 +1,6 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
+
+import { firebaseAuth } from './firebase';
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -8,53 +10,11 @@ export const apiClient = axios.create({
   },
 });
 
-const ACCESS_TOKEN_STORAGE_KEY = 'pl_access_token';
-const AUTH_EXPIRED_NOTICE_KEY = 'pl_auth_expired_notice';
-
 let authInterceptorConfigured = false;
 
-export function setAccessToken(token: string | null): void {
-  if (typeof window === 'undefined') return;
-
-  if (!token) {
-    window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    return;
-  }
-
-  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-}
-
-export function clearClientAuthState(): void {
-  setAccessToken(null);
-}
-
-export function markAuthExpiredNotice(): void {
-  if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(AUTH_EXPIRED_NOTICE_KEY, '1');
-}
-
-export function consumeAuthExpiredNotice(): boolean {
-  if (typeof window === 'undefined') return false;
-  const value = window.sessionStorage.getItem(AUTH_EXPIRED_NOTICE_KEY);
-  if (!value) return false;
-  window.sessionStorage.removeItem(AUTH_EXPIRED_NOTICE_KEY);
-  return true;
-}
-
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
-}
-
 export function createAuthHeaders(): Record<string, string> {
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error('Missing access token. Please login again.');
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+  // Authorization is attached centrally in the Axios request interceptor.
+  return {};
 }
 
 export function createIdempotencyKey(): string {
@@ -68,21 +28,32 @@ export function createIdempotencyKey(): string {
 export function configureAuthInterceptor(): void {
   if (authInterceptorConfigured) return;
 
+  apiClient.interceptors.request.use(async config => {
+    const user = firebaseAuth.currentUser;
+    if (!user) {
+      return config;
+    }
+
+    const idToken = await user.getIdToken();
+    const headers = AxiosHeaders.from(config.headers ?? {});
+    headers.set('Authorization', `Bearer ${idToken}`);
+    config.headers = headers;
+
+    return config;
+  });
+
   apiClient.interceptors.response.use(
     response => response,
-    error => {
+    async error => {
       if (axios.isAxiosError(error) && error.response?.status === 401) {
-        const requestUrl = String(error.config?.url ?? '');
-        const hasAuthHeader = Boolean(error.config?.headers && 'Authorization' in error.config.headers);
-        const isLoginRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+        try {
+          await firebaseAuth.signOut();
+        } catch {
+          // Best effort sign-out on unauthorized responses.
+        }
 
-        if (hasAuthHeader && !isLoginRequest) {
-          clearClientAuthState();
-          markAuthExpiredNotice();
-
-          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-            window.location.assign('/login');
-          }
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.assign('/login');
         }
       }
 

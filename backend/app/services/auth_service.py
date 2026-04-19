@@ -7,44 +7,77 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from redis import Redis
-
 from app.core.exceptions import AppException
-from app.core.security import create_access_token, hash_password, verify_password
 from app.models import ExpLedger, User
 from app.schemas import ActivityDayDTO, UserProfileDTO
 from app.services.gamification_service import get_current_streak
-from app.services.refresh_token_store import RefreshTokenStore
 
 
-def authenticate_user(db: Session, *, email: str, password: str) -> User:
-    user = db.scalar(select(User).where(User.email == email))
-    if user is None or not verify_password(password, user.password_hash):
-        raise AppException(status_code=401, message="Invalid credentials", detail={"code": "INVALID_CREDENTIALS"})
-    return user
-
-
-def register_user(
+def get_or_create_user_from_firebase_claims(
     db: Session,
     *,
-    email: str,
-    password: str,
+    firebase_uid: str,
+    email: str | None,
     display_name: str | None,
 ) -> User:
-    normalized_email = email.strip().lower()
-    normalized_display_name = (display_name or normalized_email.split("@")[0]).strip()
+    normalized_uid = firebase_uid.strip()
+    if not normalized_uid:
+        raise AppException(status_code=401, message="Firebase UID is missing", detail={"code": "FIREBASE_UID_MISSING"})
 
-    existing_user = db.scalar(select(User).where(User.email == normalized_email))
-    if existing_user is not None:
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
         raise AppException(
-            status_code=400,
-            message="Ten đang nhap da ton tai",
-            detail={"code": "USER_ALREADY_EXISTS"},
+            status_code=401,
+            message="Firebase token does not include email",
+            detail={"code": "FIREBASE_EMAIL_REQUIRED"},
         )
 
-    user = User(
+    normalized_display_name = (display_name or normalized_email.split("@")[0]).strip() or "Learner"
+
+    existing_by_uid = db.scalar(select(User).where(User.firebase_uid == normalized_uid))
+    if existing_by_uid is not None:
+        changed = False
+        if existing_by_uid.email != normalized_email:
+            existing_by_uid.email = normalized_email
+            changed = True
+        if not existing_by_uid.display_name:
+            existing_by_uid.display_name = normalized_display_name
+            changed = True
+
+        if changed:
+            try:
+                db.commit()
+                db.refresh(existing_by_uid)
+            except IntegrityError as exc:
+                db.rollback()
+                raise AppException(
+                    status_code=409,
+                    message="Unable to sync Firebase user",
+                    detail={"code": "FIREBASE_USER_SYNC_CONFLICT"},
+                ) from exc
+        return existing_by_uid
+
+    existing_by_email = db.scalar(select(User).where(User.email == normalized_email))
+    if existing_by_email is not None:
+        existing_by_email.firebase_uid = normalized_uid
+        if not existing_by_email.display_name:
+            existing_by_email.display_name = normalized_display_name
+        try:
+            db.commit()
+            db.refresh(existing_by_email)
+            return existing_by_email
+        except IntegrityError as exc:
+            db.rollback()
+            raise AppException(
+                status_code=409,
+                message="Unable to link Firebase account",
+                detail={"code": "FIREBASE_USER_LINK_CONFLICT"},
+            ) from exc
+
+    new_user = User(
         email=normalized_email,
-        password_hash=hash_password(password),
+        firebase_uid=normalized_uid,
+        password_hash=None,
         display_name=normalized_display_name,
         level=1,
         exp=0,
@@ -54,18 +87,21 @@ def register_user(
     )
 
     try:
-        db.add(user)
+        db.add(new_user)
         db.commit()
-        db.refresh(user)
+        db.refresh(new_user)
     except IntegrityError as exc:
         db.rollback()
+        conflict_user = db.scalar(select(User).where(User.firebase_uid == normalized_uid))
+        if conflict_user is not None:
+            return conflict_user
         raise AppException(
-            status_code=400,
-            message="Ten đang nhap da ton tai",
-            detail={"code": "USER_ALREADY_EXISTS"},
+            status_code=409,
+            message="Unable to create Firebase user",
+            detail={"code": "FIREBASE_USER_CREATE_CONFLICT"},
         ) from exc
 
-    return user
+    return new_user
 
 
 def _get_total_study_days(*, db: Session, user_id: int) -> int:
@@ -104,32 +140,4 @@ def get_user_activity_last_365_days(*, db: Session, user_id: int) -> list[Activi
         activity.append(ActivityDayDTO(date=str(awarded_date), count=int(total or 0)))
 
     return activity
-
-
-def issue_login_tokens(*, user: User, device_id: str | None, redis_client: Redis) -> tuple[str, int, str]:
-    access_token, expires_in = create_access_token(user_id=user.id, email=user.email)
-    refresh_token = RefreshTokenStore(redis_client).issue_token(user_id=user.id, device_id=device_id)
-    return access_token, expires_in, refresh_token
-
-
-def rotate_tokens(*, refresh_token: str, device_id: str | None, db: Session, redis_client: Redis) -> tuple[str, int, str]:
-    user_id, new_refresh_token = RefreshTokenStore(redis_client).rotate_token(refresh_token, device_id=device_id)
-    user = db.get(User, user_id)
-    if user is None:
-        raise AppException(status_code=401, message="User not found", detail={"code": "USER_NOT_FOUND"})
-
-    access_token, expires_in = create_access_token(user_id=user.id, email=user.email)
-    return access_token, expires_in, new_refresh_token
-
-
-def revoke_session(*, user_id: int, refresh_token: str | None, revoke_all_devices: bool, redis_client: Redis) -> None:
-    store = RefreshTokenStore(redis_client)
-    if revoke_all_devices:
-        store.revoke_all_user_families(user_id)
-        return
-
-    if not refresh_token:
-        raise AppException(status_code=401, message="Refresh token is required", detail={"code": "REFRESH_TOKEN_REQUIRED"})
-
-    store.revoke_token_family_by_token(refresh_token)
 

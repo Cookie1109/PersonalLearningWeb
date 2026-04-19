@@ -3,9 +3,14 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
 from app.models import Flashcard, Lesson
 from app.services.flashcard_generation_service import GeneratedFlashcard
+
+
+def _auth_headers_for_user(*, user) -> dict[str, str]:
+    firebase_uid = user.firebase_uid or f"uid-{user.id}"
+    token = f"test-firebase-token|{firebase_uid}|{user.email}"
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _seed_document(db_session: Session, *, user_id: int, title: str = "Flashcard Doc") -> Lesson:
@@ -108,8 +113,7 @@ def test_generate_document_flashcards_requires_ownership(client, db_session: Ses
     outsider, _ = create_user(email="outsider-flashcard@example.com", display_name="Outsider")
     lesson = _seed_document(db_session, user_id=owner.id, title="Private Flashcard Doc")
 
-    outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
-    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    outsider_headers = _auth_headers_for_user(user=outsider)
 
     response = client.post(f"/api/documents/{lesson.id}/flashcards/generate", headers=outsider_headers)
     assert response.status_code == 404
@@ -160,8 +164,7 @@ def test_patch_flashcard_status_requires_ownership(client, db_session: Session, 
     db_session.commit()
     db_session.refresh(card)
 
-    outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
-    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    outsider_headers = _auth_headers_for_user(user=outsider)
 
     response = client.patch(
         f"/api/flashcards/{card.id}/status",
@@ -225,8 +228,7 @@ def test_explain_flashcard_requires_ownership(client, db_session: Session, creat
     db_session.commit()
     db_session.refresh(card)
 
-    outsider_token, _ = create_access_token(user_id=outsider.id, email=outsider.email)
-    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    outsider_headers = _auth_headers_for_user(user=outsider)
 
     response = client.post(
         f"/api/flashcards/{card.id}/explain",

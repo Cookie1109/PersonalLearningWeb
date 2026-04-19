@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
 from app.models import Lesson
+
+
+def _auth_headers_for_user(*, user) -> dict[str, str]:
+    firebase_uid = user.firebase_uid or f"uid-{user.id}"
+    token = f"test-firebase-token|{firebase_uid}|{user.email}"
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_get_my_documents_returns_only_owner_documents(
@@ -47,8 +52,7 @@ def test_get_my_documents_returns_only_owner_documents(
     )
     db_session.commit()
 
-    owner_token, _ = create_access_token(user_id=owner_user.id, email=owner_user.email)
-    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    owner_headers = _auth_headers_for_user(user=owner_user)
 
     owner_response = client.get("/api/documents", headers=owner_headers)
     assert owner_response.status_code == 200
@@ -62,8 +66,7 @@ def test_get_my_documents_returns_only_owner_documents(
     assert all(item["flashcard_completed"] is False for item in owner_payload)
     assert all(item["is_completed"] is False for item in owner_payload)
 
-    outsider_token, _ = create_access_token(user_id=outsider_user.id, email=outsider_user.email)
-    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    outsider_headers = _auth_headers_for_user(user=outsider_user)
 
     outsider_response = client.get("/api/documents", headers=outsider_headers)
     assert outsider_response.status_code == 200
@@ -107,8 +110,7 @@ def test_get_my_documents_paged_supports_page_size_and_search(
     db_session.add_all(lessons)
     db_session.commit()
 
-    owner_token, _ = create_access_token(user_id=owner_user.id, email=owner_user.email)
-    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    owner_headers = _auth_headers_for_user(user=owner_user)
 
     paged_response = client.get("/api/documents/paged?page=1&page_size=9", headers=owner_headers)
     assert paged_response.status_code == 200

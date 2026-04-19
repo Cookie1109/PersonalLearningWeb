@@ -7,9 +7,9 @@ import {
   Settings, Bell, Star, LogOut, FilePlus2, LibraryBig, Sun, Moon
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { UserStats } from '../lib/types';
-import { getMyProfile, logout } from '../../api/auth';
-import { getAccessToken } from '../../api/client';
+import { getMyProfile } from '../../api/auth';
 import nexlWordmarkDark from '../../assets/branding/nexl-wordmark-dark.svg';
 import nexlWordmarkLight from '../../assets/branding/nexl-wordmark-light.svg';
 
@@ -44,6 +44,7 @@ function resolveInitialTheme(): ThemeMode {
 
 export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const app = useApp();
+  const { currentUser, authLoading, signOutUser } = useAuth();
   const user = userData ?? app.user;
   const { resetSessionState, setUserFromAuth } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -59,8 +60,11 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   }, [themeMode]);
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
+    if (authLoading) {
+      return;
+    }
+
+    if (!currentUser) {
       navigate('/login', { replace: true });
       return;
     }
@@ -80,7 +84,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
     return () => {
       mounted = false;
     };
-  }, [navigate, setUserFromAuth]);
+  }, [authLoading, currentUser, navigate, setUserFromAuth]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_BREAKPOINT - 1}px)`);
@@ -99,9 +103,9 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout({ revoke_all_devices: false });
+      await signOutUser();
     } catch {
-      // Logout API failures are ignored because client-side state must always be cleared.
+      // Firebase sign-out failures are ignored because client-side state must always be cleared.
     } finally {
       resetSessionState();
       navigate('/login', { replace: true });
@@ -122,6 +126,14 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const toggleThemeMode = () => {
     setThemeMode(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center">
+        <p className="text-sm text-zinc-400">Đang xác thực phiên đăng nhập...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">

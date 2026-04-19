@@ -3,8 +3,13 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token
 from app.models import ChatMessage
+
+
+def _auth_headers_for_user(*, user) -> dict[str, str]:
+    firebase_uid = user.firebase_uid or f"uid-{user.id}"
+    token = f"test-firebase-token|{firebase_uid}|{user.email}"
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_chat_post_persists_user_and_assistant_messages(
@@ -74,8 +79,7 @@ def test_chat_history_returns_only_current_user_messages(
     owner, _ = create_user(email="owner@example.com", display_name="Owner")
     outsider, _ = create_user(email="outsider@example.com", display_name="Outsider")
 
-    owner_access_token, _ = create_access_token(user_id=owner.id, email=owner.email)
-    owner_headers = {"Authorization": f"Bearer {owner_access_token}"}
+    owner_headers = _auth_headers_for_user(user=owner)
 
     db_session.add(ChatMessage(user_id=outsider.id, role="user", content="Outsider message"))
     db_session.add(ChatMessage(user_id=outsider.id, role="assistant", content="Outsider reply"))

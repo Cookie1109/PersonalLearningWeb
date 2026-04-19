@@ -554,12 +554,9 @@ export default function FlashCardDeck({
         <div className="w-full rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>Giải thích sâu</p>
           {currentExplanation && (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              className="prose prose-sm mt-2 max-w-none text-zinc-200 dark:prose-invert prose-headings:mb-2 prose-headings:mt-3 prose-h3:text-sm prose-h3:font-semibold prose-strong:text-zinc-100 prose-ul:my-2 prose-ul:pl-5 prose-li:my-1 break-words"
-            >
-              {currentExplanation}
-            </ReactMarkdown>
+            <div className="prose prose-sm mt-2 max-w-none text-zinc-200 dark:prose-invert prose-headings:mb-2 prose-headings:mt-3 prose-h3:text-sm prose-h3:font-semibold prose-strong:text-zinc-100 prose-ul:my-2 prose-ul:pl-5 prose-li:my-1 break-words">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentExplanation}</ReactMarkdown>
+            </div>
           )}
           {!currentExplanation && explainError && (
             <p className="mt-2 text-sm text-red-300">{explainError}</p>
