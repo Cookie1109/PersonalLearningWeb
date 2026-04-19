@@ -4,6 +4,8 @@ import { WeekModule, Lesson, UserStats, ActivityDay } from '../lib/types';
 
 const DEFAULT_USER_STATS: UserStats = {
   name: 'Learner',
+  email: '',
+  avatarUrl: null,
   level: 1,
   exp: 0,
   expToNextLevel: 1000,
@@ -164,10 +166,13 @@ export function AppProvider({
     const safeLevel = Math.max(1, userProfile.level || 1);
     const levelBaseExp = (safeLevel - 1) * 1000;
     const expIntoLevel = Math.max(0, userProfile.total_exp - levelBaseExp) % 1000;
+    const resolvedFullName = (userProfile.full_name || userProfile.display_name || '').trim();
 
     setUser(prev => ({
       ...prev,
-      name: userProfile.display_name,
+      name: resolvedFullName || prev.name,
+      email: userProfile.email,
+      avatarUrl: userProfile.avatar_url ?? null,
       level: safeLevel,
       exp: expIntoLevel,
       expToNextLevel: 1000,

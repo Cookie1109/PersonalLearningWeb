@@ -50,6 +50,7 @@ from .dto import (
     RoadmapLessonItemDTO,
     RoadmapMeResponseDTO,
     RoadmapWeekItemDTO,
+    UpdateMyProfileRequestDTO,
     UserProfileDTO,
     WeekModuleDTO,
 )
@@ -106,6 +107,7 @@ __all__ = [
     "RoadmapLessonItemDTO",
     "RoadmapMeResponseDTO",
     "RoadmapWeekItemDTO",
+    "UpdateMyProfileRequestDTO",
     "UserProfileDTO",
     "WeekModuleDTO",
 ]

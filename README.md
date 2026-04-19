@@ -97,6 +97,15 @@
   npm run dev
   ```
 
+  Upload ảnh đại diện ở trang Cài đặt hồ sơ sử dụng Cloudinary config từ backend (`backend/.env`):
+
+  ```bash
+  CLOUDINARY_CLOUD_NAME=your_cloud_name
+  CLOUDINARY_API_KEY=your_api_key
+  CLOUDINARY_API_SECRET=your_api_secret
+  CLOUDINARY_AVATAR_FOLDER=personal-learning/avatars
+  ```
+
   Mặc định frontend chạy Vite và proxy `/api` về backend `http://127.0.0.1:8001`.
 
   ### 4) Chạy Test

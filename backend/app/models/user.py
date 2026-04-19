@@ -14,6 +14,7 @@ class User(Base):
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     exp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_exp: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

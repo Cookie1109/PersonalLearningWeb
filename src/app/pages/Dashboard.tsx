@@ -40,8 +40,8 @@ export default function Dashboard() {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl text-white mt-1" style={{ fontWeight: 700 }}>Nhập tài liệu và vào Workspace ngay</h2>
-            <p className="text-sm text-zinc-300 mt-2">Chỉ cần nhập tài liệu. Hệ thống sẽ tạo Theory, Quiz, Flashcard trong một Workspace duy nhất.</p>
+            <h2 className="text-xl text-white mt-1" style={{ fontWeight: 700 }}>Nhập tài liệu và vào bài học ngay</h2>
+            <p className="text-sm text-zinc-300 mt-2">Chỉ cần nhập tài liệu. NEXL sẽ tạo Lý thuyết, Câu hỏi, Thẻ ghi nhớ trong một Workspace duy nhất.</p>
           </div>
           <button
             onClick={() => navigate('/create')}

@@ -64,6 +64,8 @@ export interface ActivityDay {
 
 export interface UserStats {
   name: string;
+  email: string;
+  avatarUrl: string | null;
   level: number;
   exp: number;
   expToNextLevel: number;

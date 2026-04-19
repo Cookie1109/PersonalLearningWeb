@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     cloudinary_api_key: str | None = Field(default=None, alias="CLOUDINARY_API_KEY")
     cloudinary_api_secret: str | None = Field(default=None, alias="CLOUDINARY_API_SECRET")
     cloudinary_upload_folder: str = Field(default="personal-learning/documents", alias="CLOUDINARY_UPLOAD_FOLDER")
+    cloudinary_avatar_folder: str = Field(default="personal-learning/avatars", alias="CLOUDINARY_AVATAR_FOLDER")
 
 
 @lru_cache

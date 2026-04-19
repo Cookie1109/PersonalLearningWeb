@@ -27,13 +27,16 @@ def get_current_user(
 
     email_raw = payload.get("email")
     display_name_raw = payload.get("name")
+    avatar_url_raw = payload.get("picture")
 
     email = email_raw if isinstance(email_raw, str) else None
     display_name = display_name_raw if isinstance(display_name_raw, str) else None
+    avatar_url = avatar_url_raw if isinstance(avatar_url_raw, str) else None
 
     return get_or_create_user_from_firebase_claims(
         db,
         firebase_uid=uid_raw,
         email=email,
         display_name=display_name,
+        avatar_url=avatar_url,
     )

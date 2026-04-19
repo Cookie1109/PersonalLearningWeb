@@ -2,6 +2,8 @@ import { WeekModule, LessonContent, QuizQuestion, Flashcard, ActivityDay, UserSt
 
 export const defaultUserStats: UserStats = {
   name: 'Học Viên',
+  email: '',
+  avatarUrl: null,
   level: 7,
   exp: 3450,
   expToNextLevel: 5000,

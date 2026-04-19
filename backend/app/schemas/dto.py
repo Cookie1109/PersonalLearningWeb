@@ -41,10 +41,25 @@ class UserProfileDTO(BaseModel):
     user_id: int
     email: str
     display_name: str
+    full_name: str
+    avatar_url: str | None = None
     level: int
     total_exp: int
     current_streak: int = 0
     total_study_days: int = 0
+
+
+class UpdateMyProfileRequestDTO(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    avatar_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("full_name", "avatar_url", mode="before")
+    @classmethod
+    def normalize_optional_text_fields(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return value
 
 
 class ActivityDayDTO(BaseModel):

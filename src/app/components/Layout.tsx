@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { UserStats } from '../lib/types';
 import { getMyProfile } from '../../api/auth';
+import ProfileModal from './ProfileModal';
 import nexlWordmarkDark from '../../assets/branding/nexl-wordmark-dark.svg';
 import nexlWordmarkLight from '../../assets/branding/nexl-wordmark-light.svg';
 
@@ -49,6 +50,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const { resetSessionState, setUserFromAuth } = app;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveInitialTheme);
   const navigate = useNavigate();
 
@@ -70,14 +72,34 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
     }
 
     let mounted = true;
-    const loadProfile = async () => {
+
+    const hydrateProfile = async (): Promise<boolean> => {
       try {
         const profile = await getMyProfile();
-        if (!mounted) return;
+        if (!mounted) {
+          return true;
+        }
+
         setUserFromAuth(profile);
+        return true;
       } catch {
-        // Profile hydration failures should not block navigation.
+        return false;
       }
+    };
+
+    const loadProfile = async () => {
+      const hydrated = await hydrateProfile();
+      if (hydrated || !currentUser) {
+        return;
+      }
+
+      try {
+        await currentUser.getIdToken(true);
+      } catch {
+        return;
+      }
+
+      await hydrateProfile();
     };
 
     void loadProfile();
@@ -118,6 +140,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const roadmapLabel = activeRoadmapLabel ?? 'NEXL Workspace';
   const isDarkTheme = themeMode === 'dark';
   const logoWordmark = isDarkTheme ? nexlWordmarkDark : nexlWordmarkLight;
+  const userInitial = (user.name || user.email || 'L').trim().charAt(0).toUpperCase() || 'L';
 
   const topbarButtonClass = isDarkTheme
     ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors text-sm'
@@ -175,36 +198,47 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
         <AnimatePresence mode="wait">
           {sidebarOpen ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-3 border-b border-zinc-800">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm flex-shrink-0" style={{ fontWeight: 700 }}>
-                  {user.name.charAt(0)}
+              <div className="flex flex-col gap-y-3">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(true)}
+                  title="Chỉnh sửa hồ sơ"
+                  className={`flex items-center gap-3 p-2 -ml-2 rounded-lg transition-colors w-full ${isDarkTheme ? 'hover:bg-gray-800' : 'hover:bg-slate-200/80'}`}
+                >
+                  <div className="w-9 h-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm flex-shrink-0 overflow-hidden" style={{ fontWeight: 700 }}>
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.name || 'Avatar'} className="h-full w-full object-cover" />
+                    ) : (
+                      userInitial
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+                    <p className="text-xs text-cyan-400">Cấp {user.level}</p>
+                  </div>
+                </button>
+                {/* EXP Bar */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-zinc-500">
+                    <span>EXP</span><span>{user.exp}/{user.expToNextLevel}</span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }} animate={{ width: `${expProgress}%` }}
+                      className="h-full bg-cyan-500 rounded-full"
+                    />
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate" style={{ fontWeight: 600 }}>{user.name}</p>
-                  <p className="text-xs text-cyan-400">Cấp {user.level}</p>
-                </div>
-              </div>
-              {/* EXP Bar */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-zinc-500">
-                  <span>EXP</span><span>{user.exp}/{user.expToNextLevel}</span>
-                </div>
-                <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }} animate={{ width: `${expProgress}%` }}
-                    className="h-full bg-cyan-500 rounded-full"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 mt-2">
-                <div className="flex items-center gap-1 text-xs text-orange-400">
-                  <Flame size={12} /><span style={{ fontWeight: 600 }}>{user.streak} ngày</span>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-yellow-400">
-                  <Star size={12} /><span style={{ fontWeight: 600 }}>Cấp {user.level}</span>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-emerald-400">
-                  <Trophy size={12} /><span style={{ fontWeight: 600 }}>{progress}%</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 text-xs text-orange-400">
+                    <Flame size={12} /><span style={{ fontWeight: 600 }}>{user.streak} ngày</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-yellow-400">
+                    <Star size={12} /><span style={{ fontWeight: 600 }}>Cấp {user.level}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-emerald-400">
+                    <Trophy size={12} /><span style={{ fontWeight: 600 }}>{progress}%</span>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -217,12 +251,23 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
               transition={{ duration: 0.18 }}
               className="px-2 py-3 border-b border-zinc-800"
             >
-              <div className="mx-auto h-9 w-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm" style={{ fontWeight: 700 }}>
-                {user.name.charAt(0)}
-              </div>
-              <p className="mt-2 text-center text-[10px] text-cyan-400 tracking-wide" style={{ fontWeight: 700 }}>
-                Lv.{user.level}
-              </p>
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                title="Chỉnh sửa hồ sơ"
+                className={`block w-full text-left rounded-lg py-1.5 transition-colors ${isDarkTheme ? 'hover:bg-gray-800' : 'hover:bg-slate-100'}`}
+              >
+                <div className="mx-auto h-9 w-9 rounded-full bg-cyan-700 flex items-center justify-center text-sm overflow-hidden" style={{ fontWeight: 700 }}>
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name || 'Avatar'} className="h-full w-full object-cover" />
+                  ) : (
+                    userInitial
+                  )}
+                </div>
+                <p className="mt-2 text-center text-[10px] text-cyan-400 tracking-wide" style={{ fontWeight: 700 }}>
+                  Lv.{user.level}
+                </p>
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -273,20 +318,24 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
 
         {/* Bottom nav */}
         <div className="px-2 py-3 border-t border-zinc-800 space-y-1">
-          {[
-            { icon: Bell, label: 'Thông Báo' },
-            { icon: Settings, label: 'Cài Đặt' },
-          ].map(({ icon: Icon, label }) => (
-            <button
-              key={label}
-              className={`${sidebarOpen ? 'w-full flex items-center gap-3 px-3 py-2.5 text-sm' : 'mx-auto flex h-10 w-10 items-center justify-center p-0'} rounded-xl transition-colors ${isDarkTheme ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
-            >
-              <Icon size={18} className="flex-shrink-0" />
-              <span className={`truncate transition-all duration-200 ${sidebarOpen ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0 pointer-events-none'}`}>
-                {label}
-              </span>
-            </button>
-          ))}
+          <button
+            className={`${sidebarOpen ? 'w-full flex items-center gap-3 px-3 py-2.5 text-sm' : 'mx-auto flex h-10 w-10 items-center justify-center p-0'} rounded-xl transition-colors ${isDarkTheme ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+          >
+            <Bell size={18} className="flex-shrink-0" />
+            <span className={`truncate transition-all duration-200 ${sidebarOpen ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0 pointer-events-none'}`}>
+              Thông Báo
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsProfileModalOpen(true)}
+            className={`${sidebarOpen ? 'w-full flex items-center gap-3 px-3 py-2.5 text-sm' : 'mx-auto flex h-10 w-10 items-center justify-center p-0'} rounded-xl transition-colors ${isDarkTheme ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+          >
+            <Settings size={18} className="flex-shrink-0" />
+            <span className={`truncate transition-all duration-200 ${sidebarOpen ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0 pointer-events-none'}`}>
+              Cài đặt
+            </span>
+          </button>
         </div>
       </motion.aside>
 
@@ -334,6 +383,8 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
           <Outlet />
         </div>
       </main>
+
+      <ProfileModal open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen} />
     </div>
   );
 }

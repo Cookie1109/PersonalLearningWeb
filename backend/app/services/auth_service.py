@@ -19,6 +19,7 @@ def get_or_create_user_from_firebase_claims(
     firebase_uid: str,
     email: str | None,
     display_name: str | None,
+    avatar_url: str | None,
 ) -> User:
     normalized_uid = firebase_uid.strip()
     if not normalized_uid:
@@ -33,6 +34,7 @@ def get_or_create_user_from_firebase_claims(
         )
 
     normalized_display_name = (display_name or normalized_email.split("@")[0]).strip() or "Learner"
+    normalized_avatar_url = (avatar_url or "").strip() or None
 
     existing_by_uid = db.scalar(select(User).where(User.firebase_uid == normalized_uid))
     if existing_by_uid is not None:
@@ -42,6 +44,9 @@ def get_or_create_user_from_firebase_claims(
             changed = True
         if not existing_by_uid.display_name:
             existing_by_uid.display_name = normalized_display_name
+            changed = True
+        if normalized_avatar_url and not existing_by_uid.avatar_url:
+            existing_by_uid.avatar_url = normalized_avatar_url
             changed = True
 
         if changed:
@@ -62,6 +67,8 @@ def get_or_create_user_from_firebase_claims(
         existing_by_email.firebase_uid = normalized_uid
         if not existing_by_email.display_name:
             existing_by_email.display_name = normalized_display_name
+        if normalized_avatar_url and not existing_by_email.avatar_url:
+            existing_by_email.avatar_url = normalized_avatar_url
         try:
             db.commit()
             db.refresh(existing_by_email)
@@ -79,6 +86,7 @@ def get_or_create_user_from_firebase_claims(
         firebase_uid=normalized_uid,
         password_hash=None,
         display_name=normalized_display_name,
+        avatar_url=normalized_avatar_url,
         level=1,
         exp=0,
         total_exp=0,
@@ -116,6 +124,8 @@ def build_user_profile(*, db: Session, user: User) -> UserProfileDTO:
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
+        full_name=user.display_name,
+        avatar_url=user.avatar_url,
         level=user.level,
         total_exp=user.total_exp,
         current_streak=get_current_streak(user),

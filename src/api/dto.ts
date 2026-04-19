@@ -24,10 +24,17 @@ export interface UserProfileDTO {
   user_id: number;
   email: string;
   display_name: string;
+  full_name: string;
+  avatar_url?: string | null;
   level: number;
   total_exp: number;
   current_streak?: number;
   total_study_days?: number;
+}
+
+export interface UpdateMyProfileRequestDTO {
+  full_name?: string;
+  avatar_url?: string | null;
 }
 
 export interface ActivityDayDTO {

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.models import ExpLedger, User
+from app.services.cloudinary_service import CloudinaryUploadResult
 
 
 def _auth_headers(*, firebase_uid: str, email: str) -> dict[str, str]:
@@ -135,3 +136,79 @@ def test_auth_me_creates_user_when_not_exists(client: TestClient, db_session) ->
     created_user = db_session.scalar(select(User).where(User.firebase_uid == "firebase-new-uid"))
     assert created_user is not None
     assert created_user.email == "new-user@example.com"
+
+
+def test_auth_patch_me_updates_full_name_and_avatar(client: TestClient, create_user, db_session) -> None:
+    user, _ = create_user(email="patch-me@example.com", display_name="Patch Me")
+    headers = _auth_headers(firebase_uid=user.firebase_uid or f"uid-{user.id}", email=user.email)
+
+    response = client.patch(
+        "/api/auth/me",
+        headers=headers,
+        json={
+            "full_name": "Updated Patch User",
+            "avatar_url": "https://res.cloudinary.com/demo/image/upload/v1/avatar.png",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["full_name"] == "Updated Patch User"
+    assert payload["display_name"] == "Updated Patch User"
+    assert payload["avatar_url"] == "https://res.cloudinary.com/demo/image/upload/v1/avatar.png"
+
+    db_session.refresh(user)
+    assert user.display_name == "Updated Patch User"
+    assert user.avatar_url == "https://res.cloudinary.com/demo/image/upload/v1/avatar.png"
+
+
+def test_auth_avatar_upload_updates_avatar_url(
+    client: TestClient,
+    create_user,
+    db_session,
+    monkeypatch,
+) -> None:
+    import app.api.routes.auth as auth_routes
+
+    def _fake_upload_avatar_image(*, user_id: int, file_name: str | None, content_type: str | None, file_bytes: bytes):
+        _ = (user_id, file_name, content_type, file_bytes)
+        return CloudinaryUploadResult(
+            public_id="user_1/avatar-test",
+            secure_url="https://res.cloudinary.com/demo/image/upload/v1/avatar-test.png",
+            resource_type="image",
+            original_filename="avatar-test.png",
+            format="png",
+        )
+
+    monkeypatch.setattr(auth_routes, "upload_avatar_image", _fake_upload_avatar_image)
+
+    user, _ = create_user(email="avatar-me@example.com", display_name="Avatar Me")
+    headers = _auth_headers(firebase_uid=user.firebase_uid or f"uid-{user.id}", email=user.email)
+
+    response = client.post(
+        "/api/auth/avatar",
+        headers=headers,
+        files={"file": ("avatar.png", b"fake-image-data", "image/png")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["avatar_url"] == "https://res.cloudinary.com/demo/image/upload/v1/avatar-test.png"
+
+    db_session.refresh(user)
+    assert user.avatar_url == "https://res.cloudinary.com/demo/image/upload/v1/avatar-test.png"
+
+
+def test_auth_avatar_upload_rejects_non_image_file(client: TestClient, create_user) -> None:
+    user, _ = create_user(email="avatar-invalid@example.com", display_name="Avatar Invalid")
+    headers = _auth_headers(firebase_uid=user.firebase_uid or f"uid-{user.id}", email=user.email)
+
+    response = client.post(
+        "/api/auth/avatar",
+        headers=headers,
+        files={"file": ("not-image.txt", b"plain text", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["detail"]["code"] == "AUTH_AVATAR_INVALID_FILE_TYPE"
