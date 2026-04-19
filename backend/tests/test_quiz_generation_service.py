@@ -105,7 +105,13 @@ def test_generate_quiz_questions_uses_json_mode_and_returns_10_questions(monkeyp
 
     model_name, questions = quiz_generation_service.generate_quiz_questions(
         lesson_title="Async Patterns",
-        source_content="Event loop, await, gather, and timeout handling.",
+        source_content=(
+            "Event loop, await, gather, and timeout handling.\n"
+            "```javascript\n"
+            "const app = express();\n"
+            "app.get('/', (req, res) => res.send('OK'));\n"
+            "```"
+        ),
     )
 
     assert model_name == "gemini-2.5-flash"
@@ -118,13 +124,20 @@ def test_generate_quiz_questions_uses_json_mode_and_returns_10_questions(monkeyp
     system_text = request_payload["systemInstruction"]["parts"][0]["text"]
     assert "BUOC 1: PHAN LOAI TAI LIEU" in system_text
     assert "NHOM A (IT & Lap trinh)" in system_text
-    assert "NHOM B (Phi ky thuat)" in system_text
+    assert "NHOM B (Phi ky thuat/ly thuyet)" in system_text
     assert "BUOC 2: RE NHANH CAU TRUC 10 CAU HOI" in system_text
+    assert "THEP RULE 1 - STRICT GROUNDING" in system_text
+    assert "THEP RULE 2 - CODE DETECTION RULE" in system_text
+    assert "THEP RULE 3 - QUALITY CHECK" in system_text
+    assert "THEP RULE 4 - SMART BLANKING" in system_text
     assert "4 cau 'theory', 3 cau 'fill_code', 3 cau 'find_bug'" in system_text
     assert "7 cau 'general_choice', 3 cau 'fill_blank'" in system_text
     assert "QUY TAC RENDER MARKDOWN TRONG JSON" in system_text
     assert "\\n THUC SU TRONG CHUOI JSON" in system_text
     assert "___('Hello');" in system_text
+
+    user_prompt_text = request_payload["contents"][0]["parts"][0]["text"]
+    assert "Ket qua kiem tra code block thuc su: CO" in user_prompt_text
 
 
 def test_generate_quiz_questions_raises_500_on_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,14 +295,17 @@ def test_generate_quiz_questions_repairs_malformed_json(monkeypatch: pytest.Monk
 
     model_name, questions = quiz_generation_service.generate_quiz_questions(
         lesson_title="Repair Test",
-        source_content="event loop middleware route handler" * 200,
+        source_content=(
+            ("event loop middleware route handler " * 50)
+            + "```javascript\nconst router = express.Router();\nrouter.get('/health', (_, res) => res.send('ok'));\n```"
+        ),
     )
 
     assert model_name == "gemini-2.5-flash"
     assert len(questions) == 10
 
 
-def test_generate_quiz_questions_with_express_document_keeps_code_oriented_types(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_quiz_questions_with_express_document_without_code_blocks_forces_theory_types(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeSettings:
         gemini_api_key = "test-key"
         gemini_timeout_seconds = 120.0
@@ -305,7 +321,7 @@ def test_generate_quiz_questions_with_express_document_keeps_code_oriented_types
                 "candidates": [
                     {
                         "content": {
-                            "parts": [{"text": _build_quiz_array_json()}],
+                            "parts": [{"text": _build_general_quiz_array_json()}],
                         }
                     }
                 ]
@@ -335,9 +351,10 @@ def test_generate_quiz_questions_with_express_document_keeps_code_oriented_types
     )
 
     question_types = [question.question_type for question in questions]
-    assert question_types.count("theory") == 4
-    assert question_types.count("fill_code") == 3
-    assert question_types.count("find_bug") == 3
+    assert question_types.count("general_choice") == 7
+    assert question_types.count("fill_blank") == 3
+    assert "fill_code" not in question_types
+    assert "find_bug" not in question_types
 
 
 def test_generate_quiz_questions_with_history_document_blocks_code_types(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,7 +469,12 @@ def test_generate_quiz_questions_falls_back_to_secondary_model_on_404(monkeypatc
 
     model_name, questions = quiz_generation_service.generate_quiz_questions(
         lesson_title="Fallback Model",
-        source_content="Express route middleware async request response",
+        source_content=(
+            "Express route middleware async request response\n"
+            "```javascript\n"
+            "app.use((req, res, next) => next());\n"
+            "```"
+        ),
     )
 
     assert model_name == "gemini-2.5-flash-lite"
@@ -509,8 +531,11 @@ def test_classify_document_domain_detects_technical_content() -> None:
     domain = quiz_generation_service._classify_document_domain(
         lesson_title="Express Middleware",
         source_content=(
-            "const app = express(); app.use((req, res, next) => next()); "
-            "API endpoint router controller database query JSON"
+            "Tai lieu mo ta middleware va route.\n"
+            "```javascript\n"
+            "const app = express();\n"
+            "app.use((req, res, next) => next());\n"
+            "```"
         ),
     )
 

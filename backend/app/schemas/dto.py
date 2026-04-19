@@ -80,7 +80,7 @@ class DailyQuestDTO(BaseModel):
     quest_code: str
     title: str
     difficulty: Literal["easy", "medium", "hard"]
-    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    action_type: Literal["READ_DOCUMENT", "QUIZ_COMPLETED"]
     target_value: int = Field(..., ge=1)
     current_progress: int = Field(default=0, ge=0)
     is_completed: bool = False
@@ -97,7 +97,7 @@ class DailyQuestListResponseDTO(BaseModel):
 
 
 class GamificationTrackRequestDTO(BaseModel):
-    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "QUIZ_COMPLETED"]
     target_id: str = Field(..., min_length=1, max_length=128)
     value: int = Field(..., ge=1, le=1000)
 
@@ -125,7 +125,7 @@ class QuestProgressUpdateDTO(BaseModel):
 
 class GamificationTrackResponseDTO(BaseModel):
     accepted: bool
-    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "SUMMARY_CREATED"]
+    action_type: Literal["READ_DOCUMENT", "LEARN_FLASHCARD", "QUIZ_COMPLETED"]
     target_id: str
     value: int = Field(..., ge=1)
     exp_gained: int = Field(..., ge=0)

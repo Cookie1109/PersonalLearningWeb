@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-import random
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, select
@@ -16,18 +16,21 @@ from app.services.gamification_service import (
     get_current_streak,
     get_level_progress,
     get_total_exp,
+    update_study_streak,
 )
 
 settings = get_settings()
 
 ACTION_TYPE_READ_DOCUMENT = "READ_DOCUMENT"
 ACTION_TYPE_LEARN_FLASHCARD = "LEARN_FLASHCARD"
-ACTION_TYPE_SUMMARY_CREATED = "SUMMARY_CREATED"
+ACTION_TYPE_QUIZ_COMPLETED = "QUIZ_COMPLETED"
 ACTION_TYPE_COMPLETE_DAILY_QUEST = "COMPLETE_DAILY_QUEST"
 
 REWARD_TYPE_GAMIFICATION_TRACK = "gamification_track"
 REWARD_TYPE_DAILY_QUEST_COMPLETE = "daily_quest_complete"
 REWARD_TYPE_DAILY_QUEST_ALL_CLEAR = "daily_quest_all_clear"
+
+CUMULATIVE_TRACK_ACTION_TYPES = frozenset({ACTION_TYPE_READ_DOCUMENT})
 
 
 @dataclass(frozen=True)
@@ -71,67 +74,37 @@ class TrackGamificationResult:
     current_streak: int
 
 
-QUEST_POOL_BY_DIFFICULTY: dict[str, tuple[QuestTemplate, ...]] = {
-    "easy": (
-        QuestTemplate(
-            code="SUMMARY_1",
-            title="Tóm tắt 1 tài liệu mới bằng AI",
-            difficulty="easy",
-            action_type=ACTION_TYPE_SUMMARY_CREATED,
-            target_value=1,
-            exp_reward=30,
-        ),
-        QuestTemplate(
-            code="CARDS_5",
-            title="Ôn tập 5 thẻ Flashcard",
-            difficulty="easy",
-            action_type=ACTION_TYPE_LEARN_FLASHCARD,
-            target_value=5,
-            exp_reward=20,
-        ),
+QUEST_TEMPLATES: tuple[QuestTemplate, ...] = (
+    QuestTemplate(
+        code="READ_5M",
+        title="Đọc tài liệu tập trung 5 phút",
+        difficulty="medium",
+        action_type=ACTION_TYPE_READ_DOCUMENT,
+        target_value=5,
+        exp_reward=50,
     ),
-    "medium": (
-        QuestTemplate(
-            code="CARDS_10",
-            title="Đánh dấu 10 thẻ đã thuộc",
-            difficulty="medium",
-            action_type=ACTION_TYPE_LEARN_FLASHCARD,
-            target_value=10,
-            exp_reward=40,
-        ),
-        QuestTemplate(
-            code="READ_10M",
-            title="Đọc tài liệu tập trung 10 phút",
-            difficulty="medium",
-            action_type=ACTION_TYPE_READ_DOCUMENT,
-            target_value=10,
-            exp_reward=50,
-        ),
+    QuestTemplate(
+        code="COMPLETE_QUIZ",
+        title="Hoàn thành 1 bài Quiz",
+        difficulty="hard",
+        action_type=ACTION_TYPE_QUIZ_COMPLETED,
+        target_value=1,
+        exp_reward=70,
     ),
-    "hard": (
-        QuestTemplate(
-            code="SUMMARY_2",
-            title="Tạo 2 bản tóm tắt tài liệu",
-            difficulty="hard",
-            action_type=ACTION_TYPE_SUMMARY_CREATED,
-            target_value=2,
-            exp_reward=60,
-        ),
-        QuestTemplate(
-            code="READ_20M",
-            title="Đọc tài liệu tập trung 20 phút",
-            difficulty="hard",
-            action_type=ACTION_TYPE_READ_DOCUMENT,
-            target_value=20,
-            exp_reward=100,
-        ),
-    ),
+)
+
+QUEST_TEMPLATE_BY_CODE: dict[str, QuestTemplate] = {
+    template.code: template for template in QUEST_TEMPLATES
+}
+
+QUEST_ORDER_BY_CODE: dict[str, int] = {
+    template.code: index for index, template in enumerate(QUEST_TEMPLATES)
 }
 
 _TRACK_EXP_PER_UNIT_BY_ACTION: dict[str, int] = {
     ACTION_TYPE_READ_DOCUMENT: settings.gamification_track_read_exp_per_unit,
     ACTION_TYPE_LEARN_FLASHCARD: settings.gamification_track_flashcard_exp_per_unit,
-    ACTION_TYPE_SUMMARY_CREATED: settings.gamification_track_summary_exp_per_unit,
+    ACTION_TYPE_QUIZ_COMPLETED: 0,
 }
 
 
@@ -151,22 +124,7 @@ def resolve_daily_quest_date(*, now_utc: datetime | None = None, timezone_name: 
 
 
 def _quest_sort_key(quest: DailyQuest) -> tuple[int, str]:
-    order = {"easy": 0, "medium": 1, "hard": 2}
-    return order.get(quest.difficulty, 99), quest.quest_code
-
-
-def _pick_template_for_difficulty(
-    *,
-    difficulty: str,
-    excluded_codes: set[str],
-    rng: random.Random | None = None,
-) -> QuestTemplate:
-    candidates = [template for template in QUEST_POOL_BY_DIFFICULTY[difficulty] if template.code not in excluded_codes]
-    if not candidates:
-        candidates = list(QUEST_POOL_BY_DIFFICULTY[difficulty])
-
-    chooser = rng.choice if rng is not None else random.choice
-    return chooser(candidates)
+    return QUEST_ORDER_BY_CODE.get(quest.quest_code, 99), quest.quest_code
 
 
 def get_or_create_daily_quests(
@@ -174,9 +132,12 @@ def get_or_create_daily_quests(
     db: Session,
     user_id: int,
     quest_date: date | None = None,
-    rng: random.Random | None = None,
+    rng: object | None = None,
     auto_commit: bool = True,
 ) -> list[DailyQuest]:
+    # Kept for backward compatibility with old callers; quest generation is deterministic now.
+    _ = rng
+
     resolved_date = quest_date or resolve_daily_quest_date()
 
     existing_quests = list(
@@ -187,42 +148,70 @@ def get_or_create_daily_quests(
         )
     )
 
-    if len(existing_quests) >= 3:
-        return sorted(existing_quests, key=_quest_sort_key)
+    changed = False
+    expected_codes = set(QUEST_TEMPLATE_BY_CODE.keys())
 
-    existing_codes = {quest.quest_code for quest in existing_quests}
-    existing_difficulties = {quest.difficulty for quest in existing_quests}
+    filtered_existing: list[DailyQuest] = []
+    for quest in existing_quests:
+        if quest.quest_code in expected_codes:
+            filtered_existing.append(quest)
+            continue
+        db.delete(quest)
+        changed = True
 
-    created_any = False
+    existing_by_code = {quest.quest_code: quest for quest in filtered_existing}
 
-    for difficulty in ("easy", "medium", "hard"):
-        if difficulty in existing_difficulties:
+    for template in QUEST_TEMPLATES:
+        existing = existing_by_code.get(template.code)
+        if existing is None:
+            db.add(
+                DailyQuest(
+                    user_id=user_id,
+                    quest_code=template.code,
+                    difficulty=template.difficulty,
+                    action_type=template.action_type,
+                    title=template.title,
+                    target_value=template.target_value,
+                    current_progress=0,
+                    is_completed=False,
+                    exp_reward=template.exp_reward,
+                    quest_date=resolved_date,
+                )
+            )
+            changed = True
             continue
 
-        template = _pick_template_for_difficulty(difficulty=difficulty, excluded_codes=existing_codes, rng=rng)
-        new_quest = DailyQuest(
-            user_id=user_id,
-            quest_code=template.code,
-            difficulty=template.difficulty,
-            action_type=template.action_type,
-            title=template.title,
-            target_value=template.target_value,
-            current_progress=0,
-            is_completed=False,
-            exp_reward=template.exp_reward,
-            quest_date=resolved_date,
-        )
-        db.add(new_quest)
-        existing_quests.append(new_quest)
-        existing_codes.add(template.code)
-        created_any = True
+        if existing.difficulty != template.difficulty:
+            existing.difficulty = template.difficulty
+            changed = True
+        if existing.action_type != template.action_type:
+            existing.action_type = template.action_type
+            changed = True
+        if existing.title != template.title:
+            existing.title = template.title
+            changed = True
+        if int(existing.target_value or 0) != template.target_value:
+            existing.target_value = template.target_value
+            if int(existing.current_progress or 0) > template.target_value:
+                existing.current_progress = template.target_value
+            changed = True
+        if int(existing.exp_reward or 0) != template.exp_reward:
+            existing.exp_reward = template.exp_reward
+            changed = True
 
-    if not created_any:
+    if not changed:
         return sorted(existing_quests, key=_quest_sort_key)
 
     if not auto_commit:
         db.flush()
-        return sorted(existing_quests, key=_quest_sort_key)
+        refreshed_no_commit = list(
+            db.scalars(
+                select(DailyQuest)
+                .where(and_(DailyQuest.user_id == user_id, DailyQuest.quest_date == resolved_date))
+                .order_by(DailyQuest.quest_code)
+            )
+        )
+        return sorted(refreshed_no_commit, key=_quest_sort_key)
 
     db.commit()
 
@@ -230,7 +219,7 @@ def get_or_create_daily_quests(
         db.scalars(
             select(DailyQuest)
             .where(and_(DailyQuest.user_id == user_id, DailyQuest.quest_date == resolved_date))
-            .order_by(DailyQuest.difficulty, DailyQuest.quest_code)
+            .order_by(DailyQuest.quest_code)
         )
     )
     return sorted(refreshed, key=_quest_sort_key)
@@ -286,6 +275,15 @@ def _append_reward_entry(
             metadata_json=metadata_json,
         )
     )
+
+
+def _build_track_reward_target_id(*, action_type: str, target_id: str) -> str:
+    if action_type not in CUMULATIVE_TRACK_ACTION_TYPES:
+        return target_id
+
+    suffix = uuid4().hex[:12]
+    max_prefix_length = max(1, 128 - len(suffix) - 1)
+    return f"{target_id[:max_prefix_length]}:{suffix}"
 
 
 def get_daily_quest_profile_snapshot(*, user: User) -> tuple[int, int, int, int, int]:
@@ -349,46 +347,52 @@ def track_gamification_action(
     quest_date = resolve_daily_quest_date(now_utc=now_utc)
     quests = get_or_create_daily_quests(db=db, user_id=user_id, quest_date=quest_date, auto_commit=False)
 
-    existing_track_reward = _find_existing_reward(
-        db=db,
-        user_id=user_id,
-        action_type=normalized_action_type,
-        target_id=normalized_target_id,
-        reward_type=REWARD_TYPE_GAMIFICATION_TRACK,
-    )
-    if existing_track_reward is not None:
-        level, current_exp, target_exp, total_exp, current_streak = get_daily_quest_profile_snapshot(user=locked_user)
-        return TrackGamificationResult(
-            accepted=False,
+    if normalized_action_type not in CUMULATIVE_TRACK_ACTION_TYPES:
+        existing_track_reward = _find_existing_reward(
+            db=db,
+            user_id=user_id,
             action_type=normalized_action_type,
             target_id=normalized_target_id,
-            value=value,
-            exp_gained=0,
-            completion_exp_gained=0,
-            all_clear_awarded=False,
-            all_clear_bonus_exp=0,
-            blocked_reason="DUPLICATE_TARGET",
-            quest_updates=[],
-            total_exp=total_exp,
-            level=level,
-            current_exp=current_exp,
-            target_exp=target_exp,
-            current_streak=current_streak,
+            reward_type=REWARD_TYPE_GAMIFICATION_TRACK,
         )
+        if existing_track_reward is not None:
+            level, current_exp, target_exp, total_exp, current_streak = get_daily_quest_profile_snapshot(user=locked_user)
+            return TrackGamificationResult(
+                accepted=False,
+                action_type=normalized_action_type,
+                target_id=normalized_target_id,
+                value=value,
+                exp_gained=0,
+                completion_exp_gained=0,
+                all_clear_awarded=False,
+                all_clear_bonus_exp=0,
+                blocked_reason="DUPLICATE_TARGET",
+                quest_updates=[],
+                total_exp=total_exp,
+                level=level,
+                current_exp=current_exp,
+                target_exp=target_exp,
+                current_streak=current_streak,
+            )
 
     base_exp_per_unit = _TRACK_EXP_PER_UNIT_BY_ACTION[normalized_action_type]
     track_exp_gained = add_exp_and_check_level(locked_user, base_exp_per_unit * value)
+    track_reward_target_id = _build_track_reward_target_id(
+        action_type=normalized_action_type,
+        target_id=normalized_target_id,
+    )
     _append_reward_entry(
         db=db,
         user_id=user_id,
         action_type=normalized_action_type,
-        target_id=normalized_target_id,
+        target_id=track_reward_target_id,
         reward_type=REWARD_TYPE_GAMIFICATION_TRACK,
         exp_amount=track_exp_gained,
         metadata_json={
             "source": REWARD_TYPE_GAMIFICATION_TRACK,
             "value": value,
             "quest_date": quest_date.isoformat(),
+            "raw_target_id": normalized_target_id,
         },
     )
 
@@ -466,6 +470,8 @@ def track_gamification_action(
     all_clear_awarded = False
     all_clear_bonus_exp = 0
     if quests and all(quest.is_completed for quest in quests):
+        update_study_streak(locked_user, now_utc=now_utc, is_study_day_completed=True)
+
         all_clear_target_id = _build_all_clear_target_id(quest_date=quest_date)
         existing_all_clear_reward = _find_existing_reward(
             db=db,

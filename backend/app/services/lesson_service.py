@@ -1200,7 +1200,7 @@ def complete_lesson_for_user(
         lesson.is_completed = True
         lesson.completed_at = datetime.now(UTC)
 
-        streak_bonus_exp = update_study_streak(locked_user)
+        streak_bonus_exp = update_study_streak(locked_user, is_study_day_completed=False)
         exp_gained = add_exp_and_check_level(locked_user, reward_exp)
 
         reward_entry = ExpLedger(

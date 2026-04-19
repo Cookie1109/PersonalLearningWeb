@@ -51,7 +51,7 @@ export interface GamificationProfileDTO {
 }
 
 export type QuestDifficulty = 'easy' | 'medium' | 'hard';
-export type GamificationActionType = 'READ_DOCUMENT' | 'LEARN_FLASHCARD' | 'SUMMARY_CREATED';
+export type GamificationActionType = 'READ_DOCUMENT' | 'LEARN_FLASHCARD' | 'QUIZ_COMPLETED';
 
 export interface DailyQuestDTO {
   id: string;

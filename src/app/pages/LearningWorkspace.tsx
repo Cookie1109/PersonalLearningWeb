@@ -924,6 +924,15 @@ function QuizQuestionMarkdown({ content }: { content: string }) {
   );
 }
 
+function ReadingTrackerBadge({ isIdle, activeMinutes }: { isIdle: boolean; activeMinutes: number }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">
+      <span className={isIdle ? 'w-2 h-2 rounded-full bg-gray-500' : 'w-2 h-2 rounded-full bg-green-500 animate-pulse'} />
+      <span>{isIdle ? 'Tạm dừng' : `Đọc: ${activeMinutes}p`}</span>
+    </div>
+  );
+}
+
 export default function LearningWorkspace() {
   const { lessonId } = useParams();
   const navigate = useNavigate();
@@ -1321,6 +1330,19 @@ export default function LearningWorkspace() {
         currentStreak: result.current_streak,
       });
 
+      if (quizData?.quiz_id) {
+        try {
+          const questTrack = await trackGamification({
+            action_type: 'QUIZ_COMPLETED',
+            target_id: String(quizData.quiz_id),
+            value: 1,
+          });
+          applyTrackResponseToContext(questTrack);
+        } catch {
+          // Quiz submit result remains successful even if background quest tracking fails.
+        }
+      }
+
       setQuizResult(result);
       setQuizState(prev => ({
         ...prev,
@@ -1531,16 +1553,6 @@ export default function LearningWorkspace() {
               </div>
               <h2 className="text-lg text-white" style={{ fontWeight: 600 }}>Nội dung bài học</h2>
             </div>
-            {isReadingTrackingEnabled && (
-              <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${readingTracker.isIdle
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}
-              >
-                {readingTracker.isIdle
-                  ? 'Tạm dừng ghi nhận đọc vì không có tương tác trong 2 phút.'
-                  : `Đang ghi nhận đọc chủ động: ${readingTracker.activeMinutes} phút`}
-              </div>
-            )}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
               <MarkdownContent content={lessonDetail.contentMarkdown} />
             </div>
@@ -1942,24 +1954,29 @@ export default function LearningWorkspace() {
 
           {/* Complete */}
           <div className="sticky bottom-0 bg-zinc-950/95 backdrop-blur-sm border-t border-zinc-800 px-6 py-4">
-            <div className="max-w-3xl mx-auto flex items-center justify-end gap-4">
-
-              <button
-                onClick={handleComplete}
-                disabled={isCompleted || isCompleting}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${
-                  isCompleted
-                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 cursor-default'
-                    : 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                }`}
-                style={{ fontWeight: 600 }}
-              >
-                {isCompleted ? (
-                  <><CheckCircle2 size={16} />Đã hoàn thành</>
-                ) : (
-                  <><Zap size={16} />{isCompleting ? 'Đang ghi nhận...' : 'Hoàn thành bài học'}</>
+            <div className="max-w-3xl mx-auto flex items-center justify-end">
+              <div className="flex items-center gap-4">
+                {isReadingTrackingEnabled && (
+                  <ReadingTrackerBadge isIdle={readingTracker.isIdle} activeMinutes={readingTracker.activeMinutes} />
                 )}
-              </button>
+
+                <button
+                  onClick={handleComplete}
+                  disabled={isCompleted || isCompleting}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${
+                    isCompleted
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 cursor-default'
+                      : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                  }`}
+                  style={{ fontWeight: 600 }}
+                >
+                  {isCompleted ? (
+                    <><CheckCircle2 size={16} />Đã hoàn thành</>
+                  ) : (
+                    <><Zap size={16} />{isCompleting ? 'Đang ghi nhận...' : 'Hoàn thành bài học'}</>
+                  )}
+                </button>
+              </div>
             </div>
             {completeError && (
               <div className="max-w-3xl mx-auto mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">

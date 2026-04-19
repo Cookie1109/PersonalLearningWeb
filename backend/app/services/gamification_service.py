@@ -51,13 +51,23 @@ def add_exp_and_check_level(user: User, base_exp: int) -> int:
     return base_exp
 
 
-def update_study_streak(user: User, *, now_utc: datetime | None = None) -> int:
+def update_study_streak(
+    user: User,
+    *,
+    now_utc: datetime | None = None,
+    is_study_day_completed: bool = False,
+) -> int:
     now = now_utc or datetime.now(UTC)
     today = now.date()
     yesterday = today - timedelta(days=1)
 
     last_study_date = user.last_study_date
     current_streak = get_current_streak(user)
+
+    if not is_study_day_completed:
+        user.current_streak = current_streak
+        user.streak = current_streak
+        return 0
 
     if last_study_date == today:
         user.current_streak = current_streak

@@ -41,10 +41,22 @@ QUIZ_SYSTEM_PROMPT = (
     "Ban la mot chuyen gia thiet ke chuong trinh giang day va Senior Backend Developer. "
     "Nhiem vu cua ban la doc DU LIEU DAU VAO va tao ra MOT BO TRAC NGHIEM DUNG 10 CAU HOI chuyen sau. "
     "Khong dung kien thuc ngoai le.\n\n"
+    "THEP RULE 1 - STRICT GROUNDING (RANG BUOC TUYET DOI): "
+    "Ban CHI DUOC PHEP tao cau hoi dua tren noi dung TEXT DUOC CUNG CAP. TUYET DOI KHONG su dung kien thuc lap trinh ben ngoai hoac tu suy dien. "
+    "Neu tai lieu chi noi ve uu diem cua SSR thi chi duoc hoi ve uu diem, KHONG do cach viet code SSR neu text khong co code.\n\n"
+    "THEP RULE 2 - CODE DETECTION RULE (LUAT SINH CODE): "
+    "Truoc khi sinh cau hoi, phai kiem tra tai lieu co CODE BLOCK THUC SU (duoc bao trong ```...```) hay khong. "
+    "NEU CO CODE BLOCK: duoc phep sinh fill_code. "
+    "NEU KHONG CO CODE BLOCK: day la bai LY THUYET, chi duoc sinh cau hoi khai niem (multiple choice/fill_blank theo noi dung ly thuyet) va NGHIEM CAM tao cau hoi code.\n\n"
+    "THEP RULE 3 - QUALITY CHECK: "
+    "Moi cau hoi bat buoc co dap an tim thay ro rang trong mot cau van cu the cua tai lieu duoc cung cap.\n\n"
+    "THEP RULE 4 - SMART BLANKING (DUC LO THONG MINH): "
+    "Doi voi cau hoi fill_blank, TUYET DOI KHONG DUOC de sot cac tu viet tat (acronym) hoac tu dong nghia nam trong ngoac don ngay canh cho trong ___. "
+    "Neu an tu 'Lien Hiep Quoc' thi BAT BUOC phai xoa/che luon '(LHQ)' di kem de tranh lo dap an.\n\n"
     "BUOC 1: PHAN LOAI TAI LIEU\n"
-    "Hay doc tai lieu va xac dinh no thuoc linh vuc nao:\n"
-    "- NHOM A (IT & Lap trinh): Chua ma nguon, thuat toan, cong nghe web, database, API, framework...\n"
-    "- NHOM B (Phi ky thuat): Lich su, Ngon ngu, Kinh te, Khoa hoc xa hoi, Quan tri...\n\n"
+    "Hay doc tai lieu va xac dinh no theo CODE BLOCK:\n"
+    "- NHOM A (IT & Lap trinh): Tai lieu co code block thuc su ```...```\n"
+    "- NHOM B (Phi ky thuat/ly thuyet): Tai lieu KHONG co code block thuc su ```...```\n\n"
     "BUOC 2: RE NHANH CAU TRUC 10 CAU HOI\n"
     "[NEU LA NHOM A - IT & LAP TRINH]:\n"
     "- Bat buoc sinh DUNG 10 cau gom: 4 cau 'theory', 3 cau 'fill_code', 3 cau 'find_bug'.\n"
@@ -61,6 +73,7 @@ QUIZ_SYSTEM_PROMPT = (
     "- TUYET DOI KHONG SINH CAU HOI CODE.\n"
     "- Bat buoc sinh DUNG 10 cau gom: 7 cau 'general_choice', 3 cau 'fill_blank'.\n"
     "- VOI fill_blank: trich 1 cau quan trong trong tai lieu, duc lo 1 tu khoa bang ___, va tao 4 lua chon la 4 tu khoa cung chu de.\n"
+    "- SMART BLANKING BAT BUOC: khong de lai bat ky acronym/tu dong nghia trong ngoac don sat canh cho trong ___.\n"
     "- Cac cau hoi phai duoc viet theo ngu canh ly thuyet/doc hieu, khong ep cu phap lap trinh.\n\n"
     "TRUONG 'type' BAT BUOC PHAI VIET THUONG TOAN BO: 'theory', 'fill_code', 'find_bug', 'general_choice', 'fill_blank'.\n\n"
     "PHAN OPTIONS/CORRECT_ANSWER: TUYET DOI KHONG THEM CAC TIEN TO 'A.', 'B.', 'C.', 'D.' O DAU CHUOI. "
@@ -83,8 +96,12 @@ QUIZ_SYSTEM_PROMPT = (
 )
 
 CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
-TECHNICAL_SIGNAL_PATTERN = re.compile(
-    r"\b(express|javascript|typescript|python|java|c\+\+|sql|database|api|endpoint|backend|frontend|middleware|route|controller|class|function|const|let|var|react|node|docker|query|schema|json)\b",
+CODE_BLOCK_DETECTION_PATTERN = re.compile(
+    r"```[a-zA-Z0-9_+\-]*\s*([\s\S]*?)```",
+    re.IGNORECASE,
+)
+CODE_SIGNAL_IN_BLOCK_PATTERN = re.compile(
+    r"[{}();]|=>|<=|>=|==|!=|\b(const|let|var|def|class|function|import|from|return|if|for|while|select|insert|update|delete|create|alter|drop|join|where)\b",
     re.IGNORECASE,
 )
 
@@ -131,27 +148,39 @@ def _build_quiz_model_candidates(settings) -> list[str]:
     return candidates
 
 
-def build_quiz_prompt(*, lesson_title: str, source_content: str) -> str:
+def build_quiz_prompt(*, lesson_title: str, source_content: str, has_code_blocks: bool = False) -> str:
+    code_block_status = "CO" if has_code_blocks else "KHONG"
     return (
         "DU LIEU DAU VAO:\n"
         f"- Tieu de tai lieu: {lesson_title.strip()}\n"
+        f"- Ket qua kiem tra code block thuc su: {code_block_status}\n"
         "- Nguon su that duy nhat (source_content):\n"
         f"{source_content.strip()[:50000]}"
     )
 
 
+def _has_real_code_blocks(*, source_content: str) -> bool:
+    if not source_content:
+        return False
+
+    for match in CODE_BLOCK_DETECTION_PATTERN.finditer(source_content):
+        block = (match.group(1) or "").strip()
+        if not block:
+            continue
+
+        normalized_block = re.sub(r"\s+", " ", block)
+        if len(normalized_block) < 6:
+            continue
+
+        if "\n" in block or CODE_SIGNAL_IN_BLOCK_PATTERN.search(block):
+            return True
+
+    return False
+
+
 def _classify_document_domain(*, lesson_title: str, source_content: str) -> str:
-    content = f"{lesson_title}\n{source_content}".strip()
-    lowered = content.lower()
-
-    score = 0
-    if "```" in lowered:
-        score += 3
-    score += len(TECHNICAL_SIGNAL_PATTERN.findall(content))
-    if re.search(r"[{}();]|=>", content):
-        score += 1
-
-    return DOMAIN_TECHNICAL if score >= 3 else DOMAIN_GENERAL
+    _ = lesson_title
+    return DOMAIN_TECHNICAL if _has_real_code_blocks(source_content=source_content) else DOMAIN_GENERAL
 
 
 def _build_domain_distribution_instruction(domain: str) -> str:
@@ -406,9 +435,14 @@ def generate_quiz_questions(*, lesson_title: str, source_content: str) -> tuple[
 
     model_candidates = _build_quiz_model_candidates(settings)
     timeout_seconds = max(30.0, float(settings.gemini_timeout_seconds))
-    document_domain = _classify_document_domain(lesson_title=lesson_title, source_content=source_content)
+    has_code_blocks = _has_real_code_blocks(source_content=source_content)
+    document_domain = DOMAIN_TECHNICAL if has_code_blocks else DOMAIN_GENERAL
 
-    user_prompt = build_quiz_prompt(lesson_title=lesson_title, source_content=source_content)
+    user_prompt = build_quiz_prompt(
+        lesson_title=lesson_title,
+        source_content=source_content,
+        has_code_blocks=has_code_blocks,
+    )
     request_payload = _build_quiz_generation_payload(user_prompt=user_prompt)
     saw_quota_or_rate_limit = False
     latest_quota_message: str | None = None

@@ -60,18 +60,18 @@ def test_complete_lesson_first_day_awards_base_exp_without_streak_bonus(
     assert payload["streak_bonus_exp"] == 0
     assert payload["total_exp"] == 50
     assert payload["level"] == 1
-    assert payload["current_streak"] == 1
+    assert payload["current_streak"] == 0
     assert payload["already_completed"] is False
 
     user_after = db_session.get(User, user.id)
     assert user_after is not None
     assert user_after.exp == 50
     assert user_after.total_exp == 50
-    assert user_after.current_streak == 1
-    assert user_after.last_study_date == datetime.now(UTC).date()
+    assert user_after.current_streak == 0
+    assert user_after.last_study_date is None
 
 
-def test_complete_lesson_consecutive_day_adds_streak_bonus_and_levels_up(
+def test_complete_lesson_consecutive_day_does_not_update_streak_or_bonus(
     client,
     db_session: Session,
     auth_headers,
@@ -97,10 +97,10 @@ def test_complete_lesson_consecutive_day_adds_streak_bonus_and_levels_up(
     assert response.status_code == 200
     payload = response.json()
     assert payload["exp_gained"] == 50
-    assert payload["streak_bonus_exp"] == 20
-    assert payload["total_exp"] == 1050
+    assert payload["streak_bonus_exp"] == 0
+    assert payload["total_exp"] == 1030
     assert payload["level"] == 2
-    assert payload["current_streak"] == 4
+    assert payload["current_streak"] == 3
 
 
 def test_complete_lesson_already_completed_does_not_farm_exp(
