@@ -120,7 +120,12 @@ Các biến quan trọng (xem đầy đủ trong backend/.env.example):
 Ví dụ:
 
 ```bash
-VITE_API_BASE_URL=/api
+VITE_API_URL=/api
+# Production example:
+# VITE_API_URL=https://nexl-backend-629058072270.asia-southeast1.run.app/api
+
+# Backward compatibility (optional, can remove when migrated):
+# VITE_API_BASE_URL=/api
 
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...

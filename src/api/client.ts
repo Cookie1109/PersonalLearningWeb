@@ -3,8 +3,22 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 import { firebaseAuth } from './firebase';
 
+function resolveApiBaseUrl(): string {
+  const configuredBaseUrl = (
+    import.meta.env.VITE_API_URL
+    || import.meta.env.VITE_API_BASE_URL
+    || '/api'
+  ).trim();
+
+  if (!configuredBaseUrl) {
+    return '/api';
+  }
+
+  return configuredBaseUrl.replace(/\/+$/, '');
+}
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: resolveApiBaseUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
