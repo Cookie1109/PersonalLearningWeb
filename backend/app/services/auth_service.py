@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -147,13 +148,16 @@ def build_user_profile(*, db: Session, user: User) -> UserProfileDTO:
 
 
 def get_user_activity_last_365_days(*, db: Session, user_id: int) -> list[ActivityDayDTO]:
-    start_dt = datetime.now(UTC) - timedelta(days=364)
+    local_timezone = ZoneInfo("Asia/Ho_Chi_Minh")
+    start_local_date = datetime.now(UTC).astimezone(local_timezone).date() - timedelta(days=364)
+    local_date_expr = _build_local_date_expression(db=db)
+
     rows = db.execute(
-        select(func.date(ExpLedger.awarded_at), func.count(ExpLedger.id))
+        select(local_date_expr, func.count(ExpLedger.id))
         .where(ExpLedger.user_id == user_id)
-        .where(ExpLedger.awarded_at >= start_dt)
-        .group_by(func.date(ExpLedger.awarded_at))
-        .order_by(func.date(ExpLedger.awarded_at))
+        .where(local_date_expr >= start_local_date.isoformat())
+        .group_by(local_date_expr)
+        .order_by(local_date_expr)
     ).all()
 
     activity: list[ActivityDayDTO] = []

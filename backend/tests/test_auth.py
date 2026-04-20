@@ -80,9 +80,10 @@ def test_auth_activity_returns_last_365_days_aggregated(
 ) -> None:
     user, _ = create_user(email="activity@example.com", display_name="Activity User")
 
+    timezone = ZoneInfo("Asia/Ho_Chi_Minh")
     now = datetime.now(UTC)
-    today_iso = now.date().isoformat()
-    old_iso = (now - timedelta(days=500)).date().isoformat()
+    today_local_iso = now.astimezone(timezone).date().isoformat()
+    old_local_iso = (now - timedelta(days=500)).astimezone(timezone).date().isoformat()
 
     db_session.add_all(
         [
@@ -122,8 +123,67 @@ def test_auth_activity_returns_last_365_days_aggregated(
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(item["date"] == today_iso and item["count"] >= 2 for item in payload)
-    assert all(item["date"] != old_iso for item in payload)
+    assert any(item["date"] == today_local_iso and item["count"] >= 2 for item in payload)
+    assert all(item["date"] != old_local_iso for item in payload)
+
+
+def test_auth_activity_groups_entries_by_local_utc_plus_7_day_boundary(
+    client: TestClient,
+    create_user,
+    db_session,
+) -> None:
+    user, _ = create_user(email="activity-boundary@example.com", display_name="Activity Boundary")
+    timezone = ZoneInfo("Asia/Ho_Chi_Minh")
+
+    local_day = datetime.now(UTC).astimezone(timezone).date() - timedelta(days=1)
+    next_local_day = local_day + timedelta(days=1)
+
+    first_same_day = datetime(local_day.year, local_day.month, local_day.day, 0, 20, tzinfo=timezone).astimezone(UTC)
+    second_same_day = datetime(local_day.year, local_day.month, local_day.day, 23, 40, tzinfo=timezone).astimezone(UTC)
+    first_next_day = datetime(next_local_day.year, next_local_day.month, next_local_day.day, 0, 10, tzinfo=timezone).astimezone(UTC)
+
+    db_session.add_all(
+        [
+            ExpLedger(
+                user_id=user.id,
+                lesson_id=None,
+                quiz_id=None,
+                reward_type="lesson_complete",
+                exp_amount=40,
+                metadata_json={"source": "boundary-a"},
+                awarded_at=first_same_day,
+            ),
+            ExpLedger(
+                user_id=user.id,
+                lesson_id=None,
+                quiz_id=None,
+                reward_type="quiz_pass",
+                exp_amount=60,
+                metadata_json={"source": "boundary-b"},
+                awarded_at=second_same_day,
+            ),
+            ExpLedger(
+                user_id=user.id,
+                lesson_id=None,
+                quiz_id="boundary-quiz",
+                reward_type="quiz_pass",
+                exp_amount=30,
+                metadata_json={"source": "boundary-c"},
+                awarded_at=first_next_day,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    headers = _auth_headers(firebase_uid=user.firebase_uid or f"uid-{user.id}", email=user.email)
+    response = client.get("/api/auth/activity", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    payload_by_date = {item["date"]: item["count"] for item in payload}
+
+    assert payload_by_date.get(local_day.isoformat()) == 2
+    assert payload_by_date.get(next_local_day.isoformat()) == 1
 
 
 def test_auth_me_requires_token(client: TestClient) -> None:

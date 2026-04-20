@@ -13,6 +13,11 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const FixedYearHeatmap = ProgressHeatmap as React.ComponentType<{ data: typeof activityData; year: number }>;
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const isStreakActive = user.streakStatus === 'ACTIVE';
+  const streakCardColor = isStreakActive ? 'text-orange-400' : 'text-zinc-400';
+  const streakCardBg = isStreakActive
+    ? 'bg-orange-500/10 border-orange-500/20'
+    : 'bg-zinc-500/10 border-zinc-500/20';
 
   const firstAvailableYear = useMemo(() => {
     if (!user.createdAt) return currentYear;
@@ -95,7 +100,7 @@ export default function Dashboard() {
 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { icon: Flame, label: 'Streak', value: `${user.streak} ngày`, sub: 'Chuỗi học liên tục', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
+          { icon: Flame, label: 'Streak', value: `${user.streak} ngày`, sub: 'Chuỗi học liên tục', color: streakCardColor, bg: streakCardBg },
           { icon: Clock, label: 'Ngày học', value: `${user.totalDays}`, sub: 'Tổng số ngày học', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
           { icon: Star, label: 'Cấp độ', value: `Lv.${user.level}`, sub: `${user.exp}/${user.expToNextLevel} EXP`, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
         ].map(({ icon: Icon, label, value, sub, color, bg }) => (

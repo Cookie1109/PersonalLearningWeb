@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { GamificationProfileDTO, UserProfileDTO } from '../../api/dto';
+import { getMyProfile } from '../../api/auth';
 import { WeekModule, Lesson, UserStats, ActivityDay } from '../lib/types';
 
 const DEFAULT_USER_STATS: UserStats = {
@@ -88,7 +89,17 @@ export function AppProvider({
     };
   }, []);
 
-  const getActiveDaysCount = useCallback((items: ActivityDay[]) => items.filter(day => day.count > 0).length, []);
+  const syncTotalStudyDaysFromBackend = useCallback(async () => {
+    try {
+      const profile = await getMyProfile();
+      setUser(prev => ({
+        ...prev,
+        totalDays: Math.max(0, profile.total_study_days ?? prev.totalDays),
+      }));
+    } catch {
+      // Keep current totalDays when profile refresh is temporarily unavailable.
+    }
+  }, []);
 
   const recordActivityToday = useCallback((increment: number = 1) => {
     if (increment <= 0) return;
@@ -106,11 +117,9 @@ export function AppProvider({
         next.push({ date: today, count: increment });
       }
 
-      const totalDays = getActiveDaysCount(next);
-      setUser(prevUser => ({ ...prevUser, totalDays }));
       return next;
     });
-  }, [getActiveDaysCount]);
+  }, []);
 
   const setRoadmap = useCallback((newRoadmap: WeekModule[]) => {
     setRoadmapState(newRoadmap);
@@ -168,10 +177,11 @@ export function AppProvider({
         streak: safeStreak,
         streakRaw: safeStreak,
         streakStatus: 'ACTIVE',
-        totalDays: Math.max(prev.totalDays, safeStreak),
       };
     });
-  }, [getProgressiveExpSnapshot]);
+
+    void syncTotalStudyDaysFromBackend();
+  }, [getProgressiveExpSnapshot, syncTotalStudyDaysFromBackend]);
 
   const syncGamificationProfile = useCallback((payload: GamificationProfileDTO) => {
     const safeLevel = Math.max(1, Math.floor(payload.level || 1));
@@ -189,13 +199,13 @@ export function AppProvider({
       streak: safeDisplayStreak,
       streakRaw: safeStreakRaw,
       streakStatus: safeStreakStatus,
-      totalDays: Math.max(prev.totalDays, safeDisplayStreak),
     }));
   }, []);
 
   const requestGamificationRefresh = useCallback(() => {
     setGamificationRefreshTick(prev => prev + 1);
-  }, []);
+    void syncTotalStudyDaysFromBackend();
+  }, [syncTotalStudyDaysFromBackend]);
 
   const syncActivityData = useCallback((activity: ActivityDay[]) => {
     const normalized = activity
