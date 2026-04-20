@@ -1,0 +1,25 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# Local environment/secrets
+.env
+.env.*
+*.pem
+*.key
+*-firebase-adminsdk-*.json
+
+# Git and editor artifacts
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Test files and local artifacts
+tests/
+*.db
+*.sqlite
+*.sqlite3

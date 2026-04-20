@@ -220,4 +220,121 @@ Prefix mặc định: /api
 - Profile gamification trả current_streak (raw), display_streak và streak_status (ACTIVE/PENDING/LOST).
 - total_study_days tính từ exp_ledger theo bucket ngày local UTC+7.
 - auth/activity và heatmap đều aggregate theo local UTC+7.
+
+## 10) Deploy backend lên Google Cloud Run
+
+Mục này deploy service FastAPI trong thư mục backend lên Cloud Run bằng Docker image.
+
+### 10.1 Chuẩn bị
+
+- Đã cài và login gcloud CLI.
+- Đã có Google Cloud Project.
+- Đã bật billing.
+- Database (TiDB Cloud) đã mở quyền truy cập phù hợp.
+
+Enable API cần thiết:
+
+```bash
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
+```
+
+### 10.2 Build image
+
+Ví dụ biến môi trường:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="asia-southeast1"
+export REPO="personal-learning"
+export SERVICE="nexl-backend"
+```
+
+Tạo Artifact Registry (chỉ cần 1 lần):
+
+```bash
+gcloud artifacts repositories create "$REPO" \
+  --repository-format=docker \
+  --location="$REGION" \
+  --description="Backend images"
+```
+
+Build và push image từ thư mục backend:
+
+```bash
+gcloud builds submit backend \
+  --tag "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$SERVICE:v1"
+```
+
+### 10.3 Lưu secret vào Secret Manager
+
+Bạn nên lưu các biến nhạy cảm ở Secret Manager, tối thiểu:
+
+- DATABASE_URL
+- REDIS_URL
+- GEMINI_API_KEY
+- CLOUDINARY_API_SECRET
+- YOUTUBE_API_KEY
+- FIREBASE_CREDENTIALS_JSON (nếu không dùng ADC)
+
+Ví dụ tạo 1 secret:
+
+```bash
+echo "YOUR_DATABASE_URL" | gcloud secrets create DATABASE_URL --data-file=-
+```
+
+Nếu secret đã tồn tại:
+
+```bash
+echo "YOUR_DATABASE_URL" | gcloud secrets versions add DATABASE_URL --data-file=-
+```
+
+### 10.4 Deploy Cloud Run service
+
+```bash
+gcloud run deploy "$SERVICE" \
+  --image "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$SERVICE:v1" \
+  --region "$REGION" \
+  --platform managed \
+  --allow-unauthenticated \
+  --port 8080 \
+  --set-env-vars "APP_ENV=prod,API_PREFIX=/api,FIREBASE_PROJECT_ID=nexl-92622,DAILY_QUEST_RESET_TIMEZONE=Asia/Ho_Chi_Minh" \
+  --set-secrets "DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest"
+```
+
+Gợi ý:
+
+- Nếu dùng TiDB public endpoint, giữ TLS trong DATABASE_URL, ví dụ có ssl_verify_cert=true và ssl_verify_identity=true.
+- Có thể set thêm min/max instances theo traffic.
+
+### 10.5 Chạy migration bằng Cloud Run Job (khuyến nghị)
+
+Tạo job migration:
+
+```bash
+gcloud run jobs create "$SERVICE-migrate" \
+  --image "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$SERVICE:v1" \
+  --region "$REGION" \
+  --set-env-vars "APP_ENV=prod,API_PREFIX=/api" \
+  --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
+  --command sh \
+  --args "-c,alembic upgrade head"
+```
+
+Chạy job migration:
+
+```bash
+gcloud run jobs execute "$SERVICE-migrate" --region "$REGION" --wait
+```
+
+### 10.6 Verify sau deploy
+
+- Health endpoint: https://YOUR_CLOUD_RUN_URL/api/health
+- Docs endpoint: https://YOUR_CLOUD_RUN_URL/docs
+
+## 11) Lưu ý vận hành
+
+- Service dùng cổng PORT do Cloud Run cấp (đã hỗ trợ trong Dockerfile).
+- Không bake file backend/.env vào image (đã loại qua backend/.dockerignore).
+- Ưu tiên Secret Manager cho toàn bộ credential production.
+- Nếu Firebase verify token lỗi trên Cloud Run, cấu hình FIREBASE_PROJECT_ID và credential phù hợp (ADC hoặc FIREBASE_CREDENTIALS_JSON).
   

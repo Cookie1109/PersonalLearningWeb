@@ -1,7 +1,8 @@
+import json
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,15 @@ class Settings(BaseSettings):
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
     app_port: int = Field(default=8001, alias="APP_PORT")
     api_prefix: str = Field(default="/api", alias="API_PREFIX")
+    cors_allow_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://127.0.0.1:5173"],
+        alias="CORS_ALLOW_ORIGINS",
+    )
+    cors_allow_origin_regex: str | None = Field(
+        default=r"^https://.*\.vercel\.app$",
+        alias="CORS_ALLOW_ORIGIN_REGEX",
+    )
+    cors_allow_credentials: bool = Field(default=True, alias="CORS_ALLOW_CREDENTIALS")
 
     database_url: str = Field(
         default="mysql+pymysql://root:root@localhost:3306/personal_learning",
@@ -62,6 +72,32 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str | None = Field(default=None, alias="CLOUDINARY_API_SECRET")
     cloudinary_upload_folder: str = Field(default="personal-learning/documents", alias="CLOUDINARY_UPLOAD_FOLDER")
     cloudinary_avatar_folder: str = Field(default="personal-learning/avatars", alias="CLOUDINARY_AVATAR_FOLDER")
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def parse_cors_allow_origins(cls, value: object) -> list[str]:
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            raw_value = value.strip()
+            if not raw_value:
+                return []
+
+            if raw_value.startswith("["):
+                try:
+                    parsed = json.loads(raw_value)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+
+            return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+        if isinstance(value, (list, tuple, set)):
+            return [str(item).strip() for item in value if str(item).strip()]
+
+        raise TypeError("CORS_ALLOW_ORIGINS must be a comma-separated string or list")
 
 
 @lru_cache
