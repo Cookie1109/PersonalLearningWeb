@@ -22,7 +22,13 @@ class Settings(BaseSettings):
     app_port: int = Field(default=8001, alias="APP_PORT")
     api_prefix: str = Field(default="/api", alias="API_PREFIX")
     cors_allow_origins: list[str] = Field(
-        default=["http://localhost:5173", "http://127.0.0.1:5173"],
+        default=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "https://personal-learning-web.vercel.app",
+        ],
         alias="CORS_ALLOW_ORIGINS",
     )
     cors_allow_origin_regex: str | None = Field(
