@@ -8,6 +8,8 @@ export const defaultUserStats: UserStats = {
   exp: 3450,
   expToNextLevel: 5000,
   streak: 12,
+  streakRaw: 12,
+  streakStatus: 'ACTIVE',
   totalLessons: 24,
   totalDays: 18,
 };

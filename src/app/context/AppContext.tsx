@@ -6,10 +6,13 @@ const DEFAULT_USER_STATS: UserStats = {
   name: 'Learner',
   email: '',
   avatarUrl: null,
+  createdAt: null,
   level: 1,
   exp: 0,
   expToNextLevel: 1000,
   streak: 0,
+  streakRaw: 0,
+  streakStatus: 'ACTIVE',
   totalLessons: 0,
   totalDays: 0,
 };
@@ -138,7 +141,7 @@ export function AppProvider({
   const applyServerExp = useCallback((expEarned: number) => {
     if (expEarned <= 0) return;
 
-    recordActivityToday(1);
+    recordActivityToday(expEarned);
 
     setUser(prev => {
       const newExp = prev.exp + expEarned;
@@ -154,6 +157,7 @@ export function AppProvider({
 
   const syncServerGamification = useCallback((payload: { totalExp: number; level: number; currentStreak: number }) => {
     const snapshot = getProgressiveExpSnapshot(payload.totalExp);
+    const safeStreak = Math.max(0, payload.currentStreak || 0);
 
     setUser(prev => {
       return {
@@ -161,7 +165,10 @@ export function AppProvider({
         level: snapshot.level,
         exp: snapshot.currentExp,
         expToNextLevel: snapshot.targetExp,
-        streak: Math.max(0, payload.currentStreak || 0),
+        streak: safeStreak,
+        streakRaw: safeStreak,
+        streakStatus: 'ACTIVE',
+        totalDays: Math.max(prev.totalDays, safeStreak),
       };
     });
   }, [getProgressiveExpSnapshot]);
@@ -170,13 +177,19 @@ export function AppProvider({
     const safeLevel = Math.max(1, Math.floor(payload.level || 1));
     const safeTargetExp = Math.max(1, Math.floor(payload.target_exp || safeLevel * 1000));
     const safeCurrentExp = Math.max(0, Math.min(Math.floor(payload.current_exp || 0), safeTargetExp));
+    const safeStreakRaw = Math.max(0, Math.floor(payload.current_streak || 0));
+    const safeDisplayStreak = Math.max(0, Math.floor(payload.display_streak ?? safeStreakRaw));
+    const safeStreakStatus = payload.streak_status ?? (safeDisplayStreak > 0 ? 'ACTIVE' : 'PENDING');
 
     setUser(prev => ({
       ...prev,
       level: safeLevel,
       exp: safeCurrentExp,
       expToNextLevel: safeTargetExp,
-      streak: Math.max(0, Math.floor(payload.current_streak || 0)),
+      streak: safeDisplayStreak,
+      streakRaw: safeStreakRaw,
+      streakStatus: safeStreakStatus,
+      totalDays: Math.max(prev.totalDays, safeDisplayStreak),
     }));
   }, []);
 
@@ -193,11 +206,7 @@ export function AppProvider({
       }));
 
     setActivityData(normalized);
-    setUser(prev => ({
-      ...prev,
-      totalDays: getActiveDaysCount(normalized),
-    }));
-  }, [getActiveDaysCount]);
+  }, []);
 
   const setUserFromAuth = useCallback((userProfile: UserProfileDTO) => {
     const snapshot = getProgressiveExpSnapshot(userProfile.total_exp || 0);
@@ -208,10 +217,12 @@ export function AppProvider({
       name: resolvedFullName || prev.name,
       email: userProfile.email,
       avatarUrl: userProfile.avatar_url ?? null,
+      createdAt: userProfile.created_at ?? prev.createdAt ?? null,
       level: snapshot.level,
       exp: snapshot.currentExp,
       expToNextLevel: snapshot.targetExp,
       streak: Math.max(0, userProfile.current_streak ?? prev.streak),
+      streakRaw: Math.max(0, userProfile.current_streak ?? prev.streakRaw),
       totalDays: Math.max(0, userProfile.total_study_days ?? prev.totalDays),
     }));
   }, [getProgressiveExpSnapshot]);

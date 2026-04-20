@@ -26,6 +26,7 @@ export interface UserProfileDTO {
   display_name: string;
   full_name: string;
   avatar_url?: string | null;
+  created_at?: string | null;
   level: number;
   total_exp: number;
   current_streak?: number;
@@ -48,6 +49,12 @@ export interface GamificationProfileDTO {
   target_exp: number;
   total_exp: number;
   current_streak: number;
+  display_streak?: number;
+  streak_status?: 'ACTIVE' | 'PENDING' | 'LOST';
+}
+
+export interface GamificationHeatmapResponseDTO {
+  data: Record<string, number>;
 }
 
 export type QuestDifficulty = 'easy' | 'medium' | 'hard';

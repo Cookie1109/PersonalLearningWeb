@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from app.models import User
 
@@ -56,9 +56,10 @@ def update_study_streak(
     *,
     now_utc: datetime | None = None,
     is_study_day_completed: bool = False,
+    study_date: date | None = None,
 ) -> int:
     now = now_utc or datetime.now(UTC)
-    today = now.date()
+    today = study_date or now.date()
     yesterday = today - timedelta(days=1)
 
     last_study_date = user.last_study_date

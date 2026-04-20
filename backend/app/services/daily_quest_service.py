@@ -469,8 +469,16 @@ def track_gamification_action(
 
     all_clear_awarded = False
     all_clear_bonus_exp = 0
+    has_any_completed_quest = bool(quests) and any(quest.is_completed for quest in quests)
+    if has_any_completed_quest:
+        update_study_streak(
+            locked_user,
+            now_utc=now_utc,
+            is_study_day_completed=True,
+            study_date=quest_date,
+        )
+
     if quests and all(quest.is_completed for quest in quests):
-        update_study_streak(locked_user, now_utc=now_utc, is_study_day_completed=True)
 
         all_clear_target_id = _build_all_clear_target_id(quest_date=quest_date)
         existing_all_clear_reward = _find_existing_reward(

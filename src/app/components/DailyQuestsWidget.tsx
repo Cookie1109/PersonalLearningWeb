@@ -129,7 +129,7 @@ export default function DailyQuestsWidget() {
           </div>
 
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-200" style={{ fontWeight: 600 }}>
-            Hoàn thành cả 2 để giữ vững chuỗi học tập (Streak)!
+            Hoàn thành ít nhất 1 nhiệm vụ để giữ vững chuỗi học tập (Streak)!
             {state.all_clear_bonus_exp > 0 && (
               <span className="ml-1 text-cyan-100">Thưởng thêm +{state.all_clear_bonus_exp} EXP khi all-clear.</span>
             )}

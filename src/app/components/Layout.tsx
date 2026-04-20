@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -11,7 +11,9 @@ import { useAuth } from '../context/AuthContext';
 import { UserStats } from '../lib/types';
 import { getMyProfile } from '../../api/auth';
 import { getGamificationProfile } from '../../api/gamification';
+import { GamificationProfileDTO } from '../../api/dto';
 import ProfileModal from './ProfileModal';
+import StreakLostModal from './StreakLostModal';
 import nexlWordmarkDark from '../../assets/branding/nexl-wordmark-dark.svg';
 import nexlWordmarkLight from '../../assets/branding/nexl-wordmark-light.svg';
 
@@ -30,6 +32,21 @@ export interface LayoutProps {
 type ThemeMode = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'nexl-theme-mode';
 const SIDEBAR_AUTO_COLLAPSE_BREAKPOINT = 1024;
+const STREAK_LOST_NOTIFIED_DATE_KEY = 'streakLostNotifiedDate';
+
+function resolveUtc7DateKey(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+
+  const year = parts.find(part => part.type === 'year')?.value ?? '1970';
+  const month = parts.find(part => part.type === 'month')?.value ?? '01';
+  const day = parts.find(part => part.type === 'day')?.value ?? '01';
+  return `${year}-${month}-${day}`;
+}
 
 function resolveInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') {
@@ -52,8 +69,31 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isStreakLostModalOpen, setIsStreakLostModalOpen] = useState(false);
+  const [lostStreakValue, setLostStreakValue] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(resolveInitialTheme);
   const navigate = useNavigate();
+
+  const maybeShowStreakLostModal = useCallback((profile: GamificationProfileDTO) => {
+    if (profile.streak_status !== 'LOST') {
+      return;
+    }
+
+    const safeCurrentStreak = Math.max(0, Math.floor(profile.current_streak || 0));
+    if (safeCurrentStreak <= 0) {
+      return;
+    }
+
+    const todayKey = resolveUtc7DateKey();
+    const lastNotifiedDate = window.localStorage.getItem(STREAK_LOST_NOTIFIED_DATE_KEY);
+    if (lastNotifiedDate === todayKey) {
+      return;
+    }
+
+    window.localStorage.setItem(STREAK_LOST_NOTIFIED_DATE_KEY, todayKey);
+    setLostStreakValue(safeCurrentStreak);
+    setIsStreakLostModalOpen(true);
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -96,6 +136,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
         }
 
         syncGamificationProfile(profile);
+        maybeShowStreakLostModal(profile);
       } catch {
         // Sidebar can fall back to auth profile-derived values.
       }
@@ -123,7 +164,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
     return () => {
       mounted = false;
     };
-  }, [authLoading, currentUser, navigate, setUserFromAuth, syncGamificationProfile]);
+  }, [authLoading, currentUser, maybeShowStreakLostModal, navigate, setUserFromAuth, syncGamificationProfile]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_BREAKPOINT - 1}px)`);
@@ -157,8 +198,17 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
   const expProgress = Math.min(100, Math.max(0, Math.round((user.exp / safeTargetExp) * 100)));
   const roadmapLabel = activeRoadmapLabel ?? 'NEXL Workspace';
   const isDarkTheme = themeMode === 'dark';
+  const isStreakActive = user.streakStatus === 'ACTIVE';
   const logoWordmark = isDarkTheme ? nexlWordmarkDark : nexlWordmarkLight;
   const userInitial = (user.name || user.email || 'L').trim().charAt(0).toUpperCase() || 'L';
+  const streakTextClass = isStreakActive
+    ? 'text-orange-400'
+    : (isDarkTheme ? 'text-zinc-400' : 'text-slate-500');
+  const topbarStreakBadgeClass = isStreakActive
+    ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400'
+    : (isDarkTheme
+      ? 'bg-zinc-800 border border-zinc-700 text-zinc-300'
+      : 'bg-slate-100 border border-slate-300 text-slate-600');
 
   const topbarButtonClass = isDarkTheme
     ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors text-sm'
@@ -248,7 +298,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-xs text-orange-400">
+                  <div className={`flex items-center gap-1 text-xs ${streakTextClass}`}>
                     <Flame size={12} /><span style={{ fontWeight: 600 }}>{user.streak} ngày</span>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-yellow-400">
@@ -377,7 +427,7 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
               {isDarkTheme ? <Sun size={14} /> : <Moon size={14} />}
               <span>{isDarkTheme ? 'Chế độ sáng' : 'Chế độ tối'}</span>
             </button>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${topbarStreakBadgeClass}`}>
               <Flame size={14} />
               <span style={{ fontWeight: 700 }}>{user.streak}</span>
             </div>
@@ -401,6 +451,12 @@ export default function Layout({ userData, activeRoadmapLabel }: LayoutProps) {
           <Outlet />
         </div>
       </main>
+
+      <StreakLostModal
+        open={isStreakLostModalOpen}
+        onOpenChange={setIsStreakLostModalOpen}
+        lostStreak={lostStreakValue}
+      />
 
       <ProfileModal open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen} />
     </div>

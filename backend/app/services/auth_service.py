@@ -112,9 +112,21 @@ def get_or_create_user_from_firebase_claims(
     return new_user
 
 
+def _build_local_date_expression(*, db: Session):
+    dialect_name = ""
+    if db.bind is not None:
+        dialect_name = str(db.bind.dialect.name or "").lower()
+
+    if dialect_name == "sqlite":
+        return func.date(func.datetime(ExpLedger.awarded_at, "+7 hours"))
+
+    return func.date(func.convert_tz(ExpLedger.awarded_at, "+00:00", "+07:00"))
+
+
 def _get_total_study_days(*, db: Session, user_id: int) -> int:
+    local_date_expr = _build_local_date_expression(db=db)
     total_study_days = db.scalar(
-        select(func.count(func.distinct(func.date(ExpLedger.awarded_at)))).where(ExpLedger.user_id == user_id)
+        select(func.count(func.distinct(local_date_expr))).where(ExpLedger.user_id == user_id)
     )
     return int(total_study_days or 0)
 
@@ -126,6 +138,7 @@ def build_user_profile(*, db: Session, user: User) -> UserProfileDTO:
         display_name=user.display_name,
         full_name=user.display_name,
         avatar_url=user.avatar_url,
+        created_at=user.created_at,
         level=user.level,
         total_exp=user.total_exp,
         current_streak=get_current_streak(user),

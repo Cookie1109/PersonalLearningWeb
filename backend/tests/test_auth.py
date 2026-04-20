@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -27,6 +28,49 @@ def test_auth_me_returns_profile_with_gamification_fields(client: TestClient, cr
     assert payload["email"] == user.email
     assert payload["current_streak"] == 5
     assert "total_study_days" in payload
+
+
+def test_auth_me_counts_total_study_days_by_local_utc_plus_7_date(client: TestClient, create_user, db_session) -> None:
+    user, _ = create_user(email="profile-local-days@example.com", display_name="Local Day User")
+    timezone = ZoneInfo("Asia/Ho_Chi_Minh")
+
+    first_local = datetime(2026, 4, 20, 0, 30, tzinfo=timezone).astimezone(UTC)
+    second_local_same_day = datetime(2026, 4, 20, 9, 0, tzinfo=timezone).astimezone(UTC)
+
+    db_session.add_all(
+        [
+            ExpLedger(
+                user_id=user.id,
+                lesson_id=None,
+                quiz_id=None,
+                action_type="READ_DOCUMENT",
+                target_id="local-day-a",
+                reward_type="gamification_track",
+                exp_amount=10,
+                metadata_json={"source": "test"},
+                awarded_at=first_local,
+            ),
+            ExpLedger(
+                user_id=user.id,
+                lesson_id=None,
+                quiz_id=None,
+                action_type="READ_DOCUMENT",
+                target_id="local-day-b",
+                reward_type="gamification_track",
+                exp_amount=15,
+                metadata_json={"source": "test"},
+                awarded_at=second_local_same_day,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    headers = _auth_headers(firebase_uid=user.firebase_uid or f"uid-{user.id}", email=user.email)
+    response = client.get("/api/auth/me", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_study_days"] == 1
 
 
 def test_auth_activity_returns_last_365_days_aggregated(

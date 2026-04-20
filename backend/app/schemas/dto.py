@@ -43,6 +43,7 @@ class UserProfileDTO(BaseModel):
     display_name: str
     full_name: str
     avatar_url: str | None = None
+    created_at: datetime | None = None
     level: int
     total_exp: int
     current_streak: int = 0
@@ -73,6 +74,12 @@ class GamificationProfileDTO(BaseModel):
     target_exp: int = Field(..., ge=1)
     total_exp: int = Field(..., ge=0)
     current_streak: int = Field(..., ge=0)
+    display_streak: int = Field(..., ge=0)
+    streak_status: Literal["ACTIVE", "PENDING", "LOST"]
+
+
+class GamificationHeatmapResponseDTO(BaseModel):
+    data: dict[str, int] = Field(default_factory=dict)
 
 
 class DailyQuestDTO(BaseModel):

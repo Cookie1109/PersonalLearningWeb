@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from datetime import UTC, datetime, time
+from zoneinfo import ZoneInfo
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models import DailyQuest, User
+from app.models import DailyQuest, ExpLedger, User
 from app.schemas import (
     DailyQuestDTO,
     DailyQuestListResponseDTO,
     ErrorResponseDTO,
+    GamificationHeatmapResponseDTO,
     GamificationProfileDTO,
     GamificationTrackRequestDTO,
     GamificationTrackResponseDTO,
@@ -48,6 +53,32 @@ def _to_daily_quest_dto(quest: DailyQuest) -> DailyQuestDTO:
     )
 
 
+def _build_heatmap_local_date_expression(*, db: Session):
+    dialect_name = ""
+    if db.bind is not None:
+        dialect_name = str(db.bind.dialect.name or "").lower()
+
+    if dialect_name == "sqlite":
+        return func.date(func.datetime(ExpLedger.awarded_at, "+7 hours"))
+
+    return func.date(func.convert_tz(ExpLedger.awarded_at, "+00:00", "+07:00"))
+
+
+def _resolve_heatmap_timezone() -> ZoneInfo:
+    timezone_name = (settings.daily_quest_reset_timezone or "Asia/Ho_Chi_Minh").strip()
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        return ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def _resolve_heatmap_year_range_utc(*, year: int) -> tuple[datetime, datetime]:
+    timezone = _resolve_heatmap_timezone()
+    start_local = datetime(year, 1, 1, 0, 0, 0, tzinfo=timezone)
+    end_local_exclusive = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=timezone)
+    return start_local.astimezone(UTC), end_local_exclusive.astimezone(UTC)
+
+
 @router.get(
     "/profile",
     response_model=GamificationProfileDTO,
@@ -58,12 +89,30 @@ def get_gamification_profile(
     current_user: User = Depends(get_current_user),
 ) -> GamificationProfileDTO:
     level, current_exp, target_exp, total_exp, current_streak = get_daily_quest_profile_snapshot(user=current_user)
+
+    today_local = resolve_daily_quest_date()
+    if current_user.last_study_date is None:
+        diff_days = 10**6
+    else:
+        diff_days = max(0, (today_local - current_user.last_study_date).days)
+
+    if diff_days == 0:
+        streak_status = "ACTIVE"
+    elif diff_days == 1:
+        streak_status = "PENDING"
+    else:
+        streak_status = "LOST"
+
+    display_streak = current_streak if diff_days <= 1 else 0
+
     return GamificationProfileDTO(
         level=level,
         current_exp=current_exp,
         target_exp=target_exp,
         total_exp=total_exp,
         current_streak=current_streak,
+        display_streak=display_streak,
+        streak_status=streak_status,
     )
 
 
@@ -137,3 +186,35 @@ def track_gamification(
         target_exp=result.target_exp,
         current_streak=result.current_streak,
     )
+
+
+@router.get(
+    "/heatmap",
+    response_model=GamificationHeatmapResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_gamification_heatmap(
+    year: int = Query(..., ge=1970, le=2100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GamificationHeatmapResponseDTO:
+    local_date_expr = _build_heatmap_local_date_expression(db=db)
+    start_utc, end_utc_exclusive = _resolve_heatmap_year_range_utc(year=year)
+
+    rows = db.execute(
+        select(local_date_expr, func.sum(ExpLedger.exp_amount))
+        .where(ExpLedger.user_id == current_user.id)
+        .where(ExpLedger.awarded_at >= start_utc)
+        .where(ExpLedger.awarded_at < end_utc_exclusive)
+        .group_by(local_date_expr)
+        .order_by(local_date_expr)
+    ).all()
+
+    data: dict[str, int] = {}
+    for local_date, total_exp in rows:
+        if local_date is None:
+            continue
+        data[str(local_date)] = int(total_exp or 0)
+
+    return GamificationHeatmapResponseDTO(data=data)

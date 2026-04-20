@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import {
   DailyQuestListResponseDTO,
+  GamificationHeatmapResponseDTO,
   GamificationProfileDTO,
   GamificationTrackRequestDTO,
   GamificationTrackResponseDTO,
@@ -13,6 +14,13 @@ export async function getGamificationProfile(): Promise<GamificationProfileDTO> 
 
 export async function getDailyQuests(): Promise<DailyQuestListResponseDTO> {
   const response = await apiClient.get<DailyQuestListResponseDTO>('/gamification/quests');
+  return response.data;
+}
+
+export async function getHeatmapData(year: number): Promise<GamificationHeatmapResponseDTO> {
+  const response = await apiClient.get<GamificationHeatmapResponseDTO>('/gamification/heatmap', {
+    params: { year },
+  });
   return response.data;
 }
 

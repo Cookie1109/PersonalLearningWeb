@@ -66,10 +66,13 @@ export interface UserStats {
   name: string;
   email: string;
   avatarUrl: string | null;
+  createdAt?: string | null;
   level: number;
   exp: number;
   expToNextLevel: number;
   streak: number;
+  streakRaw: number;
+  streakStatus: 'ACTIVE' | 'PENDING' | 'LOST';
   totalLessons: number;
   totalDays: number;
 }
