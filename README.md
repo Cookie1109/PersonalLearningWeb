@@ -1,125 +1,245 @@
 
-  # PersonalLearning
+# PersonalLearningWeb (NEXL)
 
-  ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
-  ![Python](https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white)
-  ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
-  ![AI](https://img.shields.io/badge/AI-Gemini-00A67E?logo=google&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.116-009688?logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
 
-  PersonalLearning là nền tảng EdTech ứng dụng AI giúp biến tài liệu học tập thành không gian tự học tương tác. Hệ thống tự động hóa quy trình chắt lọc kiến thức từ nguồn thô và tái cấu trúc thành nội dung học có thể đọc, hỏi đáp, luyện tập. Mục tiêu là rút ngắn thời gian học, tăng độ hiểu sâu và hỗ trợ kiểm tra đánh giá liên tục.
+NEXL là nền tảng học tập tích hợp AI: chuyển tài liệu nguồn thành Workspace để học lý thuyết, chat hỏi đáp, luyện flashcard, làm quiz và theo dõi tiến độ bằng gamification.
 
-  ## Tính năng nổi bật
+## 1) Tính năng hiện có
 
-  - **Omni-Input**: Nạp dữ liệu đa nguồn từ **URL** (HTML parsing với **readability-lxml**), **Text**, **PDF/DOCX**, **Ảnh** (OCR qua Gemini).
-  - **Pedagogical Distillation (AI Theory)**: Sinh bài học **Markdown** theo cấu trúc sư phạm, giữ nguyên **Code/Terminal blocks**, lọc nhiễu tự động.
-  - **Strict RAG Q&A Chat**: Chat hỏi đáp bị **khóa chặt theo tài liệu nguồn** (anti-hallucination), hỗ trợ **stream/markdown** và nguyên tắc trả lời có kiểm soát.
-  - **Assessment & Mega Quiz**: Tự động tạo **Flashcard** và **Quiz** theo từng bài học; có sẵn luồng chọn nhiều tài liệu trong Thư viện để hướng tới **Mega Quiz (multi-select)**.
+- Tạo Workspace từ text, URL, file PDF/DOCX.
+- Trích xuất nội dung nguồn (parser) và chuẩn hóa để học.
+- Sinh nội dung bài học theo lesson.
+- Chat hỏi đáp theo tài liệu của người dùng.
+- Flashcard: generate, cập nhật trạng thái, giải thích mặt sau.
+- Quiz: generate, làm bài, nộp bài, chấm điểm và thưởng EXP theo luật backend.
+- Gamification:
+  - Daily Quest cố định theo ngày (UTC+7).
+  - Streak trạng thái ACTIVE/PENDING/LOST.
+  - Heatmap hoạt động theo năm.
+  - Total study days đồng bộ từ backend profile.
 
-  ## Kiến trúc và công nghệ
+## 2) Kiến trúc công nghệ
 
-  ### Frontend
-  - **React 18** + **Vite** + **TypeScript**
-  - **TailwindCSS** + UI components (Radix-based)
-  - Markdown renderer: **react-markdown**, **remark-gfm**, **remark-breaks**, **rehype-highlight**
+### Frontend
 
-  ### Backend
-  - **FastAPI** (Python)
-  - **SQLAlchemy ORM**
-  - **Alembic Migration**
-  - **MySQL**
-  - Hỗ trợ parser: **requests**, **BeautifulSoup4**, **readability-lxml**, **PyPDF2**, **python-docx**
+- React 18 + Vite + TypeScript
+- Tailwind CSS + Radix UI
+- Axios + Firebase Web Auth
 
-  ### AI Engine
-  - **Gemini API (Google Generative Language)**
-  - Sử dụng hệ thống **System Prompt** chuyên biệt cho sinh lý thuyết, chat theo tài liệu, và tạo quiz.
+### Backend
 
-  ## Getting Started
+- FastAPI
+- SQLAlchemy ORM + Alembic
+- MySQL (runtime), SQLite (nhiều test case)
+- Redis (cooldown/idempotency/rate-limit)
+- Firebase Admin (verify ID token)
+- Gemini API (generation/chat)
 
-  ### 1) Prerequisites
+## 3) Cấu trúc thư mục chính
 
-  - **Node.js** 18+
-  - **Python** 3.10+
-  - **pip**
-  - **MySQL** 8+
-  - (Khuyến nghị) **Redis** cho quiz cooldown/idempotency scenarios
+```text
+.
+├── src/                 # Frontend app
+├── backend/
+│   ├── app/             # FastAPI source
+│   ├── alembic/         # Migration scripts
+│   └── tests/           # Backend tests
+├── package.json         # Frontend scripts
+└── README.md
+```
 
-  ### 2) Setup Backend
+## 4) Yêu cầu hệ thống
 
-  ```bash
-  cd backend
+- Node.js 18+
+- Python 3.11+
+- MySQL 8+
+- Redis (khuyến nghị rất mạnh, đặc biệt cho quiz cooldown/idempotency)
 
-  # Tạo môi trường ảo
-  python -m venv .venv
+## 5) Chạy local
 
-  # Kích hoạt (Windows PowerShell)
-  .\.venv\Scripts\Activate.ps1
+### Bước A - Backend
 
-  # Cài dependency
-  pip install -r requirements.txt
-  ```
+```bash
+cd backend
 
-  Tạo file môi trường:
+# Tạo venv
+python -m venv .venv
 
-  ```bash
-  copy .env.example .env
-  ```
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 
-  Cập nhật các biến quan trọng trong `.env`:
+# Cài dependencies
+pip install -r requirements.txt
 
-  - `DATABASE_URL` (MySQL)
-  - `GEMINI_API_KEY`
-  - `GEMINI_MODEL` / `GEMINI_QUIZ_MODEL` / `GEMINI_PRO_MODEL`
-  - `REDIS_URL` (nếu sử dụng Redis)
+# Tạo env backend
+copy .env.example .env
 
-  Chạy migration:
+# Chạy migration
+alembic upgrade head
 
-  ```bash
-  alembic upgrade head
-  ```
+# Run API
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+```
 
-  Khởi động backend:
+Backend base URL mặc định: http://127.0.0.1:8001
 
-  ```bash
-  uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
-  ```
+### Bước B - Frontend
 
-  Kiểm tra nhanh:
+```bash
+cd ..
+npm install
+npm run dev
+```
 
-  ```bash
-  curl http://127.0.0.1:8001/api/health
-  ```
+Frontend mặc định proxy /api sang http://127.0.0.1:8001 (xem vite.config.ts).
 
-  ### 3) Setup Frontend
+## 6) Cấu hình môi trường
 
-  ```bash
-  cd ..
-  npm install
-  npm run dev
-  ```
+### 6.1 Backend: backend/.env
 
-  Upload ảnh đại diện ở trang Cài đặt hồ sơ sử dụng Cloudinary config từ backend (`backend/.env`):
+Các biến quan trọng (xem đầy đủ trong backend/.env.example):
 
-  ```bash
-  CLOUDINARY_CLOUD_NAME=your_cloud_name
-  CLOUDINARY_API_KEY=your_api_key
-  CLOUDINARY_API_SECRET=your_api_secret
-  CLOUDINARY_AVATAR_FOLDER=personal-learning/avatars
-  ```
+- APP_HOST, APP_PORT, API_PREFIX
+- DATABASE_URL
+- REDIS_URL
+- FIREBASE_PROJECT_ID
+- FIREBASE_CREDENTIALS_PATH hoặc FIREBASE_CREDENTIALS_JSON
+- GEMINI_API_KEY, GEMINI_MODEL, GEMINI_QUIZ_MODEL, GEMINI_PRO_MODEL
+- QUIZ_PASS_SCORE, QUIZ_PASS_REWARD_EXP
+- DAILY_QUEST_RESET_TIMEZONE (mặc định Asia/Ho_Chi_Minh)
+- DAILY_QUEST_ALL_CLEAR_BONUS_EXP
+- CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 
-  Mặc định frontend chạy Vite và proxy `/api` về backend `http://127.0.0.1:8001`.
+### 6.2 Frontend: .env (tại root project)
 
-  ### 4) Chạy Test
+Ví dụ:
 
-  Unit test backend:
+```bash
+VITE_API_BASE_URL=/api
 
-  ```bash
-  cd backend
-  pytest
-  ```
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_MEASUREMENT_ID=... # optional
+```
 
-  ## Roadmap
+Lưu ý: frontend và backend phải dùng cùng Firebase project để verify token hoạt động đúng.
 
-  - Bổ sung **lịch sử điểm số và thống kê tiến độ** theo tuần/tháng cho mỗi học viên.
-  - Hỗ trợ **export bài học/quiz ra PDF** để học offline.
-  - Mở rộng **đa ngôn ngữ (VI/EN)** cho giao diện và prompt sinh nội dung.
+## 7) Scripts hữu ích
+
+### Frontend
+
+```bash
+npm run dev
+npm run test
+npm run build
+```
+
+### Backend
+
+```bash
+cd backend
+pytest
+alembic upgrade head
+alembic revision --autogenerate -m "your_migration_name"
+```
+
+## 8) API chính (rút gọn)
+
+Prefix mặc định: /api
+
+### Health
+
+- GET /health
+
+### Auth/Profile
+
+- GET /auth/me
+- PATCH /auth/me
+- POST /auth/avatar
+- GET /auth/activity
+
+### Parser
+
+- POST /parser/extract-text
+
+### Documents
+
+- POST /documents
+- POST /documents/upload
+- GET /documents
+- GET /documents/paged
+- PATCH /documents/{doc_id}
+- DELETE /documents/{doc_id}
+- POST /documents/{document_id}/chat
+- GET /documents/{document_id}/flashcards
+- POST /documents/{document_id}/flashcards/generate
+- GET /documents/{document_id}/quiz
+- POST /documents/{document_id}/quiz/generate
+- POST /documents/{document_id}/quiz/submit
+
+### Lessons / Quizzes
+
+- GET /lessons/{lesson_id}
+- POST /lessons/{lesson_id}/generate
+- GET /lessons/{lesson_id}/quiz
+- POST /lessons/{lesson_id}/quiz/generate
+- POST /lessons/{lesson_id}/flashcards/complete
+- POST /lessons/{lesson_id}/complete
+- POST /quizzes/{quiz_id}/submit
+
+### Flashcards
+
+- PATCH /flashcards/{card_id}/status
+- POST /flashcards/{card_id}/explain
+
+### Chat
+
+- POST /chat
+- GET /chat/history
+
+### Gamification
+
+- GET /gamification/profile
+- GET /gamification/quests
+- POST /gamification/track
+- GET /gamification/heatmap?year=YYYY
+
+## 9) Quy tắc gamification đang áp dụng
+
+- Local day dùng UTC+7 cho các chỉ số ngày học/gamification.
+- Daily quest reset theo DAILY_QUEST_RESET_TIMEZONE (mặc định Asia/Ho_Chi_Minh).
+- Profile gamification trả current_streak (raw), display_streak và streak_status (ACTIVE/PENDING/LOST).
+- total_study_days tính từ exp_ledger theo bucket ngày local UTC+7.
+- auth/activity và heatmap đều aggregate theo local UTC+7.
+
+## 10) Kiểm tra nhanh sau khi bật hệ thống
+
+- Health: http://127.0.0.1:8001/api/health
+- OpenAPI: http://127.0.0.1:8001/docs
+- Frontend: http://127.0.0.1:5173
+
+## 11) Troubleshooting nhanh
+
+- 401 ở API protected:
+  - Kiểm tra token Firebase ở frontend.
+  - Kiểm tra FIREBASE_PROJECT_ID và credential ở backend.
+- Không upload avatar được:
+  - Kiểm tra CLOUDINARY_* trong backend/.env.
+- Quiz cooldown/rate-limit không hoạt động đúng:
+  - Kiểm tra REDIS_URL và trạng thái Redis.
+- Migration lỗi kết nối:
+  - Kiểm tra DATABASE_URL và quyền user MySQL.
+
+---
+
+Nếu cần mở rộng README cho production deployment (Docker, CI/CD, monitoring, backup DB), có thể bổ sung thêm mục Deployment Guide riêng.
   
