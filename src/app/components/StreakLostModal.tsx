@@ -18,10 +18,10 @@ export default function StreakLostModal({ open, onOpenChange, lostStreak }: Stre
           </div>
           <div className="min-w-0">
             <h2 className="text-lg text-white" style={{ fontWeight: 700 }}>
-              Chuoi hoc tap da bi ngat
+              Chuỗi học tập đã bị ngắt
             </h2>
             <p className="mt-2 text-sm text-zinc-300">
-              Rat tiec, ban da danh mat chuoi {lostStreak} ngay. Hay bat dau lai tu dau nhe!
+              Rất tiếc, bạn đã đánh mất chuỗi {lostStreak} ngày. Hãy bắt đầu lại từ đầu nhé!
             </p>
           </div>
         </div>
@@ -34,7 +34,7 @@ export default function StreakLostModal({ open, onOpenChange, lostStreak }: Stre
             style={{ fontWeight: 600 }}
           >
             <RotateCcw size={14} />
-            Bat dau lai
+            Bắt đầu lại
           </button>
         </div>
       </DialogContent>
