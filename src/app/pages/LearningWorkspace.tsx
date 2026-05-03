@@ -759,22 +759,27 @@ export function QuizResultDisplay({
   const correctCount = quizResult.results.filter(item => item.is_correct).length;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 space-y-5">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-5 text-slate-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-white">
       <div className="text-center">
-        <p className="text-xs uppercase tracking-wide text-zinc-500">Kết quả quiz</p>
-        <p className={`text-5xl mt-2 ${quizResult.is_passed ? 'text-emerald-400' : 'text-amber-400'}`} style={{ fontWeight: 800 }}>
+        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-zinc-500">Kết quả quiz</p>
+        <p
+          className={`text-5xl mt-2 ${quizResult.is_passed
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-amber-600 dark:text-amber-400'}`}
+          style={{ fontWeight: 800 }}
+        >
           {quizResult.score}%
         </p>
-        <p className="text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} câu đúng</p>
+        <p className="text-slate-600 dark:text-zinc-300 text-sm mt-2">{correctCount}/{quizQuestions.length} câu đúng</p>
         {quizResult.is_passed ? (
-          <p className="text-emerald-300 text-sm mt-2">Bạn đã đạt quiz. Icon Quiz sẽ sáng ngay lập tức.</p>
+          <p className="text-emerald-600 dark:text-emerald-300 text-sm mt-2">Bạn đã đạt quiz. Icon Quiz sẽ sáng ngay lập tức.</p>
         ) : (
-          <p className="text-amber-300 text-sm mt-2">Chưa đạt ngưỡng. Hãy ôn lại lý thuyết và thử lại.</p>
+          <p className="text-amber-600 dark:text-amber-300 text-sm mt-2">Chưa đạt ngưỡng. Hãy ôn lại lý thuyết và thử lại.</p>
         )}
       </div>
 
       {quizResult.reward_granted && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
           Chúc mừng! Bạn nhận {quizResult.exp_gained} EXP khi vượt quiz lần đầu.
         </div>
       )}
@@ -793,35 +798,35 @@ export function QuizResultDisplay({
             : 'Không xác định';
 
           return (
-            <div key={answer.question_id} className="space-y-3 rounded-xl border border-zinc-700 bg-zinc-950/60 p-3">
-              <p className="text-sm text-zinc-100" style={{ fontWeight: 700 }}>
+            <div key={answer.question_id} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-zinc-700 dark:bg-zinc-950/60">
+              <p className="text-sm text-slate-800 dark:text-zinc-100" style={{ fontWeight: 700 }}>
                 Câu {index + 1}
               </p>
-              <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900/70">
                 <QuizQuestionMarkdown content={question?.text ?? 'Nội dung câu hỏi'} />
               </div>
 
               {answer.is_correct ? (
-                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-100">
                   Bạn đã trả lời đúng: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
                 </div>
               ) : (
                 <>
-                  <div className="rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2.5 text-sm text-red-100">
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-100">
                     Bạn đã chọn: <span style={{ fontWeight: 700 }}>{selectedOptionText}</span>
                   </div>
-                  <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2.5 text-sm text-emerald-100">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-100">
                     Đáp án đúng: <span style={{ fontWeight: 700 }}>{correctOptionText}</span>
                   </div>
                 </>
               )}
 
               {answer.explanation && (
-                <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2.5 text-amber-100">
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-700 dark:border-amber-400/35 dark:bg-amber-400/10 dark:text-amber-100">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300" style={{ fontWeight: 700 }}>
                     <Lightbulb size={13} />Giải thích
                   </div>
-                  <p className="mt-1.5 text-sm leading-relaxed text-amber-100/95">{answer.explanation}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-amber-700 dark:text-amber-100/95">{answer.explanation}</p>
                 </div>
               )}
             </div>
@@ -834,7 +839,7 @@ export function QuizResultDisplay({
           <button
             onClick={onRegenerate}
             disabled={isRegenerating || isRegenerateDisabled}
-            className="w-full rounded-xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-60 disabled:cursor-not-allowed text-cyan-100 px-4 py-2.5 text-sm inline-flex items-center justify-center gap-2"
+            className="w-full rounded-xl border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed text-cyan-700 px-4 py-2.5 text-sm inline-flex items-center justify-center gap-2 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:hover:bg-cyan-500/20 dark:text-cyan-100"
             style={{ fontWeight: 600 }}
           >
             <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
@@ -846,7 +851,7 @@ export function QuizResultDisplay({
       <div className="flex gap-3">
         <button
           onClick={onRetry}
-          className="flex-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-2.5 text-sm"
+          className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 text-sm dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100"
           style={{ fontWeight: 600 }}
         >
           Làm lại quiz

@@ -248,35 +248,50 @@ export default function QuizPage({
 
   if (mode === 'quiz-result') {
     const grade = score >= 80
-      ? { label: 'Excellent', color: 'text-yellow-400', bg: 'bg-yellow-500/10' }
+      ? { label: 'Excellent', color: 'text-yellow-700 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-500/10' }
       : score >= 60
-        ? { label: 'Good', color: 'text-cyan-400', bg: 'bg-cyan-500/10' }
-        : { label: 'Needs review', color: 'text-violet-400', bg: 'bg-violet-500/10' };
+        ? { label: 'Good', color: 'text-cyan-700 dark:text-cyan-400', bg: 'bg-cyan-50 dark:bg-cyan-500/10' }
+        : { label: 'Needs review', color: 'text-violet-700 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-500/10' };
 
     return (
       <div className="max-w-2xl mx-auto px-6 py-8">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={`${grade.bg} border border-zinc-800 rounded-2xl p-8 text-center`}>
-          <h2 className="text-3xl text-white mb-2" style={{ fontWeight: 800 }}>{grade.label}</h2>
-          <p className="text-zinc-400">Server score</p>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`${grade.bg} border border-slate-200 dark:border-zinc-800 rounded-2xl p-8 text-center text-slate-900 dark:text-white`}
+        >
+          <h2 className="text-3xl text-slate-900 dark:text-white mb-2" style={{ fontWeight: 800 }}>{grade.label}</h2>
+          <p className="text-slate-600 dark:text-zinc-400">Server score</p>
           <div className={`text-6xl my-6 ${grade.color}`} style={{ fontWeight: 800 }}>{score}%</div>
-          <p className="text-zinc-300 text-sm">{correctCount}/{questions.length} câu trả lời đúng</p>
+          <p className="text-slate-600 dark:text-zinc-300 text-sm">{correctCount}/{questions.length} câu trả lời đúng</p>
           {quizResult?.reward_granted && (
-            <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
               Chúc mừng! Bạn đã vượt quiz lần đầu và nhận {quizResult.exp_gained} EXP.
             </div>
           )}
 
           <div className="mt-6 space-y-2 text-left">
             {(quizResult?.results ?? []).map((answer, i) => (
-              <div key={answer.question_id} className={`flex items-center gap-3 p-3 rounded-xl ${answer.is_correct ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
-                {answer.is_correct ? <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" /> : <XCircle size={16} className="text-red-400 flex-shrink-0" />}
-                <p className="text-sm text-zinc-300 truncate">Question {i + 1}: {questions[i]?.text.slice(0, 60)}...</p>
+              <div
+                key={answer.question_id}
+                className={`flex items-center gap-3 p-3 rounded-xl ${answer.is_correct
+                  ? 'bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20'
+                  : 'bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/20'}`}
+              >
+                {answer.is_correct
+                  ? <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  : <XCircle size={16} className="text-red-600 dark:text-red-400 flex-shrink-0" />}
+                <p className="text-sm text-slate-600 dark:text-zinc-300 truncate">Question {i + 1}: {questions[i]?.text.slice(0, 60)}...</p>
               </div>
             ))}
           </div>
 
           <div className="flex gap-3 mt-8">
-            <button onClick={restartQuiz} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-sm" style={{ fontWeight: 600 }}>
+            <button
+              onClick={restartQuiz}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors text-sm dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              style={{ fontWeight: 600 }}
+            >
               <RotateCcw size={15} />Retry
             </button>
             <button onClick={() => setMode('select')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-600 text-white hover:bg-violet-500 transition-colors text-sm" style={{ fontWeight: 600 }}>
@@ -291,18 +306,21 @@ export default function QuizPage({
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => setMode('select')} className="flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
+        <button
+          onClick={() => setMode('select')}
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 transition-colors dark:text-zinc-500 dark:hover:text-zinc-300"
+        >
           <ChevronRight size={16} className="rotate-180" />Exit
         </button>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-500">Question {quizState.currentIndex + 1}/{questions.length}</span>
-          <div className="flex items-center gap-1 text-xs text-emerald-400" style={{ fontWeight: 600 }}>
+          <span className="text-xs text-slate-500 dark:text-zinc-500">Question {quizState.currentIndex + 1}/{questions.length}</span>
+          <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400" style={{ fontWeight: 600 }}>
             <CheckCircle2 size={12} />{Object.keys(quizState.selectedAnswers).length} answered
           </div>
         </div>
       </div>
 
-      <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-8">
+      <div className="h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden mb-8">
         <motion.div
           animate={{ width: `${questions.length > 0 ? (quizState.currentIndex / questions.length) * 100 : 0}%` }}
           className="h-full bg-cyan-500 rounded-full"
@@ -317,14 +335,14 @@ export default function QuizPage({
           exit={{ opacity: 0, x: -20 }}
           className="space-y-6"
         >
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 dark:bg-zinc-900 dark:border-zinc-800">
             <div className="flex items-center gap-2 mb-4">
-              <span className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-xs flex items-center justify-center flex-shrink-0" style={{ fontWeight: 700 }}>
+              <span className="w-7 h-7 rounded-lg bg-cyan-100 border border-cyan-200 text-cyan-700 text-xs flex items-center justify-center flex-shrink-0 dark:bg-cyan-500/20 dark:border-cyan-500/30 dark:text-cyan-400" style={{ fontWeight: 700 }}>
                 {quizState.currentIndex + 1}
               </span>
-              <span className="text-xs text-zinc-500">Quiz</span>
+              <span className="text-xs text-slate-500 dark:text-zinc-500">Quiz</span>
             </div>
-            <h3 className="text-lg text-white leading-relaxed" style={{ fontWeight: 600 }}>{currentQuestion?.text}</h3>
+            <h3 className="text-lg text-slate-900 dark:text-white leading-relaxed" style={{ fontWeight: 600 }}>{currentQuestion?.text}</h3>
           </div>
 
           <div className="space-y-3">
@@ -334,11 +352,11 @@ export default function QuizPage({
 
               let className = 'w-full text-left px-5 py-4 rounded-xl border text-sm transition-all ';
               if (!selectedKey) {
-                className += 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800 cursor-pointer';
+                className += 'bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50 cursor-pointer dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:bg-zinc-800';
               } else if (isSelected) {
-                className += 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300';
+                className += 'bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-500/10 dark:border-cyan-500/40 dark:text-cyan-300';
               } else {
-                className += 'bg-zinc-900 border-zinc-800 text-zinc-600 cursor-default';
+                className += 'bg-slate-50 border-slate-200 text-slate-400 cursor-default dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-600';
               }
 
               return (
@@ -351,28 +369,28 @@ export default function QuizPage({
                 >
                   <div className="flex items-center gap-3">
                     <span className={`w-6 h-6 rounded-full border text-xs flex items-center justify-center flex-shrink-0 ${
-                      !selectedKey ? 'border-zinc-600 text-zinc-500' :
-                      isSelected ? 'border-cyan-400 text-cyan-400' :
-                      'border-zinc-700 text-zinc-700'
+                      !selectedKey ? 'border-slate-300 text-slate-500 dark:border-zinc-600 dark:text-zinc-500' :
+                      isSelected ? 'border-cyan-600 text-cyan-700 dark:border-cyan-400 dark:text-cyan-400' :
+                      'border-slate-200 text-slate-400 dark:border-zinc-700 dark:text-zinc-700'
                     }`} style={{ fontWeight: 600 }}>
                       {option.option_key || String.fromCharCode(65 + i)}
                     </span>
                     <span>{option.text}</span>
-                    {selectedKey && isSelected && <CheckCircle2 size={16} className="ml-auto text-cyan-400 flex-shrink-0" />}
+                    {selectedKey && isSelected && <CheckCircle2 size={16} className="ml-auto text-cyan-600 dark:text-cyan-400 flex-shrink-0" />}
                   </div>
                 </motion.button>
               );
             })}
           </div>
 
-          <div className="overflow-hidden rounded-xl border p-4 bg-zinc-900 border-zinc-700">
+          <div className="overflow-hidden rounded-xl border p-4 bg-slate-50 border-slate-200 dark:bg-zinc-900 dark:border-zinc-700">
             <div className="flex items-start gap-3">
-              <Sparkles size={15} className="text-violet-400 flex-shrink-0 mt-0.5" />
+              <Sparkles size={15} className="text-violet-600 dark:text-violet-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-xs text-violet-400 mb-1" style={{ fontWeight: 600 }}>
+                <p className="text-xs text-violet-600 dark:text-violet-400 mb-1" style={{ fontWeight: 600 }}>
                   Evaluation is server-side only
                 </p>
-                <p className="text-sm text-zinc-300 leading-relaxed">
+                <p className="text-sm text-slate-600 dark:text-zinc-300 leading-relaxed">
                   This payload never contains câu trả lời đúng before submit.
                 </p>
               </div>
@@ -391,7 +409,7 @@ export default function QuizPage({
               )}
             </button>
             {submitError && (
-              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                 {submitError}
               </div>
             )}
