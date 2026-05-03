@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Check, Download, Lightbulb, Loader2, RotateCcw, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Lightbulb, Loader2, RotateCcw, Sparkles, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FlashcardStatusDTO } from '../../api/dto';
@@ -42,14 +42,6 @@ function mapLegacyCard(card: LegacyFlashcard): DeckCard {
     back_text: card.back,
     status: 'new',
   };
-}
-
-function escapeCsvField(value: string): string {
-  const raw = String(value ?? '');
-  if (/[",\n]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
 }
 
 export default function FlashCardDeck({
@@ -306,29 +298,6 @@ export default function FlashCardDeck({
     }
   }, [current, explanationByCardId, isApiMode, isExplaining, isFlipped]);
 
-  const handleExportCsv = useCallback(() => {
-    if (cardsState.length === 0) {
-      return;
-    }
-
-    const lines: string[] = ['front_text,back_text'];
-    for (const card of cardsState) {
-      lines.push(`${escapeCsvField(card.front_text)},${escapeCsvField(card.back_text)}`);
-    }
-
-    const csvContent = lines.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'flashcards.csv';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-  }, [cardsState]);
-
   const restart = () => {
     setCurrentIndex(0);
     setIsFlipped(false);
@@ -410,17 +379,6 @@ export default function FlashCardDeck({
   if (isEndOfDeck) {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <button
-            onClick={handleExportCsv}
-            disabled={cardsState.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ fontWeight: 600 }}
-          >
-            <Download size={13} />Xuất CSV
-          </button>
-        </div>
-
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900/70 p-5">
           <h3 className="text-lg text-white" style={{ fontWeight: 700 }}>Tổng kết</h3>
           <p className="mt-1 text-sm text-zinc-400">
@@ -462,17 +420,6 @@ export default function FlashCardDeck({
 
   return (
     <div className="flex flex-col items-center gap-6 py-4">
-      <div className="w-full flex justify-end">
-        <button
-          onClick={handleExportCsv}
-          disabled={cardsState.length === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ fontWeight: 600 }}
-        >
-          <Download size={13} />Xuất CSV
-        </button>
-      </div>
-
       <div className="w-full space-y-2">
         <div className="flex justify-between text-xs text-zinc-500">
           <span>Thẻ {Math.min(currentIndex + 1, deckCards.length)} / {deckCards.length}</span>
