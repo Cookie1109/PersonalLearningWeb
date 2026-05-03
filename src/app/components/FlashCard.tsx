@@ -476,7 +476,7 @@ export default function FlashCardDeck({
             void handleExplainCurrent();
           }}
           disabled={isExplaining || isUpdatingStatus}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm"
+          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/20"
           style={{ fontWeight: 600 }}
         >
           {isExplaining ? <Loader2 size={15} className="animate-spin" /> : <Lightbulb size={15} />}Giải thích
@@ -486,38 +486,38 @@ export default function FlashCardDeck({
             void handleRateCard('missed_it');
           }}
           disabled={isUpdatingStatus}
-          className="flex items-center gap-2 px-8 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm"
+          className="flex items-center gap-2 px-8 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/20"
           style={{ fontWeight: 600 }}
         >
-          <X size={16} />❌ Chưa thuộc
+          <X size={16} />Chưa thuộc
         </button>
         <button
           onClick={() => {
             void handleRateCard('got_it');
           }}
           disabled={isUpdatingStatus}
-          className="flex items-center gap-2 px-8 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm"
+          className="flex items-center gap-2 px-8 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-sm dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
           style={{ fontWeight: 600 }}
         >
-          <Check size={16} />✅ Đã thuộc
+          <Check size={16} />Đã thuộc
         </button>
       </div>
 
       {(isFlipped && (currentExplanation || explainError)) && (
-        <div className="w-full rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-amber-300" style={{ fontWeight: 700 }}>Giải thích sâu</p>
+        <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900/70">
+          <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300" style={{ fontWeight: 700 }}>Giải thích sâu</p>
           {currentExplanation && (
-            <div className="prose prose-sm mt-2 max-w-none text-zinc-200 dark:prose-invert prose-headings:mb-2 prose-headings:mt-3 prose-h3:text-sm prose-h3:font-semibold prose-strong:text-zinc-100 prose-ul:my-2 prose-ul:pl-5 prose-li:my-1 break-words">
+            <div className="prose prose-sm mt-2 max-w-none text-slate-700 dark:text-zinc-200 dark:prose-invert prose-headings:mb-2 prose-headings:mt-3 prose-h3:text-sm prose-h3:font-semibold prose-strong:text-slate-900 dark:prose-strong:text-zinc-100 prose-ul:my-2 prose-ul:pl-5 prose-li:my-1 break-words">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentExplanation}</ReactMarkdown>
             </div>
           )}
           {!currentExplanation && explainError && (
-            <p className="mt-2 text-sm text-red-300">{explainError}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-300">{explainError}</p>
           )}
         </div>
       )}
 
-      <div className="flex items-center gap-4 text-zinc-600 text-xs">
+      <div className="flex items-center gap-4 text-slate-500 dark:text-zinc-600 text-xs">
         <button
           onClick={() => {
             if (currentIndex > 0) {
@@ -526,7 +526,7 @@ export default function FlashCardDeck({
             }
           }}
           disabled={currentIndex === 0}
-          className="flex items-center gap-1 hover:text-zinc-400 disabled:opacity-30 transition-colors"
+          className="flex items-center gap-1 hover:text-slate-700 disabled:opacity-30 transition-colors dark:hover:text-zinc-400"
         >
           <ChevronLeft size={14} />Trước
         </button>
@@ -535,10 +535,10 @@ export default function FlashCardDeck({
             <div
               key={card.id}
               className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                index === currentIndex ? 'bg-violet-400' :
+                index === currentIndex ? 'bg-violet-500 dark:bg-violet-400' :
                 card.status === 'got_it' ? 'bg-emerald-500' :
                 card.status === 'missed_it' ? 'bg-red-500' :
-                'bg-zinc-700'
+                'bg-slate-300 dark:bg-zinc-700'
               }`}
             />
           ))}
@@ -551,7 +551,7 @@ export default function FlashCardDeck({
             }
           }}
           disabled={currentIndex >= deckCards.length - 1}
-          className="flex items-center gap-1 hover:text-zinc-400 disabled:opacity-30 transition-colors"
+          className="flex items-center gap-1 hover:text-slate-700 disabled:opacity-30 transition-colors dark:hover:text-zinc-400"
         >
           Sau<ChevronRight size={14} />
         </button>
@@ -559,7 +559,7 @@ export default function FlashCardDeck({
 
       <button
         onClick={restart}
-        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800"
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
         style={{ fontWeight: 600 }}
       >
         <RotateCcw size={13} />Về thẻ đầu
