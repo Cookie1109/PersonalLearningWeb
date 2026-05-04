@@ -250,6 +250,35 @@ class DocumentChatResponseDTO(BaseModel):
     reply: str
 
 
+class TutorAskRequestDTO(BaseModel):
+    document_id: int | str
+    question: str = Field(..., min_length=1, max_length=4000)
+
+    @field_validator("document_id", mode="before")
+    @classmethod
+    def normalize_document_id(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                raise ValueError("document_id must not be empty")
+            return normalized
+        return value
+
+    @field_validator("question", mode="before")
+    @classmethod
+    def normalize_question(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                raise ValueError("question must not be empty")
+            return normalized
+        return value
+
+
+class TutorStreamChunkDTO(BaseModel):
+    delta: str
+
+
 class ParserExtractUrlRequestDTO(BaseModel):
     url: str = Field(..., min_length=8, max_length=2048)
 

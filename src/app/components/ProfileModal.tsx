@@ -3,7 +3,7 @@ import { Camera, Loader2, Save, Trash2, UserRound } from 'lucide-react';
 import axios from 'axios';
 import { updateMyProfile, uploadMyAvatar } from '../../api/auth';
 import { useApp } from '../context/AppContext';
-import { Dialog, DialogContent } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
@@ -158,6 +158,10 @@ export default function ProfileModal({ open, onOpenChange }: ProfileModalProps) 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!w-[min(100vw-2rem,780px)] !max-w-[780px] max-h-[88vh] overflow-y-auto border-slate-200 dark:border-zinc-800 bg-gradient-to-br from-cyan-50 via-white to-slate-50 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-950 p-6 md:p-7">
+        <DialogTitle className="sr-only">Cài đặt hồ sơ</DialogTitle>
+        <DialogDescription className="sr-only">
+          Chỉnh sửa thông tin hồ sơ và ảnh đại diện.
+        </DialogDescription>
         <div className="flex items-center gap-3 mb-1 pr-9">
           <div className="h-11 w-11 rounded-2xl bg-cyan-600 text-white flex items-center justify-center">
             <UserRound size={20} />

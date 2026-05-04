@@ -10,19 +10,18 @@ import 'highlight.js/styles/github-dark.css';
 import {
   CheckCircle2, BookOpen,
   Loader2, Zap,
-  MessageSquare, CreditCard, ListChecks, Lightbulb, Send, RefreshCw
+  MessageSquare, CreditCard, ListChecks, Lightbulb, RefreshCw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
-  chatWithDocument,
   completeFlashcardProgress,
   completeLessonProgress,
-  DocumentChatHistoryItem,
   generateLesson,
   getLessonDetail,
   LessonDetail,
 } from '../../api/learning';
 import { trackGamification } from '../../api/gamification';
+import AITutorChat from '../components/AITutorChat';
 import FlashCardDeck from '../components/FlashCard';
 import { Flashcard } from '../lib/types';
 import { GamificationTrackResponseDTO, QuizResponseDTO, QuizSubmitResponseDTO } from '../../api/dto';
@@ -30,11 +29,6 @@ import { fetchQuizByDocument, generateQuizByDocument, submitQuizByDocument } fro
 import useReadingTracker from '../hooks/useReadingTracker';
 
 type LearningTab = 'theory' | 'quiz' | 'flashcard' | 'qa';
-
-interface QAMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 interface QuizState {
   currentIndex: number;
@@ -868,40 +862,42 @@ export function QuizResultDisplay({
   );
 }
 
-function MarkdownContent({ content }: { content: string }) {
+const MarkdownContent = React.memo(function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-invert max-w-none prose-p:text-zinc-300 prose-li:text-zinc-300 prose-strong:text-cyan-300 prose-headings:text-white prose-code:text-cyan-300 prose-a:text-cyan-300 prose-a:no-underline hover:prose-a:underline">
+    <div className="max-w-none select-text text-zinc-300">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          h2: ({ children }) => <h2 className="text-xl text-white mt-6 mb-3" style={{ fontWeight: 700 }}>{children}</h2>,
-          h3: ({ children }) => <h3 className="text-base text-zinc-200 mt-4 mb-2" style={{ fontWeight: 600 }}>{children}</h3>,
-          p: ({ children }) => <p className="text-zinc-300 text-sm leading-relaxed mb-4">{children}</p>,
-          li: ({ children }) => <li className="text-zinc-300 text-sm my-1">{children}</li>,
-          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed mb-4">{children}</pre>,
+          h2: ({ children }) => <h2 className="text-xl text-white mt-6 mb-3 select-text" style={{ fontWeight: 700 }}>{children}</h2>,
+          h3: ({ children }) => <h3 className="text-base text-zinc-200 mt-4 mb-2 select-text" style={{ fontWeight: 600 }}>{children}</h3>,
+          p: ({ children }) => <p className="text-sm leading-relaxed mb-4 select-text">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 text-sm select-text">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 text-sm select-text">{children}</ol>,
+          li: ({ children }) => <li className="text-sm select-text">{children}</li>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-950/80 p-3 text-xs leading-relaxed mb-4 select-text">{children}</pre>,
           code: ({ inline, children, ...props }: MarkdownCodeComponentProps) => {
             if (inline) {
-              return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs">{children}</code>;
+              return <code className="text-cyan-300 bg-cyan-400/10 px-1.5 py-0.5 rounded text-xs select-text">{children}</code>;
             }
-            return <code className="text-zinc-200" {...props}>{children}</code>;
+            return <code className="text-zinc-200 select-text" {...props}>{children}</code>;
           },
           table: ({ children }) => (
-            <div className="my-4 overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-900/60">
-              <table className="min-w-full border-collapse text-sm text-zinc-200">{children}</table>
+            <div className="my-4 overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-900/60 select-text">
+              <table className="min-w-full border-collapse text-sm text-zinc-200 select-text">{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-zinc-800/80">{children}</thead>,
-          th: ({ children }) => <th className="border border-zinc-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-zinc-300">{children}</th>,
-          td: ({ children }) => <td className="border border-zinc-800 px-3 py-2 align-top text-sm">{children}</td>,
-          blockquote: ({ children }) => <blockquote className="my-4 border-l-4 border-zinc-600 pl-4 text-zinc-300 italic">{children}</blockquote>,
+          thead: ({ children }) => <thead className="bg-zinc-800/80 select-text">{children}</thead>,
+          th: ({ children }) => <th className="border border-zinc-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-zinc-300 select-text">{children}</th>,
+          td: ({ children }) => <td className="border border-zinc-800 px-3 py-2 align-top text-sm select-text">{children}</td>,
+          blockquote: ({ children }) => <blockquote className="my-4 border-l-4 border-zinc-600 pl-4 italic select-text">{children}</blockquote>,
         }}
       >
         {content}
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 function QuizQuestionMarkdown({ content }: { content: string }) {
   return (
@@ -980,11 +976,6 @@ export default function LearningWorkspace() {
 
   const [isMarkingFlashcardComplete, setIsMarkingFlashcardComplete] = useState(false);
   const [flashcardError, setFlashcardError] = useState<string | null>(null);
-  const [qaMessages, setQaMessages] = useState<QAMessage[]>([]);
-  const [qaInput, setQaInput] = useState('');
-  const [qaError, setQaError] = useState<string | null>(null);
-  const [isQASending, setIsQASending] = useState(false);
-  const qaScrollRef = useRef<HTMLDivElement | null>(null);
 
   const quizQuestions = quizData?.questions ?? [];
   const currentQuizQuestion = quizQuestions[quizState.currentIndex];
@@ -1136,10 +1127,6 @@ export default function LearningWorkspace() {
     setShowQuizRegenerateConfirm(false);
     setIsMarkingFlashcardComplete(false);
     setFlashcardError(null);
-    setQaMessages([]);
-    setQaInput('');
-    setQaError(null);
-    setIsQASending(false);
     void loadLesson(lessonId);
   }, [lessonId, loadLesson]);
 
@@ -1154,23 +1141,6 @@ export default function LearningWorkspace() {
 
     return () => window.clearInterval(timerId);
   }, [quizRegenerateRetryAfterSeconds]);
-
-  useEffect(() => {
-    if (activeTab !== 'qa') {
-      return;
-    }
-
-    const container = qaScrollRef.current;
-    if (!container) {
-      return;
-    }
-
-    const rafId = requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-    });
-
-    return () => cancelAnimationFrame(rafId);
-  }, [activeTab, qaMessages, isQASending]);
 
   const loadQuiz = useCallback(async (targetLessonId: string) => {
     setIsQuizLoading(true);
@@ -1416,50 +1386,6 @@ export default function LearningWorkspace() {
       }
     } finally {
       setIsMarkingFlashcardComplete(false);
-    }
-  };
-
-  const handleSendQAMessage = async () => {
-    if (!lessonId || isQASending) {
-      return;
-    }
-
-    const trimmedMessage = qaInput.trim();
-    if (!trimmedMessage) {
-      return;
-    }
-
-    const historySnapshot: DocumentChatHistoryItem[] = qaMessages
-      .slice(-20)
-      .map(item => ({ role: item.role, content: item.content }));
-
-    const nextUserMessage: QAMessage = {
-      role: 'user',
-      content: trimmedMessage,
-    };
-
-    setQaMessages(prev => [...prev, nextUserMessage]);
-    setQaInput('');
-    setQaError(null);
-    setIsQASending(true);
-
-    try {
-      const reply = await chatWithDocument(lessonId, trimmedMessage, historySnapshot);
-      setQaMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: reply,
-        },
-      ]);
-    } catch (error) {
-      if (error instanceof Error) {
-        setQaError(error.message);
-      } else {
-        setQaError('Không thể gửi câu hỏi lúc này.');
-      }
-    } finally {
-      setIsQASending(false);
     }
   };
 
@@ -1778,103 +1704,7 @@ export default function LearningWorkspace() {
 
   const renderQAPanel = () => {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 h-[560px] flex flex-col">
-        <div
-          ref={qaScrollRef}
-          className="flex-1 overflow-y-auto pr-1 space-y-3"
-        >
-          {qaMessages.length === 0 && !isQASending && (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-zinc-200 text-sm" style={{ fontWeight: 600 }}>Hỏi đáp trực tiếp với tài liệu</p>
-                <p className="text-zinc-500 text-xs mt-1">Đặt câu hỏi và AI sẽ chỉ trả lời dựa trên nội dung tài liệu này.</p>
-              </div>
-            </div>
-          )}
-
-          {qaMessages.map((message, index) => (
-            <div
-              key={`qa-${index}`}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed border ${message.role === 'user'
-                  ? 'bg-cyan-600/20 border-cyan-500/40 text-cyan-100'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-100'
-                }`}
-              >
-                {message.role === 'assistant' ? (
-                  <div className="prose prose-invert max-w-none prose-p:my-1 prose-p:text-zinc-100 prose-li:text-zinc-200 prose-strong:text-cyan-300">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm, remarkBreaks]}
-                      rehypePlugins={[rehypeHighlight]}
-                      components={{
-                        p: ({ children }) => <p className="mb-4 text-zinc-100">{children}</p>,
-                        pre: ({ children }) => <pre className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-950/80 p-2.5 text-xs leading-relaxed mb-4">{children}</pre>,
-                        code: ({ inline, children, ...props }: MarkdownCodeComponentProps) => {
-                          if (inline) {
-                            return <code className="rounded bg-cyan-400/10 px-1 py-0.5 text-xs text-cyan-200">{children}</code>;
-                          }
-                          return <code className="text-zinc-100" {...props}>{children}</code>;
-                        },
-                        table: ({ children }) => (
-                          <div className="my-2 overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900/70">
-                            <table className="min-w-full border-collapse text-xs text-zinc-200">{children}</table>
-                          </div>
-                        ),
-                        th: ({ children }) => <th className="border border-zinc-700 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-zinc-300">{children}</th>,
-                        td: ({ children }) => <td className="border border-zinc-800 px-2 py-1 align-top text-xs">{children}</td>,
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <p>{message.content}</p>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {isQASending && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl px-3.5 py-2.5 text-sm border bg-zinc-800 border-zinc-700 text-zinc-200 inline-flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />AI đang trả lời...
-              </div>
-            </div>
-          )}
-        </div>
-
-        {qaError && (
-          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            {qaError}
-          </div>
-        )}
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleSendQAMessage();
-          }}
-          className="mt-3 flex items-center gap-2"
-        >
-          <input
-            value={qaInput}
-            onChange={(event) => setQaInput(event.target.value)}
-            disabled={isQASending}
-            placeholder="Đặt câu hỏi về tài liệu này..."
-            className="flex-1 rounded-xl bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-cyan-500/60 disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={isQASending || !qaInput.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm text-white"
-            style={{ fontWeight: 600 }}
-          >
-            <Send size={14} />Gửi
-          </button>
-        </form>
-      </div>
+      <AITutorChat documentId={lessonId ?? ''} />
     );
   };
 

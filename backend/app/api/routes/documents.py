@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from redis import Redis
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ from app.models import Lesson, User
 from app.schemas import (
     DocumentChatRequestDTO,
     DocumentChatResponseDTO,
+    TutorAskRequestDTO,
+    TutorStreamChunkDTO,
     DocumentCreateRequestDTO,
     DocumentCreateResponseDTO,
     DocumentDeleteResponseDTO,
@@ -27,12 +30,13 @@ from app.schemas import (
     QuizPublicResponseDTO,
     QuizSubmitResponseDTO,
 )
-from app.services import chat_service
+from app.services import ai_tutor_service, chat_service
 from app.services.flashcard_service import generate_flashcards_for_document_user, get_flashcards_for_document_user
 from app.services.lesson_service import (
     create_document_for_user,
     create_document_from_uploaded_file_for_user,
     delete_document_for_user,
+    get_lesson_for_user,
     list_documents_page_for_user,
     list_documents_for_user,
     rename_document_for_user,
@@ -64,6 +68,34 @@ ERROR_RESPONSES = {
     429: {"model": ErrorResponseDTO, "description": "Too Many Requests"},
     503: {"model": ErrorResponseDTO, "description": "Service Unavailable"},
 }
+
+TUTOR_STREAM_RESPONSES = {
+    **ERROR_RESPONSES,
+    200: {
+        "description": "AI Tutor stream (SSE)",
+        "content": {"text/event-stream": {"schema": TutorStreamChunkDTO.model_json_schema()}},
+    },
+}
+
+
+def _normalize_body_document_id(value: int | str) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            raise AppException(
+                status_code=400,
+                message="document_id is required",
+                detail={"code": "DOCUMENT_ID_REQUIRED"},
+            )
+        if normalized.isdigit():
+            return int(normalized)
+    raise AppException(
+        status_code=400,
+        message="document_id must be a number",
+        detail={"code": "DOCUMENT_ID_INVALID"},
+    )
 
 
 @router.post(
@@ -237,6 +269,41 @@ def chat_with_document(
         history=[item.model_dump() for item in payload.history],
     )
     return DocumentChatResponseDTO(reply=reply)
+
+
+@router.post(
+    "/{document_id}/tutor/stream",
+    status_code=status.HTTP_200_OK,
+    responses=TUTOR_STREAM_RESPONSES,
+)
+async def stream_ai_tutor_reply(
+    document_id: int,
+    payload: TutorAskRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    body_document_id = _normalize_body_document_id(payload.document_id)
+    if body_document_id != document_id:
+        raise AppException(
+            status_code=400,
+            message="document_id does not match path parameter",
+            detail={"code": "DOCUMENT_ID_MISMATCH"},
+        )
+
+    lesson, _ = get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
+    stream = ai_tutor_service.stream_tutor_answer(
+        source_content=lesson.source_content,
+        question=payload.question,
+    )
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(
