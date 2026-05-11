@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +28,10 @@ Tiêu chí xác định nội dung trọng tâm:
 - Phải bao gồm các mốc thời gian, sự kiện lịch sử, hoặc nhân vật quan trọng.
 - Phải bao gồm các nguyên nhân, kết quả, hoặc đặc điểm cấu trúc được liệt kê trong bài.
 
+Ràng buộc loại bỏ nhiễu:
+- Bỏ qua các phần điều hướng/metadata như: "Bài trước", "Bài sau", "Bài học trước", "Bài học sau", "Trang chủ", "Tìm kiếm", "Tác giả", "Mục lục", "Lưu trữ", "Bình luận", "Chuyên mục", "Danh mục", "Thẻ/Tag".
+- KHÔNG tạo flashcard hỏi về tên bài học, bài học trước/sau, tác giả, hoặc các mục điều hướng của trang.
+
 Quy tắc về số lượng và định dạng:
 - TUYỆT ĐỐI KHÔNG tự ý giới hạn số lượng thẻ (không dừng ở 10 hay 15 thẻ). Văn bản có bao nhiêu ý quan trọng, phải tạo bấy nhiêu thẻ tương ứng. (Có thể lên tới 50-100 thẻ nếu văn bản dài).
 - Trả về đúng định dạng JSON Array: [{"front": "...", "back": "..."}].
@@ -35,12 +40,68 @@ Quy tắc về số lượng và định dạng:
 """.strip()
 
 CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\\s*(.*?)\\s*```", re.IGNORECASE | re.DOTALL)
+FLASHCARD_NOISE_PHRASES = (
+    "bai hoc truoc",
+    "bai truoc",
+    "bai hoc sau",
+    "bai sau",
+    "bai hoc nay",
+    "bai nay",
+    "trang chu",
+    "tim kiem",
+    "tac gia",
+    "muc luc",
+    "luu tru",
+    "danh muc",
+    "chuyen muc",
+    "binh luan",
+    "lien he",
+    "gioi thieu",
+    "dang ky",
+    "dang nhap",
+    "chia se",
+    "thong bao",
+    "ban quyen",
+    "chinh sach",
+    "dieu khoan",
+    "tag",
+    "blog",
+)
 
 
 @dataclass(frozen=True)
 class GeneratedFlashcard:
     front_text: str
     back_text: str
+
+
+def _fold_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFD", value or "")
+    without_marks = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    without_marks = without_marks.replace("đ", "d").replace("Đ", "D")
+    return without_marks.casefold()
+
+
+def _is_noise_flashcard(front_text: str, back_text: str) -> bool:
+    combined = f"{front_text} {back_text}".strip()
+    if not combined:
+        return True
+
+    folded = _fold_text(combined)
+    return any(phrase in folded for phrase in FLASHCARD_NOISE_PHRASES)
+
+
+def _filter_generated_flashcards(cards: list[GeneratedFlashcard]) -> list[GeneratedFlashcard]:
+    if not cards:
+        return []
+
+    filtered = [card for card in cards if not _is_noise_flashcard(card.front_text, card.back_text)]
+    if not filtered:
+        return cards
+
+    if len(filtered) < len(cards):
+        logger.info("flashcard_generation.filtered_noise removed=%s", len(cards) - len(filtered))
+    return filtered
 
 
 def _normalize_model_name(raw_model: str) -> str:
@@ -187,7 +248,7 @@ def build_flashcard_prompt(*, lesson_title: str, document_text: str) -> str:
     source_text = (document_text or "").strip()
     return (
         "INPUT SOURCE:\n"
-        f"- Document title: {lesson_title.strip()}\n"
+        f"- Document title (chi de dinh huong, KHONG tao flashcard ve ten bai): {lesson_title.strip()}\n"
         "- Truth source (document_text):\n"
         f"{source_text}"
     )
@@ -205,6 +266,7 @@ def parse_generated_flashcards(raw_text: str) -> list[GeneratedFlashcard]:
 
     normalized: list[GeneratedFlashcard] = []
     seen_pairs: set[tuple[str, str]] = set()
+    invalid_count = 0
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -220,6 +282,7 @@ def parse_generated_flashcards(raw_text: str) -> list[GeneratedFlashcard]:
         front_text = str(front_raw or "").strip()
         back_text = str(back_raw or "").strip()
         if not front_text or not back_text:
+            invalid_count += 1
             continue
 
         key = (front_text.casefold(), back_text.casefold())
@@ -236,6 +299,9 @@ def parse_generated_flashcards(raw_text: str) -> list[GeneratedFlashcard]:
 
     if len(normalized) < 4:
         raise ValueError("Flashcard payload must contain at least 4 valid cards")
+
+    if invalid_count:
+        raise ValueError("Flashcard payload contains empty front/back")
 
     return normalized
 
@@ -350,8 +416,27 @@ def generate_flashcards(*, lesson_title: str, document_text: str) -> tuple[str, 
 
             try:
                 cards = parse_generated_flashcards(generated_text)
-                return model_name, cards
+                filtered_cards = _filter_generated_flashcards(cards)
+                if not filtered_cards:
+                    last_ai_error = AppException(
+                        status_code=500,
+                        message="AI service returned invalid flashcard payload",
+                        detail={"code": "LLM_INVALID_FLASHCARD_PAYLOAD"},
+                    )
+                    break
+                return model_name, filtered_cards
             except (ValueError, json.JSONDecodeError) as exc:
+                invalid_payload_messages = (
+                    "Flashcard payload contains empty front/back",
+                    "Flashcard payload must contain at least 4 valid cards",
+                )
+                if any(message in str(exc) for message in invalid_payload_messages):
+                    last_ai_error = AppException(
+                        status_code=500,
+                        message="AI service returned invalid flashcard payload",
+                        detail={"code": "LLM_INVALID_FLASHCARD_PAYLOAD", "error": str(exc)},
+                    )
+                    break
                 if has_fallback:
                     logger.warning(
                         "flashcard_generation.invalid_json_try_fallback model=%s error=%s",

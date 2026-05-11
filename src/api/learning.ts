@@ -638,6 +638,18 @@ function normalizeFlashcardMutationError(error: unknown, action: 'load' | 'gener
   const status = error.response?.status;
   const code = error.response?.data?.detail?.code as string | undefined;
 
+  if (status === 429 || code === 'FLASHCARD_GENERATION_RATE_LIMITED' || code === 'FLASHCARD_EXPLAIN_RATE_LIMITED') {
+    const retryAfterRaw = error.response?.data?.detail?.retry_after_seconds;
+    const retryAfter = Number.parseInt(String(retryAfterRaw ?? ''), 10);
+    const baseMessage = action === 'explain'
+      ? 'Bạn đã yêu cầu giải thích quá nhanh.'
+      : 'Bạn đã tạo flashcard quá nhanh.';
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      return new Error(`${baseMessage} Vui lòng thử lại sau ${retryAfter} giây.`);
+    }
+    return new Error(`${baseMessage} Vui lòng thử lại sau ít phút.`);
+  }
+
   if (code === 'DOCUMENT_NOT_FOUND' || (status === 404 && action !== 'update')) {
     return new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
   }

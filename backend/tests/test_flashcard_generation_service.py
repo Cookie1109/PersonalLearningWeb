@@ -12,6 +12,7 @@ def test_flashcard_system_prompt_enforces_exhaustive_extraction_contract() -> No
     assert "TUYỆT ĐỐI KHÔNG tự ý giới hạn số lượng thẻ" in prompt
     assert "Có thể lên tới 50-100 thẻ" in prompt
     assert '[{"front": "...", "back": "..."}]' in prompt
+    assert "KHÔNG tạo flashcard hỏi về tên bài học" in prompt
 
 
 def test_build_generation_payload_sets_high_max_output_tokens() -> None:
@@ -39,6 +40,28 @@ def test_parse_generated_flashcards_keeps_all_valid_cards_without_hard_cap() -> 
     assert len(parsed_cards) == 30
     assert parsed_cards[0].front_text == "Moc su kien 1"
     assert parsed_cards[-1].back_text == "Mo ta su kien quan trong so 30."
+
+
+def test_filter_generated_flashcards_drops_navigation_noise() -> None:
+    cards = [
+        flashcard_generation_service.GeneratedFlashcard(
+            front_text="Bai hoc truoc ten gi?",
+            back_text="Bai 8.",
+        ),
+        flashcard_generation_service.GeneratedFlashcard(
+            front_text="Event loop la gi?",
+            back_text="Co che dieu phoi callback trong JavaScript runtime.",
+        ),
+        flashcard_generation_service.GeneratedFlashcard(
+            front_text="Trang chu co gi?",
+            back_text="Dieu huong trang web.",
+        ),
+    ]
+
+    filtered = flashcard_generation_service._filter_generated_flashcards(cards)
+
+    assert len(filtered) == 1
+    assert filtered[0].front_text == "Event loop la gi?"
 
 
 def test_build_flashcard_prompt_keeps_tail_content_for_long_documents() -> None:

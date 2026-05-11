@@ -31,6 +31,7 @@ from app.schemas import (
     QuizSubmitResponseDTO,
 )
 from app.services import ai_tutor_service, chat_service
+from app.services.flashcard_rate_limit_store import FlashcardGenerationRateLimitStore
 from app.services.flashcard_service import generate_flashcards_for_document_user, get_flashcards_for_document_user
 from app.services.lesson_service import (
     create_document_for_user,
@@ -316,7 +317,23 @@ def generate_document_flashcards(
     document_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    redis_client: Redis = Depends(get_redis_client),
 ) -> list[FlashcardDTO]:
+    if settings.flashcard_generation_limit_enabled:
+        limiter = FlashcardGenerationRateLimitStore(
+            redis_client,
+            max_requests=settings.flashcard_generation_limit_max_requests,
+            window_seconds=settings.flashcard_generation_limit_window_seconds,
+        )
+        try:
+            limiter.enforce_or_raise(user_id=current_user.id, document_id=document_id)
+        except AppException as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            if settings.app_env == "dev" and exc.status_code == 503 and detail.get("code") == "REDIS_UNAVAILABLE":
+                pass
+            else:
+                raise
+
     cards = generate_flashcards_for_document_user(
         db=db,
         user_id=current_user.id,

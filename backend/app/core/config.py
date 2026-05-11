@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     quiz_regeneration_limit_enabled: bool = Field(default=True, alias="QUIZ_REGENERATION_LIMIT_ENABLED")
     quiz_regeneration_limit_max_requests: int = Field(default=3, alias="QUIZ_REGENERATION_LIMIT_MAX_REQUESTS")
     quiz_regeneration_limit_window_seconds: int = Field(default=600, alias="QUIZ_REGENERATION_LIMIT_WINDOW_SECONDS")
+    flashcard_generation_limit_enabled: bool = Field(default=True, alias="FLASHCARD_GENERATION_LIMIT_ENABLED")
+    flashcard_generation_limit_max_requests: int = Field(default=1, alias="FLASHCARD_GENERATION_LIMIT_MAX_REQUESTS")
+    flashcard_generation_limit_window_seconds: int = Field(default=600, alias="FLASHCARD_GENERATION_LIMIT_WINDOW_SECONDS")
+    flashcard_explain_limit_enabled: bool = Field(default=True, alias="FLASHCARD_EXPLAIN_LIMIT_ENABLED")
+    flashcard_explain_limit_max_requests: int = Field(default=5, alias="FLASHCARD_EXPLAIN_LIMIT_MAX_REQUESTS")
+    flashcard_explain_limit_window_seconds: int = Field(default=60, alias="FLASHCARD_EXPLAIN_LIMIT_WINDOW_SECONDS")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(
         default="gemini-2.5-flash",
