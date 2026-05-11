@@ -11,7 +11,7 @@ export interface AITutorChatProps {
 }
 
 export default function AITutorChat({ documentId, className = '' }: AITutorChatProps) {
-  const { messages, isTyping, error, sendMessage } = useAITutor();
+  const { messages, isTyping, error, sendMessage } = useAITutor(documentId);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -63,8 +63,68 @@ export default function AITutorChat({ documentId, className = '' }: AITutorChatP
               }`}
             >
               {message.role === 'ai' ? (
-                <div className="prose prose-sm max-w-none break-words text-slate-800 dark:text-zinc-100 dark:prose-invert prose-p:my-2 prose-strong:text-slate-900 dark:prose-strong:text-zinc-50 prose-code:text-cyan-700 dark:prose-code:text-cyan-300 prose-code:bg-cyan-400/10 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:my-3 prose-pre:bg-zinc-950/80 prose-pre:border prose-pre:border-zinc-700 prose-pre:rounded-xl prose-pre:p-3 prose-pre:overflow-x-auto prose-ul:my-2 prose-ul:pl-5 prose-ol:my-2 prose-ol:pl-5 prose-li:my-1">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                <div className="prose prose-sm max-w-none break-words text-slate-800 dark:text-zinc-100 dark:prose-invert prose-p:my-2 prose-strong:text-slate-900 dark:prose-strong:text-zinc-50 prose-ul:my-2 prose-ul:pl-5 prose-ol:my-2 prose-ol:pl-5 prose-li:my-1">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ node, ...props }) => (
+                        <div className="overflow-x-auto my-4 rounded-lg border border-slate-200 dark:border-zinc-700">
+                          <table className="min-w-full text-sm divide-y divide-slate-200 dark:divide-zinc-700" {...props} />
+                        </div>
+                      ),
+                      thead: ({ node, ...props }) => (
+                        <thead className="bg-slate-50 dark:bg-zinc-800/50" {...props} />
+                      ),
+                      th: ({ node, ...props }) => (
+                        <th className="px-4 py-3 text-left font-semibold text-slate-900 dark:text-zinc-100" {...props} />
+                      ),
+                      td: ({ node, ...props }) => (
+                        <td className="px-4 py-3 border-t border-slate-200 dark:border-zinc-700" {...props} />
+                      ),
+                      pre: ({ node, children, ...props }) => {
+                        const child = Array.isArray(children) ? children[0] : children;
+                        const childClassName = child?.props?.className || '';
+                        const match = /language-(\w+)/.exec(childClassName);
+
+                        return (
+                          <div className="relative my-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+                            {match ? (
+                              <div className="bg-zinc-100 dark:bg-zinc-800/80 px-3 py-1 text-xs font-mono text-zinc-500 uppercase">
+                                {match[1]}
+                              </div>
+                            ) : null}
+                            <pre
+                              className="bg-zinc-50 dark:bg-zinc-950 p-4 overflow-x-auto text-sm leading-relaxed text-zinc-800 dark:text-zinc-200"
+                              {...props}
+                            >
+                              {children}
+                            </pre>
+                          </div>
+                        );
+                      },
+                      code: ({ node, className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        if (!match) {
+                          return (
+                            <code
+                              className="inline bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300 px-1.5 py-0.5 rounded text-sm font-mono"
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+
+                        return (
+                          <code className={`font-mono ${className || ''}`} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <span className="whitespace-pre-wrap">{message.content}</span>

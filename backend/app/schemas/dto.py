@@ -562,3 +562,10 @@ class ChatHistoryMessageDTO(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     created_at: datetime
+
+
+class TutorHistoryMessageDTO(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: datetime

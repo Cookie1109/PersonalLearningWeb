@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import AsyncGenerator
+
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from redis import Redis
@@ -9,13 +13,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.exceptions import AppException
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.infra.redis_client import get_redis_client
 from app.models import Lesson, User
 from app.schemas import (
     DocumentChatRequestDTO,
     DocumentChatResponseDTO,
     TutorAskRequestDTO,
+    TutorHistoryMessageDTO,
     TutorStreamChunkDTO,
     DocumentCreateRequestDTO,
     DocumentCreateResponseDTO,
@@ -42,6 +47,7 @@ from app.services.lesson_service import (
     list_documents_for_user,
     rename_document_for_user,
 )
+from app.services.tutor_history_service import append_tutor_turn, list_tutor_history
 from app.services.quiz_generation_rate_limit_store import QuizGenerationRateLimitStore
 from app.services.quiz_service import (
     ensure_quiz_regeneration_allowed_for_lesson_user,
@@ -52,6 +58,7 @@ from app.services.quiz_service import (
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 settings = get_settings()
+logger = logging.getLogger("app.documents")
 MAX_RAW_TEXT_CHARS = 45000
 RAW_TEXT_TOO_LONG_DETAIL_MESSAGE = (
     "Văn bản quá dài (vượt quá 45.000 ký tự). "
@@ -273,6 +280,36 @@ def chat_with_document(
     return DocumentChatResponseDTO(reply=reply)
 
 
+@router.get(
+    "/{document_id}/tutor/history",
+    response_model=list[TutorHistoryMessageDTO],
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def get_tutor_history(
+    document_id: int,
+    limit: int = Query(default=200, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[TutorHistoryMessageDTO]:
+    lesson, _ = get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
+    records = list_tutor_history(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=lesson.id,
+        limit=limit,
+    )
+    return [
+        TutorHistoryMessageDTO(
+            id=record.id,
+            role=record.role,
+            content=record.content,
+            created_at=record.created_at,
+        )
+        for record in records
+    ]
+
+
 @router.post(
     "/{document_id}/tutor/stream",
     status_code=status.HTTP_200_OK,
@@ -294,12 +331,40 @@ async def stream_ai_tutor_reply(
 
     lesson, _ = get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
     content_to_use = (lesson.source_content or "").strip() or (lesson.content_markdown or "").strip()
-    stream = ai_tutor_service.stream_tutor_answer(
-        source_content=content_to_use,
-        question=payload.question,
-    )
+
+    async def event_stream() -> AsyncGenerator[bytes, None]:
+        assistant_chunks: list[str] = []
+        completed = False
+        try:
+            async for chunk in ai_tutor_service.stream_tutor_answer(
+                source_content=content_to_use,
+                question=payload.question,
+                on_chunk=assistant_chunks.append,
+            ):
+                yield chunk
+            completed = True
+        finally:
+            if not completed:
+                return
+
+            assistant_reply = "".join(assistant_chunks).strip()
+            if assistant_reply and not assistant_reply.startswith("[LỖI HỆ THỐNG]"):
+                try:
+                    persist_db = SessionLocal()
+                    try:
+                        append_tutor_turn(
+                            db=persist_db,
+                            user_id=current_user.id,
+                            lesson_id=lesson.id,
+                            user_content=payload.question,
+                            assistant_content=assistant_reply,
+                        )
+                    finally:
+                        persist_db.close()
+                except Exception as exc:
+                    logger.warning("tutor.history.persist_failed error=%s", str(exc))
     return StreamingResponse(
-        stream,
+        event_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

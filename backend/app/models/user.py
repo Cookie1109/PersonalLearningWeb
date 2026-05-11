@@ -36,3 +36,4 @@ class User(Base):
     quiz_attempts = relationship("QuizAttempt", back_populates="user", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user")
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
+    tutor_messages = relationship("TutorMessage", back_populates="user", cascade="all, delete-orphan")

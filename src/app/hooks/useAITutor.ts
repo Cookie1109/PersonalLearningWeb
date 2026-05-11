@@ -9,6 +9,13 @@ export interface Message {
   content: string;
 }
 
+interface TutorHistoryMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
 export interface UseAITutorReturn {
   messages: Message[];
   isTyping: boolean;
@@ -77,7 +84,7 @@ function extractSseData(event: string): string {
   return dataLines.join('\n');
 }
 
-export default function useAITutor(): UseAITutorReturn {
+export default function useAITutor(documentId: string | number = ''): UseAITutorReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +97,67 @@ export default function useAITutor(): UseAITutorReturn {
       }
     };
   }, []);
+
+  const getAuthToken = useCallback(async () => {
+    await waitForAuthStateResolution();
+    const user = firebaseAuth.currentUser;
+    if (!user) {
+      throw new Error('You must be signed in to use AI Tutor.');
+    }
+
+    let token: string | null = null;
+    try {
+      token = await user.getIdToken();
+    } catch {
+      token = await user.getIdToken(true);
+    }
+
+    if (!token) {
+      throw new Error('Unable to retrieve auth token.');
+    }
+
+    return token;
+  }, []);
+
+  const loadHistory = useCallback(async (documentId: string | number) => {
+    const normalizedDocumentId = String(documentId ?? '').trim();
+    if (!normalizedDocumentId) {
+      setMessages([]);
+      return;
+    }
+
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(
+        `${resolveApiBaseUrl()}/documents/${normalizedDocumentId}/tutor/history`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as TutorHistoryMessage[];
+      const historyMessages = payload.map(item => ({
+        id: `history-${item.id}`,
+        role: item.role === 'assistant' ? 'ai' : 'user',
+        content: item.content,
+      }));
+
+      setMessages(historyMessages);
+      setError(null);
+    } catch {
+      setError('Unable to load AI Tutor history.');
+    }
+  }, [getAuthToken]);
+
+  useEffect(() => {
+    loadHistory(documentId);
+  }, [documentId, loadHistory]);
 
   const sendMessage = useCallback(async (question: string, documentId: string | number) => {
     const normalizedQuestion = question.trim();
@@ -130,22 +198,7 @@ export default function useAITutor(): UseAITutorReturn {
     abortControllerRef.current = controller;
 
     try {
-      await waitForAuthStateResolution();
-      const user = firebaseAuth.currentUser;
-      if (!user) {
-        throw new Error('You must be signed in to use AI Tutor.');
-      }
-
-      let token: string | null = null;
-      try {
-        token = await user.getIdToken();
-      } catch {
-        token = await user.getIdToken(true);
-      }
-
-      if (!token) {
-        throw new Error('Unable to retrieve auth token.');
-      }
+      const token = await getAuthToken();
 
       const response = await fetch(
         `${resolveApiBaseUrl()}/documents/${normalizedDocumentId}/tutor/stream`,
@@ -236,7 +289,7 @@ export default function useAITutor(): UseAITutorReturn {
       }
       setIsTyping(false);
     }
-  }, []);
+  }, [getAuthToken]);
 
   return {
     messages,

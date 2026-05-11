@@ -7,6 +7,7 @@ from app.models.flashcard_progress import FlashcardProgress
 from app.models.lesson import Lesson
 from app.models.quiz import Question, Quiz, QuizAttempt
 from app.models.roadmap import Roadmap
+from app.models.tutor_message import TutorMessage
 from app.models.user import User
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "Quiz",
     "Question",
     "QuizAttempt",
+    "TutorMessage",
 ]

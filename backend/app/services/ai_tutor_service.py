@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import re
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable
 
 import google.generativeai as genai
 
@@ -17,7 +17,8 @@ SYSTEM_PROMPT_TEMPLATE = (
     "1. Ưu tiên tuyệt đối: Trả lời mọi câu hỏi dựa CHÍNH XÁC vào nội dung của [TÀI_LIỆU_TRÍCH_XUẤT] được cung cấp dưới đây.\n"
     "2. Quyền mở rộng an toàn: Nếu câu hỏi của người dùng vượt ra ngoài [TÀI_LIỆU_TRÍCH_XUẤT] nhưng VẪN LIÊN QUAN TRỰC TIẾP đến chủ đề cốt lõi của tài liệu (ví dụ: tài liệu dạy tạo bảng PostgreSQL, người dùng hỏi cách chèn dữ liệu giả), bạn được phép sử dụng kiến thức bên ngoài để hướng dẫn thêm.\n"
     "3. Vạch ranh giới rõ ràng: Nếu câu hỏi HOÀN TOÀN KHÔNG LIÊN QUAN đến chủ đề bài học, bạn PHẢI TỪ CHỐI trả lời một cách lịch sự và hướng người dùng quay lại nội dung bài học.\n"
-    "4. Minh bạch: Khi sử dụng kiến thức bên ngoài (không có trong tài liệu), hãy bắt đầu bằng câu: \"Mặc dù tài liệu hiện tại không đề cập chi tiết, nhưng trong thực tế...\"\n\n"
+    "4. Minh bạch: Khi sử dụng kiến thức bên ngoài (không có trong tài liệu), hãy bắt đầu bằng câu: \"Mặc dù tài liệu hiện tại không đề cập chi tiết, nhưng trong thực tế...\"\n"
+    "5. Định dạng (Markdown): BẮT BUỘC trình bày dễ đọc bằng Markdown GFM. Nếu chỉ là tên biến/hàm/tham số (ví dụ: req, res, next) thì dùng backtick inline, KHÔNG bọc trong khối code. Chỉ dùng khối code (```) cho đoạn code nhiều dòng hoặc lệnh đầy đủ. Sử dụng in đậm, in nghiêng, danh sách (bulleted/numbered lists) rõ ràng. Bảng phải theo Markdown GFM và có dòng phân tách ngay sau header (| --- | --- |). KHÔNG đặt bảng trong khối code.\n\n"
     "[TÀI_LIỆU_TRÍCH_XUẤT]\n"
     "{source_content}\n\n"
     "[CÂU_HỎI_CỦA_NGƯỜI_DÙNG]\n"
@@ -96,7 +97,12 @@ def _format_sse(text: str) -> bytes:
     return f"{data}\n".encode("utf-8")
 
 
-async def stream_tutor_answer(*, source_content: str, question: str) -> AsyncGenerator[bytes, None]:
+async def stream_tutor_answer(
+    *,
+    source_content: str,
+    question: str,
+    on_chunk: Callable[[str], None] | None = None,
+) -> AsyncGenerator[bytes, None]:
     normalized_source = (source_content or "").strip()
     if not normalized_source:
         yield _format_sse("[LỖI HỆ THỐNG]: Document source content is empty")
@@ -142,6 +148,8 @@ async def stream_tutor_answer(*, source_content: str, question: str) -> AsyncGen
             chunk_text = getattr(chunk, "text", "")
             if chunk_text:
                 logger.info("tutor.chunk_text=%s", chunk_text)
+                if on_chunk:
+                    on_chunk(chunk_text)
                 yielded_any = True
                 yield _format_sse(chunk_text)
 
