@@ -264,8 +264,9 @@ def chat_with_document(
             detail={"code": "DOCUMENT_NOT_FOUND"},
         )
 
+    content_to_use = (lesson.source_content or "").strip() or (lesson.content_markdown or "").strip()
     reply = chat_service.generate_document_chat_reply(
-        source_content=lesson.source_content,
+        source_content=content_to_use,
         message=payload.message,
         history=[item.model_dump() for item in payload.history],
     )
@@ -292,8 +293,9 @@ async def stream_ai_tutor_reply(
         )
 
     lesson, _ = get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
+    content_to_use = (lesson.source_content or "").strip() or (lesson.content_markdown or "").strip()
     stream = ai_tutor_service.stream_tutor_answer(
-        source_content=lesson.source_content,
+        source_content=content_to_use,
         question=payload.question,
     )
     return StreamingResponse(
