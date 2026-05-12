@@ -361,6 +361,11 @@ export interface FlashcardStatusUpdateRequestDTO {
   status: Extract<FlashcardStatusDTO, 'got_it' | 'missed_it'>;
 }
 
+export interface FlashcardExplainRequestDTO {
+  front_text: string;
+  back_text: string;
+}
+
 export interface FlashcardExplainResponseDTO {
   explanation: string;
 }

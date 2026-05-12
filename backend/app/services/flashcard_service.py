@@ -132,14 +132,14 @@ def update_flashcard_status_for_user(*, db: Session, card: Flashcard, status_val
     return card
 
 
-def explain_flashcard_for_user(*, db: Session, card: Flashcard) -> str:
+def explain_flashcard_text(*, front_text: str, back_text: str) -> str:
     explanation = generate_chat_reply(
         messages=[
             {
                 "role": "user",
                 "content": (
                     "Giải thích trực diện và chuyên sâu khái niệm sau dưới dạng gạch đầu dòng Markdown: "
-                    f"{card.front_text} - {card.back_text}"
+                    f"{front_text} - {back_text}"
                 ),
             }
         ],
@@ -155,3 +155,7 @@ def explain_flashcard_for_user(*, db: Session, card: Flashcard) -> str:
         )
 
     return normalized_explanation
+
+
+def explain_flashcard_for_user(*, db: Session, card: Flashcard) -> str:
+    return explain_flashcard_text(front_text=card.front_text, back_text=card.back_text)

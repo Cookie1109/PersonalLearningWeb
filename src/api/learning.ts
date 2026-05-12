@@ -12,6 +12,7 @@ import {
   DocumentSummaryDTO,
   FlashcardDTO,
   FlashcardCompleteResponseDTO,
+  FlashcardExplainRequestDTO,
   FlashcardExplainResponseDTO,
   FlashcardStatusUpdateRequestDTO,
   LessonCompleteResponseDTO,
@@ -650,12 +651,19 @@ function normalizeFlashcardMutationError(error: unknown, action: 'load' | 'gener
     return new Error(`${baseMessage} Vui lòng thử lại sau ít phút.`);
   }
 
-  if (code === 'DOCUMENT_NOT_FOUND' || (status === 404 && action !== 'update')) {
+  if (code === 'FLASHCARD_NOT_FOUND') {
+    return new Error('Flashcard không tồn tại hoặc bạn không có quyền truy cập.');
+  }
+
+  if (code === 'DOCUMENT_NOT_FOUND') {
     return new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
   }
 
-  if (code === 'FLASHCARD_NOT_FOUND') {
-    return new Error('Flashcard không tồn tại hoặc bạn không có quyền truy cập.');
+  if (status === 404) {
+    if (action === 'update' || action === 'explain') {
+      return new Error('Flashcard không tồn tại hoặc bạn không có quyền truy cập.');
+    }
+    return new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
   }
 
   if (action === 'generate' && code === 'DOCUMENT_SOURCE_EMPTY') {
@@ -722,6 +730,40 @@ export async function updateFlashcardStatus(
     return response.data;
   } catch (error) {
     throw normalizeFlashcardMutationError(error, 'update');
+  }
+}
+
+export async function explainFlashcardByDocument(
+  documentId: string | number,
+  frontText: string,
+  backText: string,
+): Promise<string> {
+  const payload: FlashcardExplainRequestDTO = {
+    front_text: frontText,
+    back_text: backText,
+  };
+
+  try {
+    const response = await apiClient.post<FlashcardExplainResponseDTO>(
+      `/documents/${encodeURIComponent(String(documentId))}/flashcards/explain`,
+      payload,
+      {
+        headers: {
+          ...createAuthHeaders(),
+        },
+      }
+    );
+
+    return response.data?.explanation ?? '';
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const code = error.response?.data?.detail?.code as string | undefined;
+      if (status === 404 || code === 'DOCUMENT_NOT_FOUND') {
+        throw new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
+      }
+    }
+    throw normalizeFlashcardMutationError(error, 'explain');
   }
 }
 

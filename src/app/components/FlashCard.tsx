@@ -4,7 +4,12 @@ import { ChevronLeft, ChevronRight, Check, Lightbulb, Loader2, RotateCcw, Sparkl
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FlashcardStatusDTO } from '../../api/dto';
-import { explainFlashcard, generateFlashcards, getFlashcards, updateFlashcardStatus } from '../../api/learning';
+import {
+  explainFlashcardByDocument,
+  generateFlashcards,
+  getFlashcards,
+  updateFlashcardStatus,
+} from '../../api/learning';
 import { Flashcard as LegacyFlashcard } from '../lib/types';
 
 interface Props {
@@ -279,9 +284,19 @@ export default function FlashCardDeck({
     setExplainError(null);
 
     try {
-      const explanation = isApiMode
-        ? await explainFlashcard(current.id)
-        : `Giải thích thêm: ${current.back_text}`;
+      let explanation = '';
+      if (isApiMode) {
+        if (documentId === undefined || documentId === null) {
+          throw new Error('Tài liệu không tồn tại hoặc bạn không có quyền truy cập.');
+        }
+        explanation = await explainFlashcardByDocument(
+          documentId,
+          current.front_text,
+          current.back_text,
+        );
+      } else {
+        explanation = `Giải thích thêm: ${current.back_text}`;
+      }
 
       setExplanationByCardId(prev => ({
         ...prev,

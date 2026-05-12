@@ -336,6 +336,18 @@ class FlashcardStatusUpdateRequestDTO(BaseModel):
         return value
 
 
+class FlashcardExplainRequestDTO(BaseModel):
+    front_text: str = Field(..., min_length=1, max_length=500)
+    back_text: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("front_text", "back_text", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class FlashcardExplainResponseDTO(BaseModel):
     explanation: str
 

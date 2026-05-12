@@ -32,12 +32,18 @@ from app.schemas import (
     DocumentSummaryDTO,
     ErrorResponseDTO,
     FlashcardDTO,
+    FlashcardExplainRequestDTO,
+    FlashcardExplainResponseDTO,
     QuizPublicResponseDTO,
     QuizSubmitResponseDTO,
 )
 from app.services import ai_tutor_service, chat_service
-from app.services.flashcard_rate_limit_store import FlashcardGenerationRateLimitStore
-from app.services.flashcard_service import generate_flashcards_for_document_user, get_flashcards_for_document_user
+from app.services.flashcard_rate_limit_store import FlashcardExplainRateLimitStore, FlashcardGenerationRateLimitStore
+from app.services.flashcard_service import (
+    explain_flashcard_text,
+    generate_flashcards_for_document_user,
+    get_flashcards_for_document_user,
+)
 from app.services.lesson_service import (
     create_document_for_user,
     create_document_from_uploaded_file_for_user,
@@ -448,6 +454,44 @@ def get_document_flashcards(
         )
         for card in cards
     ]
+
+
+@router.post(
+    "/{document_id}/flashcards/explain",
+    response_model=FlashcardExplainResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def explain_document_flashcard(
+    document_id: int,
+    payload: FlashcardExplainRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    redis_client: Redis = Depends(get_redis_client),
+) -> FlashcardExplainResponseDTO:
+    if settings.flashcard_explain_limit_enabled:
+        limiter = FlashcardExplainRateLimitStore(
+            redis_client,
+            max_requests=settings.flashcard_explain_limit_max_requests,
+            window_seconds=settings.flashcard_explain_limit_window_seconds,
+        )
+        try:
+            limiter.enforce_or_raise(user_id=current_user.id)
+        except AppException as exc:
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            if settings.app_env == "dev" and exc.status_code == 503 and detail.get("code") == "REDIS_UNAVAILABLE":
+                pass
+            else:
+                raise
+
+    get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
+
+    explanation = explain_flashcard_text(
+        front_text=payload.front_text,
+        back_text=payload.back_text,
+    )
+
+    return FlashcardExplainResponseDTO(explanation=explanation)
 
 
 @router.post(
