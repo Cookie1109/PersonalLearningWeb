@@ -7,6 +7,8 @@ export interface Message {
   id: string;
   role: 'user' | 'ai';
   content: string;
+  createdAt?: string; // ISO string, only present for history messages
+  isHistory?: boolean;
 }
 
 interface TutorHistoryMessage {
@@ -19,8 +21,12 @@ interface TutorHistoryMessage {
 export interface UseAITutorReturn {
   messages: Message[];
   isTyping: boolean;
+  isLoadingHistory: boolean;
+  historyLoadError: string | null;
   error: string | null;
   sendMessage: (question: string, documentId: string | number) => Promise<void>;
+  clearHistory: (documentId: string | number) => Promise<void>;
+  retryLoadHistory: (documentId: string | number) => Promise<void>;
 }
 
 function resolveApiBaseUrl(): string {
@@ -87,6 +93,8 @@ function extractSseData(event: string): string {
 export default function useAITutor(documentId: string | number = ''): UseAITutorReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -119,12 +127,15 @@ export default function useAITutor(documentId: string | number = ''): UseAITutor
     return token;
   }, []);
 
-  const loadHistory = useCallback(async (documentId: string | number) => {
-    const normalizedDocumentId = String(documentId ?? '').trim();
+  const loadHistory = useCallback(async (docId: string | number) => {
+    const normalizedDocumentId = String(docId ?? '').trim();
     if (!normalizedDocumentId) {
       setMessages([]);
       return;
     }
+
+    setIsLoadingHistory(true);
+    setHistoryLoadError(null);
 
     try {
       const token = await getAuthToken();
@@ -138,35 +149,76 @@ export default function useAITutor(documentId: string | number = ''): UseAITutor
       );
 
       if (!response.ok) {
+        if (response.status === 404) {
+          // Document not found – treat as empty history, not an error
+          setMessages([]);
+          return;
+        }
+        setHistoryLoadError('Không thể tải lịch sử hội thoại. Vui lòng thử lại.');
         return;
       }
 
       const payload = (await response.json()) as TutorHistoryMessage[];
-      const historyMessages = payload.map(item => ({
+      const historyMessages: Message[] = payload.map(item => ({
         id: `history-${item.id}`,
         role: item.role === 'assistant' ? 'ai' : 'user',
         content: item.content,
+        createdAt: item.created_at,
+        isHistory: true,
       }));
 
       setMessages(historyMessages);
-      setError(null);
+      setHistoryLoadError(null);
     } catch {
-      setError('Unable to load AI Tutor history.');
+      setHistoryLoadError('Không thể tải lịch sử hội thoại. Vui lòng thử lại.');
+    } finally {
+      setIsLoadingHistory(false);
     }
   }, [getAuthToken]);
 
   useEffect(() => {
+    setMessages([]);
+    setHistoryLoadError(null);
     loadHistory(documentId);
   }, [documentId, loadHistory]);
 
-  const sendMessage = useCallback(async (question: string, documentId: string | number) => {
+  const clearHistory = useCallback(async (docId: string | number) => {
+    const normalizedDocumentId = String(docId ?? '').trim();
+    if (!normalizedDocumentId) return;
+
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(
+        `${resolveApiBaseUrl()}/documents/${normalizedDocumentId}/tutor/history`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to clear history');
+      }
+      setMessages([]);
+      setError(null);
+    } catch {
+      setError('Không thể xóa lịch sử hội thoại. Vui lòng thử lại.');
+    }
+  }, [getAuthToken]);
+
+  const retryLoadHistory = useCallback(async (docId: string | number) => {
+    await loadHistory(docId);
+  }, [loadHistory]);
+
+  const sendMessage = useCallback(async (question: string, docId: string | number) => {
     const normalizedQuestion = question.trim();
     if (!normalizedQuestion) {
       setError('Please enter a question.');
       return;
     }
 
-    const normalizedDocumentId = String(documentId ?? '').trim();
+    const normalizedDocumentId = String(docId ?? '').trim();
     if (!normalizedDocumentId) {
       setError('Document id is required.');
       return;
@@ -182,12 +234,14 @@ export default function useAITutor(documentId: string | number = ''): UseAITutor
       id: createMessageId(),
       role: 'user',
       content: normalizedQuestion,
+      isHistory: false,
     };
     const aiMessageId = createMessageId();
     const aiMessage: Message = {
       id: aiMessageId,
       role: 'ai',
       content: '',
+      isHistory: false,
     };
 
     setMessages(prev => [...prev, userMessage, aiMessage]);
@@ -294,7 +348,11 @@ export default function useAITutor(documentId: string | number = ''): UseAITutor
   return {
     messages,
     isTyping,
+    isLoadingHistory,
+    historyLoadError,
     error,
     sendMessage,
+    clearHistory,
+    retryLoadHistory,
   };
 }

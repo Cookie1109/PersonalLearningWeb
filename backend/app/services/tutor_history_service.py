@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
@@ -59,4 +59,24 @@ def append_tutor_turn(
             status_code=409,
             message="Failed to persist tutor chat messages",
             detail={"code": "TUTOR_HISTORY_PERSIST_FAILED"},
+        ) from exc
+
+
+def clear_tutor_history(*, db: Session, user_id: int, lesson_id: int) -> int:
+    """Delete all tutor messages for a given user and lesson. Returns the number of deleted rows."""
+    try:
+        result = db.execute(
+            delete(TutorMessage).where(
+                TutorMessage.user_id == user_id,
+                TutorMessage.lesson_id == lesson_id,
+            )
+        )
+        db.commit()
+        return result.rowcount  # type: ignore[return-value]
+    except Exception as exc:
+        db.rollback()
+        raise AppException(
+            status_code=500,
+            message="Failed to clear tutor chat history",
+            detail={"code": "TUTOR_HISTORY_CLEAR_FAILED"},
         ) from exc

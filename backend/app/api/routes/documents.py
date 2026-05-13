@@ -53,7 +53,7 @@ from app.services.lesson_service import (
     list_documents_for_user,
     rename_document_for_user,
 )
-from app.services.tutor_history_service import append_tutor_turn, list_tutor_history
+from app.services.tutor_history_service import append_tutor_turn, clear_tutor_history, list_tutor_history
 from app.services.quiz_generation_rate_limit_store import QuizGenerationRateLimitStore
 from app.services.quiz_service import (
     ensure_quiz_regeneration_allowed_for_lesson_user,
@@ -314,6 +314,25 @@ def get_tutor_history(
         )
         for record in records
     ]
+
+
+@router.delete(
+    "/{document_id}/tutor/history",
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def clear_document_tutor_history(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    lesson, _ = get_lesson_for_user(db=db, user_id=current_user.id, lesson_id=document_id)
+    deleted_count = clear_tutor_history(
+        db=db,
+        user_id=current_user.id,
+        lesson_id=lesson.id,
+    )
+    return {"deleted": deleted_count, "message": "Tutor history cleared"}
 
 
 @router.post(
