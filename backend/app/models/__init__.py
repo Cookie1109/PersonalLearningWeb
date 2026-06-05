@@ -9,6 +9,15 @@ from app.models.quiz import Question, Quiz, QuizAttempt
 from app.models.roadmap import Roadmap
 from app.models.tutor_message import TutorMessage
 from app.models.user import User
+from app.models.fsrs_graph_models import (
+    ConceptTag,
+    ConceptEdge,
+    ConceptWeakness,
+    FSRSCard,
+    FSRSReview,
+    LessonTag,
+    FlashcardTag,
+)
 
 __all__ = [
     "AuditLog",
@@ -24,4 +33,12 @@ __all__ = [
     "Question",
     "QuizAttempt",
     "TutorMessage",
+    "ConceptTag",
+    "ConceptEdge",
+    "ConceptWeakness",
+    "FSRSCard",
+    "FSRSReview",
+    "LessonTag",
+    "FlashcardTag",
 ]
+

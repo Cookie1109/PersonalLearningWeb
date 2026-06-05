@@ -57,7 +57,7 @@ function waitForAuthStateResolution(): Promise<void> {
 }
 
 function hasAuthorizationHeader(headers: unknown): boolean {
-  const normalizedHeaders = AxiosHeaders.from(headers ?? {});
+  const normalizedHeaders = AxiosHeaders.from(headers as any ?? {});
   const authHeader = normalizedHeaders.get('Authorization');
 
   if (Array.isArray(authHeader)) {

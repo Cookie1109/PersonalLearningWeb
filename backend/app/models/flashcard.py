@@ -26,3 +26,6 @@ class Flashcard(Base):
     )
 
     lesson = relationship("Lesson", back_populates="flashcards")
+    fsrs_card = relationship("FSRSCard", back_populates="flashcard", uselist=False, cascade="all, delete-orphan")
+    concept_tags = relationship("ConceptTag", secondary="flashcard_tags", back_populates="flashcards")
+

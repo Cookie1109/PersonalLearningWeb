@@ -7,23 +7,34 @@ from app.api import api_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import IdempotencyMiddleware, RequestContextMiddleware
 from app.infra.firebase_client import init_firebase_app
 
 settings = get_settings()
+
+
+from app.db.session import init_mysql_tables
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
     init_firebase_app(strict=False)
+    try:
+        init_mysql_tables()
+    except Exception as e:
+        import logging
+        logging.getLogger("app.main").error("Failed to initialize MySQL tables: %s", str(e))
     yield
+
+
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(IdempotencyMiddleware)
 
     app.add_middleware(
         CORSMiddleware,

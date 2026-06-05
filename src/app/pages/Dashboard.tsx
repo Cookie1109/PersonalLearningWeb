@@ -7,11 +7,19 @@ import DailyQuestsWidget from '../components/DailyQuestsWidget';
 import ProgressHeatmap from '../components/ProgressHeatmap';
 import { getHeatmapData } from '../../api/gamification';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
+import KnowledgeGraphView from '../components/KnowledgeGraphView';
+import WeakConceptsWidget from '../components/WeakConceptsWidget';
+
 
 export default function Dashboard() {
   const { user, activityData, syncActivityData } = useApp();
   const navigate = useNavigate();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleReviewCompleted = () => {
+    setRefreshKey(prev => prev + 1);
+  };
   const FixedYearHeatmap = ProgressHeatmap as React.ComponentType<{ data: typeof activityData; year: number }>;
+
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const isStreakActive = user.streakStatus === 'ACTIVE';
   const streakCardColor = isStreakActive ? 'text-orange-400' : 'text-zinc-400';
@@ -117,6 +125,12 @@ export default function Dashboard() {
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
         <DailyQuestsWidget />
+      </motion.div>
+
+      {/* Stage 2 FSRS & Knowledge Graph */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17 }} className="space-y-6">
+        <WeakConceptsWidget key={refreshKey} onReviewCompleted={handleReviewCompleted} />
+        <KnowledgeGraphView key={refreshKey + 1} />
       </motion.div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18 }} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">

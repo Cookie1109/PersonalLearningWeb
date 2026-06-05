@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from redis import Redis
 from sqlalchemy import and_, select
@@ -16,6 +16,7 @@ from app.core.exceptions import AppException
 from app.db.session import SessionLocal, get_db
 from app.infra.redis_client import get_redis_client
 from app.models import Lesson, User
+from app.models.upload_models import MySQLDocument
 from app.schemas import (
     DocumentChatRequestDTO,
     DocumentChatResponseDTO,
@@ -70,6 +71,18 @@ RAW_TEXT_TOO_LONG_DETAIL_MESSAGE = (
     "Văn bản quá dài (vượt quá 45.000 ký tự). "
     "Vui lòng cắt nhỏ nội dung theo từng chương để AI xử lý chính xác nhất."
 )
+
+
+async def _verify_internal_call(
+    x_internal_secret: str | None = Header(default=None, alias="X-Internal-Secret")
+) -> None:
+    """Dependency: ensures the request comes from an internal trusted service (Node.js worker)."""
+    expected_secret = settings.internal_service_secret
+    if not x_internal_secret or x_internal_secret != expected_secret:
+        raise HTTPException(
+            status_code=403,
+            detail={"message": "Forbidden: internal service secret required", "code": "INTERNAL_AUTH_FAILED"}
+        )
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponseDTO, "description": "Bad Request"},
@@ -592,3 +605,72 @@ def submit_document_quiz(
         reward_exp=settings.quiz_pass_reward_exp,
         reward_type=settings.quiz_first_pass_reward_type,
     )
+
+
+@router.post(
+    "/process-async",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_verify_internal_call)],
+)
+async def process_document_async(
+    user_id: int = Form(...),
+    title: str | None = Form(default=None),
+    source_content: str | None = Form(default=None),
+    file: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+):
+    try:
+        # Validate source_content length (same limit as public endpoint)
+        if source_content and len(source_content) > MAX_RAW_TEXT_CHARS:
+            raise HTTPException(status_code=400, detail=RAW_TEXT_TOO_LONG_DETAIL_MESSAGE)
+
+        if file is not None:
+            file_bytes = await file.read()
+            lesson = create_document_from_uploaded_file_for_user(
+                db=db,
+                user_id=user_id,
+                file_name=file.filename,
+                content_type=file.content_type,
+                file_bytes=file_bytes,
+                title_override=title,
+            )
+        elif source_content is not None:
+            lesson = create_document_for_user(
+                db=db,
+                user_id=user_id,
+                title=title or "Tài liệu không tên",
+                source_content=source_content,
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Either file or source_content must be provided")
+
+        mysql_doc = MySQLDocument(
+            user_id=user_id,
+            mysql_lesson_id=lesson.id,
+            title=lesson.title,
+            source_content=lesson.source_content,
+            content_markdown=lesson.content_markdown,
+            source_file_url=lesson.source_file_url,
+            source_file_name=lesson.source_file_name,
+            source_file_mime_type=lesson.source_file_mime_type
+        )
+        db.add(mysql_doc)
+        db.commit()
+        db.refresh(mysql_doc)
+
+        return {
+            "document_id": mysql_doc.id,
+            "lesson_id": lesson.id,
+            "title": lesson.title,
+            "content_markdown": lesson.content_markdown,
+            "source_content": lesson.source_content,
+            "source_file_url": lesson.source_file_url,
+            "source_file_name": lesson.source_file_name,
+            "source_file_mime_type": lesson.source_file_mime_type,
+        }
+    except Exception as exc:
+        db.rollback()
+        logger.error("Error processing document async: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+

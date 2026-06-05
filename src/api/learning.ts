@@ -819,6 +819,132 @@ export async function generateLesson(lessonId: string): Promise<LessonDetail> {
   return mapLessonDetail(response.data.lesson);
 }
 
+export interface GraphNode {
+  id: number;
+  name: string;
+  weaknessScore: number;
+  cardCount: number;
+}
+
+export interface GraphEdge {
+  id: number;
+  sourceTagId: number;
+  targetTagId: number;
+  weight: number;
+  relationshipType: string;
+}
+
+export interface KnowledgeGraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface WeakConcept {
+  tagId: number;
+  name: string;
+  weaknessScore: number;
+  cardCount: number;
+}
+
+export interface FSRSCardSchedule {
+  cardId: number;
+  frontText: string;
+  backText: string;
+  due: string;
+  state: number;
+  stability: number | null;
+  difficulty: number | null;
+  lessonId: number;
+  lessonTitle: string;
+}
+
+export interface FSRSCard {
+  cardId: number;
+  state: number;
+  step: number | null;
+  stability: number | null;
+  difficulty: number | null;
+  due: string;
+  lastReview: string | null;
+}
+
+export async function getKnowledgeGraph(): Promise<KnowledgeGraphResponse> {
+  const response = await apiClient.get<{ nodes: any[]; edges: any[] }>('/knowledge-graph', {
+    headers: createAuthHeaders(),
+  });
+  return {
+    nodes: (response.data.nodes ?? []).map(n => ({
+      id: n.id,
+      name: n.name,
+      weaknessScore: n.weakness_score,
+      cardCount: n.card_count,
+    })),
+    edges: (response.data.edges ?? []).map(e => ({
+      id: e.id,
+      sourceTagId: e.source_tag_id,
+      targetTagId: e.target_tag_id,
+      weight: e.weight,
+      relationshipType: e.relationship_type,
+    })),
+  };
+}
+
+export async function getWeakConcepts(): Promise<WeakConcept[]> {
+  const response = await apiClient.get<any[]>('/knowledge-graph/weak-concepts', {
+    headers: createAuthHeaders(),
+  });
+  return (response.data ?? []).map(c => ({
+    tagId: c.tag_id,
+    name: c.name,
+    weaknessScore: c.weakness_score,
+    cardCount: c.card_count,
+  }));
+}
+
+export async function getFSRSReviewSchedule(): Promise<FSRSCardSchedule[]> {
+  const response = await apiClient.get<any[]>('/flashcards/review-schedule', {
+    headers: createAuthHeaders(),
+  });
+  return (response.data ?? []).map(c => ({
+    cardId: c.card_id,
+    frontText: c.front_text,
+    backText: c.back_text,
+    due: c.due,
+    state: c.state,
+    stability: c.stability,
+    difficulty: c.difficulty,
+    lessonId: c.lesson_id,
+    lessonTitle: c.lesson_title,
+  }));
+}
+
+export async function submitFSRSReview(
+  cardId: number,
+  rating: number,
+  reviewDuration?: number
+): Promise<FSRSCard> {
+  const response = await apiClient.post<any>(
+    `/flashcards/${cardId}/review`,
+    {
+      rating,
+      review_duration: reviewDuration,
+    },
+    {
+      headers: createAuthHeaders(),
+    }
+  );
+  return {
+    cardId: response.data.card_id,
+    state: response.data.state,
+    step: response.data.step,
+    stability: response.data.stability,
+    difficulty: response.data.difficulty,
+    due: response.data.due,
+    lastReview: response.data.last_review,
+  };
+}
+
+
 
 
 

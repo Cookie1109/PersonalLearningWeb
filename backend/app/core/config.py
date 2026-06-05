@@ -41,7 +41,12 @@ class Settings(BaseSettings):
         default="mysql+pymysql://root:root@localhost:3306/personal_learning",
         alias="DATABASE_URL",
     )
+    postgres_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/postgres",
+        alias="POSTGRES_URL",
+    )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+
 
     firebase_project_id: str | None = Field(default=None, alias="FIREBASE_PROJECT_ID")
     firebase_credentials_path: str | None = Field(default=None, alias="FIREBASE_CREDENTIALS_PATH")
@@ -84,6 +89,24 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str | None = Field(default=None, alias="CLOUDINARY_API_SECRET")
     cloudinary_upload_folder: str = Field(default="personal-learning/documents", alias="CLOUDINARY_UPLOAD_FOLDER")
     cloudinary_avatar_folder: str = Field(default="personal-learning/avatars", alias="CLOUDINARY_AVATAR_FOLDER")
+    # Shared secret for internal service-to-service calls (Node.js → FastAPI)
+    # Must be set in .env for production. Default value is for dev only.
+    internal_service_secret: str = Field(
+        default="nexl-internal-dev-secret-change-in-production",
+        alias="INTERNAL_SERVICE_SECRET",
+    )
+
+    @field_validator("internal_service_secret", mode="after")
+    @classmethod
+    def warn_default_secret(cls, v: str) -> str:
+        if v == "nexl-internal-dev-secret-change-in-production":
+            import warnings
+            warnings.warn(
+                "⚠️  INTERNAL_SERVICE_SECRET is using the default dev value. "
+                "Set a strong secret in .env for production!",
+                stacklevel=2,
+            )
+        return v
 
     @field_validator("cors_allow_origins", mode="before")
     @classmethod

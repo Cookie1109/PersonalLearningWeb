@@ -204,6 +204,11 @@ def create_document_for_user(
         db.add(lesson)
         db.commit()
         db.refresh(lesson)
+        try:
+            from app.services.keyword_extraction_service import extract_and_save_concepts_for_lesson
+            extract_and_save_concepts_for_lesson(db=db, lesson=lesson)
+        except Exception as extract_exc:
+            logger.warning("Failed to extract concepts on document creation: %s", str(extract_exc))
         return lesson
     except Exception as exc:
         db.rollback()
@@ -242,6 +247,11 @@ def create_document_draft_for_user(
         db.add(lesson)
         db.commit()
         db.refresh(lesson)
+        try:
+            from app.services.keyword_extraction_service import extract_and_save_concepts_for_lesson
+            extract_and_save_concepts_for_lesson(db=db, lesson=lesson)
+        except Exception as extract_exc:
+            logger.warning("Failed to extract concepts on draft creation: %s", str(extract_exc))
         return lesson
     except Exception as exc:
         db.rollback()

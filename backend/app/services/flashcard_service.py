@@ -91,6 +91,55 @@ def generate_flashcards_for_document_user(*, db: Session, user_id: int, document
             ]
 
             db.add_all(flashcards)
+            db.flush()
+
+            # Pre-create FSRSCard records for each flashcard
+            from app.models.fsrs_graph_models import FSRSCard
+            from datetime import datetime, timezone
+            fsrs_cards = [
+                FSRSCard(
+                    card_id=card.id,
+                    state=1, # fsrs.State.Learning
+                    step=0,
+                    stability=None,
+                    difficulty=None,
+                    due=datetime.now(timezone.utc),
+                    last_review=None
+                )
+                for card in flashcards
+            ]
+            db.add_all(fsrs_cards)
+            db.flush()
+
+            # Link concepts/tags to these new flashcards
+            # First, ensure the lesson has concept tags extracted (self-healing for lessons
+            # where keyword extraction has not run yet or ran before flashcards were ready)
+            from app.models.fsrs_graph_models import LessonTag
+            from app.services.keyword_extraction_service import (
+                tag_flashcards_with_concepts,
+                extract_concepts_from_text,
+                save_concepts_and_edges,
+            )
+            stmt_check = select(LessonTag.tag_id).where(LessonTag.lesson_id == lesson.id).limit(1)
+            has_tags = db.scalar(stmt_check) is not None
+            if not has_tags:
+                # Lesson has no concept tags yet — extract & save within current transaction
+                text_source = (lesson.content_markdown or lesson.source_content or "").strip()
+                if text_source:
+                    concept_data = extract_concepts_from_text(lesson_title=lesson.title, text=text_source)
+                    if concept_data and concept_data.get("tags"):
+                        save_concepts_and_edges(db=db, user_id=user_id, lesson_id=lesson.id, data=concept_data)
+
+            tag_flashcards_with_concepts(db=db, user_id=user_id, lesson_id=lesson.id)
+            db.flush()
+
+            # Recalculate concept weakness for this lesson's tags
+            from app.models.fsrs_graph_models import LessonTag, ConceptWeakness
+            from app.services.concept_aggregation import recalculate_concept_weakness
+            stmt_tags = select(LessonTag.tag_id).where(LessonTag.lesson_id == lesson.id)
+            tag_ids = db.scalars(stmt_tags).all()
+            for tag_id in tag_ids:
+                recalculate_concept_weakness(db, user_id, tag_id)
 
         for card in flashcards:
             db.refresh(card)

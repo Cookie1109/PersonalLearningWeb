@@ -57,6 +57,8 @@ class Lesson(Base):
     quiz = relationship("Quiz", back_populates="lesson", uselist=False, cascade="all, delete-orphan")
     flashcards = relationship("Flashcard", back_populates="lesson", cascade="all, delete-orphan")
     tutor_messages = relationship("TutorMessage", back_populates="lesson", cascade="all, delete-orphan")
+    concept_tags = relationship("ConceptTag", secondary="lesson_tags", back_populates="lessons")
+
 
     @validates("title")
     def _sync_title_normalized(self, _key: str, title: str) -> str:

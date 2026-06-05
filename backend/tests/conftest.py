@@ -160,6 +160,9 @@ def fake_redis() -> FakeRedis:
 
 @pytest.fixture
 def client(db_session: Session, fake_redis: FakeRedis, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+    import app.infra.redis_client as redis_client_module
+    monkeypatch.setattr(redis_client_module, "get_redis_client", lambda: fake_redis)
+
     import app.api.deps.auth as deps_auth
     import app.api.routes.lessons as lessons_routes
     import app.api.routes.quizzes as quizzes_routes

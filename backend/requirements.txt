@@ -19,3 +19,8 @@ trafilatura==1.12.2
 requests==2.32.3
 PyPDF2==3.0.1
 python-docx==1.1.2
+pg8000==1.31.2
+google-generativeai==0.8.6
+
+
+

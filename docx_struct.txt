@@ -1,0 +1,86 @@
+TRƯỜNG ĐẠI HỌC ĐÀ LẠT
+KHOA CÔNG NGHỆ THÔNG TIN
+
+BÁO CÁO BÀI TẬP CÁ NHÂN
+Môn học: Lập trình Python
+
+Dự án: NEXL – Nền tảng Học tập Cá nhân Tích hợp AI
+
+
+Đà Lạt, tháng 5 năm 2025
+
+1. TỔNG QUAN DỰ ÁN
+NEXL (Personal Learning Web) là nền tảng học tập cá nhân tích hợp Trí Tuệ Nhân Tạo, được xây dựng nhằm giúp người dùng chuyển đổi các tài liệu thô (PDF, DOCX, URL, văn bản thuần) thành một không gian học tập thông minh. Sản phẩm hướng đến mục tiêu tự động hóa quy trình tạo nội dung ôn tập, thay thế việc ghi chép thủ công bằng các công cụ AI có chiều sâu sư phạm.
+1.1. Mục tiêu cốt lõi
+Biến tài liệu học tập thành bài giảng có cấu trúc một cách tự động.
+Cung cấp hệ thống ôn tập đa dạng: Quiz trắc nghiệm, Flashcard ghi nhớ, AI Tutor hỏi đáp.
+Duy trì động lực học thông qua cơ chế Gamification (EXP, Level, Streak, Daily Quest).
+Đảm bảo độ tin cậy với hệ thống chống spam, kiểm soát API và bảo mật xác thực.
+1.2. Kiến trúc công nghệ
+
+
+1.3. Work flow của hệ thống
+
+2. MÔ TẢ CHỨC NĂNG SẢN PHẨM
+2.1. Quản lý Workspace & Tài liệu
+Người dùng khởi tạo Workspace từ nhiều nguồn tài liệu. Giao diện hỗ trợ trạng thái Loading/Extracting thời gian thực và có cơ chế kiểm soát đầu vào nghiêm ngặt:
+Văn bản thuần: Bộ đếm ký tự hiển thị cảnh báo màu tại 40.000 ký tự, chặn tối đa ở 45.000 ký tự (kiểm soát giới hạn token AI).
+Đường dẫn web (URL): Backend dùng thư viện trafilatura để cào và lọc nội dung chính, tự động loại bỏ quảng cáo, menu, footer.
+Tệp tin (PDF/DOCX): Hỗ trợ kéo-thả, validate dung lượng ≤ 15MB và kiểm tra MIME type trước khi upload.
+2.2. Tự động sinh Bài giảng
+AI phân tích toàn bộ tài liệu đầu vào và tái cấu trúc thành bài giảng chuyên nghiệp dạng Markdown.
+Hiển thị: Dùng react-markdown + remark-gfm và rehype-highlight để tô màu cú pháp code tự động.
+Cơ chế Auto-Continuation: Backend tự phát hiện khi LLM sinh dở nội dung (do giới hạn Output Token), tự động nối lệnh để hoàn thiện bài giảng liền mạch.
+Prompt Chắt lọc Sư phạm: LỌC NHIỄU, TÁI CẤU TRÚC ý tưởng, BẢO TOÀN 100% code block kỹ thuật.
+2.3. Hệ thống Câu hỏi ôn tập (Quiz) & Thẻ nhớ (Flashcard)
+Quiz: Bộ 10 câu trắc nghiệm tự động sinh từ nội dung bài học.
+Xáo trộn câu hỏi và đáp án mỗi lần fetch để chống học vẹt vị trí đáp án.
+Cool-down Block: Nếu điểm quá thấp, bắt chờ 30s–1 phút trước khi làm lại.
+Nhận diện chủ đề IT để sinh câu hỏi fill_code hoặc find_bug thay vì chỉ hỏi lý thuyết.
+Flashcard: Thẻ nhớ 3D flip animation, theo dõi tiến độ hoàn thành Deck.
+Nút "Giải thích" (icon bóng đèn): Gọi AI phân tích sâu khái niệm, trả về Markdown ghim bên dưới thẻ.
+2.4. AI Tutor & Document Chat (Gia sư AI)
+NEXL Tutor: Chat SSE Streaming, auto-scroll, ghim ngữ cảnh tài liệu đang mở, cho phép mở rộng kiến thức chuyên ngành.
+Document Chat (NotebookLM Mini): Chế độ nghiêm ngặt – AI bắt buộc trả lời "Tài liệu không đề cập" nếu thông tin không có trong tài liệu nguồn, cấm tự sáng tác ngoài lề.
+2.5. Hệ thống Thư viện
+Màn hình quản lý các Workspace đã tạo, hiển thị dạng lưới thẻ (Grid Cards).
+Tìm kiếm real-time với kỹ thuật Debounce và phím tắt Ctrl+K / Cmd+K.
+Phân trang (Pagination): Tải dữ liệu từ Backend, chuyển trang nhẹ nhàng.
+Đổi tên (Rename) và Xóa (Delete) Workspace kèm hộp thoại xác nhận an toàn.
+2.6. Hệ thống Gamification (Trò chơi hóa)
+Dashboard được thiết kế xoay quanh Gamification nhằm giữ chân người dùng (Retention).
+Widget Level & EXP: Thanh tiến trình lũy tiến theo công thức Level × 1000.
+Heatmap học tập: Mô phỏng GitHub Activity Graph, đổi màu theo EXP tích lũy mỗi ngày.
+Daily Quests: Nhiệm vụ hàng ngày dạng RPG, cập nhật theo múi giờ Việt Nam, có All-clear Bonus EXP.
+Streak (chuỗi ngày kỷ luật): Modal popup "Streak Lost" tự động nhắc nhở khi đứt chuỗi.
+2.7. Tài khoản, Bảo mật & Chống Spam
+Firebase Auth + Cloudinary: Upload ảnh đại diện với validate ≤ 5MB và kiểm tra định dạng file phía Client.
+Redis Rate Limit: Tối đa 3 lần sinh Quiz/10 phút; 5 giải thích Flashcard/1 phút. UI hiển thị Toast lỗi HTTP 429.
+Idempotency Key cho mọi hành động Gamification: Tránh cộng dư điểm EXP do lag mạng gửi request trùng.
+Dark Mode / Light Mode: Lưu preferences trên LocalStorage, toggle đặt ở Layout Component.
+
+3. QUÁ TRÌNH SỬ DỤNG AI & CÁC PROMPT ĐÃ THỰC HIỆN
+Phần này trình bày chi tiết quá trình sinh viên tương tác với AI (Gemini, Claude) để phát triển từng chức năng của dự án theo đúng yêu cầu đánh giá: Prompt đã dùng – AI sinh code gì – Sinh viên chỉnh sửa gì và vì sao.
+
+4. KẾT QUẢ ĐẠT ĐƯỢC
+
+5. KHÓ KHĂN VÀ BÀI HỌC KINH NGHIỆM
+5.1. Khó khăn đã gặp
+Khó khăn 1 – LLM bị cắt giữa chừng: Gemini Flash có giới hạn Output Token, khiến bài giảng bị sinh dở chừng. Giải pháp: thiết kế cơ chế Auto-Continuation ở Backend tự phát hiện và nối tiếp tự động.
+Khó khăn 2 – SSE không truyền được JWT Token: Trình duyệt không cho phép đính kèm Header vào EventSource. Giải pháp: chuyển sang fetch API + ReadableStream() với method POST để bảo mật đầy đủ.
+Khó khăn 3 – Rate Limit theo IP bị lỗi NAT: Môi trường trường học dùng chung IP (NAT) khiến nhiều người bị khóa oan. Giải pháp: đọc JWT Token từ Middleware để lấy User_ID làm khóa Redis.
+Khó khăn 4 – Cộng dư EXP do lag mạng: Client gửi request trùng khi mạng chậm dẫn đến cộng dư EXP. Giải pháp: Idempotency Key lưu Redis, bỏ qua request đã xử lý trong ngày.
+5.2. Bài học kinh nghiệm
+AI là công cụ hỗ trợ, không thay thế tư duy thiết kế: AI sinh code nhanh nhưng cần con người kiểm tra edge cases và đảm bảo kiến trúc tổng thể hợp lý.
+Luôn kiểm tra bảo mật ngay từ đầu: Lỗ hổng SSE/EventSource là minh chứng cho việc cần tư duy bảo mật từ giai đoạn thiết kế.
+Xử lý edge case quan trọng hơn happy path: Các vấn đề thực tế (NAT, lag mạng, token limit) xuất hiện ở những trường hợp không lường trước.
+Thiết kế UX tốt đi đôi với Backend chắc chắn: Toast 429 màu đỏ, Cool-down Block đều là phản hồi người dùng xuất phát từ xử lý lỗi Backend.
+6. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+6.1. Kết luận
+NEXL là minh chứng thực tiễn cho việc ứng dụng AI vào giáo dục. Hệ thống hoàn thiện 11 tính năng, hoạt động ổn định, bảo mật và cung cấp trải nghiệm học tập tương tác cao. Quan trọng hơn, quá trình phát triển đã rèn luyện tư duy phản biện: biết khi nào nên tin AI, khi nào cần tự nghiên cứu và giải quyết vấn đề thực tiễn.
+6.2. Hướng phát triển
+Tích hợp phân tích hình ảnh và công thức toán học (LaTeX) từ file slide.
+Hệ thống đề xuất bài học cá nhân hóa dựa trên lịch sử làm Quiz và điểm yếu người dùng.
+Hỗ trợ học tập nhóm trong cùng một Workspace tài liệu.
+Tích hợp Spaced Repetition System (SRS) cho Flashcard theo thuật toán khoa học.
+Phát triển ứng dụng Mobile (React Native) để học mọi lúc mọi nơi.

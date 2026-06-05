@@ -46,7 +46,8 @@ class IdempotencyStore:
 
         existing = self._read_json(existing_raw)
         if existing is None:
-            return "in_progress", None
+            # Key expired between SET(nx=True) and GET — treat as a fresh start (retry-safe)
+            return "started", None
 
         if existing.get("status") == "COMPLETED":
             return "completed", existing.get("response")
