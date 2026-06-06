@@ -75,7 +75,7 @@ Nếu Hội đồng hỏi cơ chế này, có thể trả lời chi tiết ở c
 - **Keyword/Tag Extraction:** Khi user upload tài liệu, dùng `Gemini 2.0 Flash` nhanh chóng trích xuất các từ khóa cốt lõi.
 - **Đồ thị mạng nhện (Knowledge Graph):** Backend lưu các tags và quan hệ giữa chúng, Frontend vẽ đồ thị tương tác (D3.js hoặc Vis.js). Giao diện giống Obsidian Graph View.
 - **Smart Suggestions:** Khi user học bài A có tag "Binary Tree", hệ thống gợi ý *"Khái niệm này liên quan đến file 'Thuật toán sắp xếp' bạn upload tuần trước — ôn lại không?"*
-- **Goal-Oriented Roadmap:** User gõ mục tiêu học ("Ôn thi cuối kỳ môn CTDL"), AI sinh khung sườn dàn ý. Với mỗi mục, user upload tài liệu nhỏ tương ứng → tích tiểu thành đại.
+- **Goal-Oriented Roadmap liên kết Graph:** User gõ mục tiêu học ("Ôn thi cuối kỳ môn CTDL"), AI sinh khung sườn dàn ý **kèm theo các concept tags dự kiến**. Khi user upload tài liệu cho các mục này, hệ thống tự động map vào Knowledge Graph → tích tiểu thành đại, biến roadmap tĩnh thành graph động.
 
 ### Tại sao đây là đóng góp học thuật thực sự
 

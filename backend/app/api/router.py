@@ -11,6 +11,7 @@ from app.api.routes import (
 	parser_router,
 	quizzes_router,
 	knowledge_graph_router,
+	roadmaps_router,
 )
 
 api_router = APIRouter()
@@ -24,4 +25,6 @@ api_router.include_router(lessons_router)
 api_router.include_router(parser_router)
 api_router.include_router(quizzes_router)
 api_router.include_router(knowledge_graph_router)
+api_router.include_router(roadmaps_router)
+
 

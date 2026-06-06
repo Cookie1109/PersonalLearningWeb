@@ -21,8 +21,10 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tổng Quan', end: true },
   { to: '/create', icon: FilePlus2, label: 'Tạo Workspace' },
   { to: '/library', icon: LibraryBig, label: 'Thư viện' },
+  { to: '/roadmap', icon: Target, label: 'Lộ Trình AI' },
   { to: '/learn', icon: BookOpen, label: 'Không Gian Học' },
 ];
+
 
 export interface LayoutProps {
   userData?: UserStats;

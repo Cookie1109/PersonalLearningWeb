@@ -8,6 +8,7 @@ from .lessons import router as lessons_router
 from .parser import router as parser_router
 from .quizzes import router as quizzes_router
 from .knowledge_graph import router as knowledge_graph_router
+from .roadmaps import router as roadmaps_router
 
 __all__ = [
 	"documents_router",
@@ -20,5 +21,7 @@ __all__ = [
 	"parser_router",
 	"quizzes_router",
 	"knowledge_graph_router",
+	"roadmaps_router",
 ]
+
 

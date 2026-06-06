@@ -360,6 +360,7 @@ class LessonDTO(BaseModel):
     type: Literal["theory", "practice", "project"] = "theory"
     description: str
     youtube_video_id: str | None = None
+    concept_tags: list[str] = Field(default_factory=list)
 
 
 class WeekModuleDTO(BaseModel):
@@ -386,6 +387,7 @@ class RoadmapLessonItemDTO(BaseModel):
     is_completed: bool
     quiz_passed: bool = False
     flashcard_completed: bool = False
+    concept_tags: list[str] = Field(default_factory=list)
 
 
 class RoadmapWeekItemDTO(BaseModel):
@@ -403,6 +405,88 @@ class RoadmapItemDTO(BaseModel):
 
 class RoadmapMeResponseDTO(BaseModel):
     roadmaps: list[RoadmapItemDTO] = Field(default_factory=list)
+
+
+# ── Roadmap editing DTOs ──────────────────────────────────────────────────────
+
+class RoadmapRenameTitleRequestDTO(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if len(normalized) < 3:
+                raise ValueError("title must be at least 3 characters")
+            return normalized
+        return value
+
+
+class RoadmapDeleteResponseDTO(BaseModel):
+    roadmap_id: int
+    message: str
+
+
+class RoadmapAddLessonRequestDTO(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    position: int = Field(default=1, ge=1)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if len(normalized) < 3:
+                raise ValueError("title must be at least 3 characters")
+            return normalized
+        return value
+
+
+class RoadmapAddLessonResponseDTO(BaseModel):
+    lesson_id: int
+    roadmap_id: int
+    title: str
+    position: int
+    message: str
+
+
+class LessonRenameTitleRequestDTO(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            if len(normalized) < 3:
+                raise ValueError("title must be at least 3 characters")
+            return normalized
+        return value
+
+
+class LessonRenameTitleResponseDTO(BaseModel):
+    lesson_id: int
+    title: str
+    message: str
+
+
+class LessonDeleteResponseDTO(BaseModel):
+    lesson_id: int
+    message: str
+
+
+class LessonReorderRequestDTO(BaseModel):
+    """Move a lesson to a new position. Both fields required."""
+    position: int = Field(..., ge=1)
+    week_number: int = Field(..., ge=1)
+
+
+class LessonReorderResponseDTO(BaseModel):
+    lesson_id: int
+    position: int
+    week_number: int
+    message: str
 
 
 class LessonExampleDTO(BaseModel):

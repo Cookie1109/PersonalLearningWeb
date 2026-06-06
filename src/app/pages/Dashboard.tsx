@@ -123,17 +123,7 @@ export default function Dashboard() {
         ))}
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-        <DailyQuestsWidget />
-      </motion.div>
-
-      {/* Stage 2 FSRS & Knowledge Graph */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17 }} className="space-y-6">
-        <WeakConceptsWidget key={refreshKey} onReviewCompleted={handleReviewCompleted} />
-        <KnowledgeGraphView key={refreshKey + 1} />
-      </motion.div>
-
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.18 }} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <TrendingUp size={18} className="text-cyan-400" />
@@ -174,6 +164,16 @@ export default function Dashboard() {
           </label>
         </div>
         <FixedYearHeatmap data={activityData} year={selectedYear} />
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+        <DailyQuestsWidget />
+      </motion.div>
+
+      {/* Stage 2 FSRS & Knowledge Graph */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="space-y-6">
+        <WeakConceptsWidget key={refreshKey} onReviewCompleted={handleReviewCompleted} />
+        <KnowledgeGraphView key={refreshKey + 1} />
       </motion.div>
     </div>
   );

@@ -44,13 +44,11 @@ function MessageBubble({ message }: { message: Message }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl border px-4 py-2.5 text-sm leading-relaxed ${
-          message.isHistory ? 'opacity-75' : 'opacity-100'
-        } ${
-          isUser
+        className={`max-w-[85%] rounded-2xl border px-4 py-2.5 text-sm leading-relaxed ${message.isHistory ? 'opacity-75' : 'opacity-100'
+          } ${isUser
             ? 'bg-cyan-600 text-white border-cyan-500/40'
             : 'bg-zinc-800 text-zinc-100 border-zinc-700'
-        }`}
+          }`}
       >
         {message.role === 'ai' ? (
           <div className="prose prose-sm max-w-none break-words text-zinc-100 dark:prose-invert prose-p:my-2 prose-strong:text-zinc-50 prose-ul:my-2 prose-ul:pl-5 prose-ol:my-2 prose-ol:pl-5 prose-li:my-1">
@@ -112,9 +110,8 @@ function MessageBubble({ message }: { message: Message }) {
 
         {/* Timestamp only for history messages */}
         {message.isHistory && message.createdAt && (
-          <div className={`mt-1.5 text-[10px] flex items-center gap-1 ${
-            isUser ? 'justify-end text-cyan-200/50' : 'text-zinc-600'
-          }`}>
+          <div className={`mt-1.5 text-[10px] flex items-center gap-1 ${isUser ? 'justify-end text-cyan-200/50' : 'text-zinc-600'
+            }`}>
             <Clock size={9} />
             {formatMessageTime(message.createdAt)}
           </div>

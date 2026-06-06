@@ -51,6 +51,8 @@ flowchart LR
 ```
 ```mermaid
 flowchart TD
+  Goal[User Goal] --> GenRoadmap[Generate Roadmap]
+  GenRoadmap --> Upload[Upload Document]
   Upload --> HashCheck
   HashCheck -->|miss| KeywordExtract
   KeywordExtract --> KG[Knowledge Graph]
@@ -136,8 +138,8 @@ flowchart TD
 
 ---
 
-### Giai doan 3 (Tuan 6-7): UX/UI Roadmap + Gia su AI
-**Muc tieu:** Roadmap co the sua nhanh, UX toi gian.
+### Giai doan 3 (Tuan 6-7): Mũi nhọn 2 (Tiếp theo) - Roadmap Generator & UX
+**Muc tieu:** Roadmap co the sua nhanh, UX toi gian va lien ket chat che voi Knowledge Graph.
 
 **Frontend**
 - Roadmap UI: danh sach block, keo-tha reorder (dnd-kit/beautiful-dnd).
@@ -145,19 +147,23 @@ flowchart TD
 - Badge nguon tai lieu ro rang.
 
 **Backend Python (FastAPI)**
-- API roadmap generate (Gemini 2.0 Flash): JSON chi gom tieu_de va nguon.
+- API roadmap generate (Gemini 2.0 Flash + Structured Outputs/Pydantic): JSON gom tieu_de, nguon va concept_tags du kien.
 - Luu roadmap theo user va versioning nhe.
+
+**Data/DB**
+- Schema: Tao bang `roadmaps`, `lessons` (cac buoc trong roadmap).
+- Lien ket `lessons` voi `concept_tags` de dong bo voi Knowledge Graph khi user bat dau hoc.
 
 **Deliverables**
 - Roadmap edit nhanh (khong can timeline).
-- Prompt roadmap on dinh JSON.
+- Prompt roadmap on dinh JSON (su dung Pydantic validation).
 
 **Exit criteria**
 - User tao roadmap tu goal va sua lai trong < 1 phut.
-- JSON roadmap luon pass schema validation sau 10 lan test voi goal khac nhau.
+- JSON roadmap luon pass schema validation sau 10 lan test voi goal khac nhau (nho Structured Outputs).
 
 **Rui ro & giam thieu**
-- Rui ro: JSON loi. Giam thieu: schema validate + auto-repair.
+- Rui ro: JSON loi hoac roi rac voi he thong. Giam thieu: dung Pydantic de ep kieu tra ve, map tag sinh ra voi Knowledge Graph.
 
 ---
 

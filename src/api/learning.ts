@@ -944,6 +944,76 @@ export async function submitFSRSReview(
   };
 }
 
+// ── Roadmap editing API ───────────────────────────────────────────────────────
+
+export async function renameRoadmap(roadmapId: number, title: string): Promise<MyRoadmap> {
+  const normalizedTitle = title.trim();
+  if (normalizedTitle.length < 3) throw new Error('Tên lộ trình cần ít nhất 3 ký tự.');
+  const response = await apiClient.patch<RoadmapItemDTO>(
+    `/roadmaps/${roadmapId}/title`,
+    { title: normalizedTitle },
+    { headers: createAuthHeaders() }
+  );
+  return mapRoadmapItem(response.data);
+}
+
+export async function deleteRoadmap(roadmapId: number): Promise<void> {
+  await apiClient.delete(`/roadmaps/${roadmapId}`, { headers: createAuthHeaders() });
+}
+
+export async function addLessonToRoadmap(
+  roadmapId: number,
+  title: string
+): Promise<{ lessonId: number; title: string; position: number }> {
+  const normalizedTitle = title.trim();
+  if (normalizedTitle.length < 3) throw new Error('Tên bước học cần ít nhất 3 ký tự.');
+  const response = await apiClient.post<{
+    lesson_id: number;
+    roadmap_id: number;
+    title: string;
+    position: number;
+    message: string;
+  }>(
+    `/roadmaps/${roadmapId}/lessons`,
+    { title: normalizedTitle },
+    { headers: createAuthHeaders() }
+  );
+  return {
+    lessonId: response.data.lesson_id,
+    title: response.data.title,
+    position: response.data.position,
+  };
+}
+
+// ── Lesson editing API ────────────────────────────────────────────────────────
+
+export async function renameLessonTitle(lessonId: number, title: string): Promise<void> {
+  const normalizedTitle = title.trim();
+  if (normalizedTitle.length < 3) throw new Error('Tên bước học cần ít nhất 3 ký tự.');
+  await apiClient.patch(
+    `/lessons/${lessonId}/title`,
+    { title: normalizedTitle },
+    { headers: createAuthHeaders() }
+  );
+}
+
+export async function deleteLessonFromRoadmap(lessonId: number): Promise<void> {
+  await apiClient.delete(`/lessons/${lessonId}`, { headers: createAuthHeaders() });
+}
+
+export async function reorderLesson(
+  lessonId: number,
+  position: number,
+  weekNumber: number
+): Promise<void> {
+  await apiClient.patch(
+    `/lessons/${lessonId}/reorder`,
+    { position, week_number: weekNumber },
+    { headers: createAuthHeaders() }
+  );
+}
+
+
 
 
 

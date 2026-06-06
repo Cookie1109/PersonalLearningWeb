@@ -14,12 +14,12 @@ export default function KnowledgeGraphView() {
   const [graphData, setGraphData] = useState<KnowledgeGraphResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Simulation states
   const [nodes, setNodes] = useState<SimNode[]>([]);
   const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
   const [draggedNodeId, setDraggedNodeId] = useState<number | null>(null);
-  
+
   // Viewport states for Zoom/Pan
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -35,7 +35,7 @@ export default function KnowledgeGraphView() {
     try {
       const data = await getKnowledgeGraph();
       setGraphData(data);
-      
+
       // Initialize nodes with circular layout positions
       const width = 600;
       const height = 400;
@@ -72,7 +72,7 @@ export default function KnowledgeGraphView() {
     const width = 600;
     const height = 400;
     const center = { x: width / 2, y: height / 2 };
-    
+
     // Physical constants
     const repulsion = 400; // Force pushing nodes apart
     const attraction = 0.05; // Spring force pulling connected nodes together
@@ -98,7 +98,7 @@ export default function KnowledgeGraphView() {
               const force = (repulsion / distSq) * 1.5;
               const fx = (dx / dist) * force;
               const fy = (dy / dist) * force;
-              
+
               n1.vx -= fx;
               n1.vy -= fy;
               n2.vx += fx;
@@ -116,7 +116,7 @@ export default function KnowledgeGraphView() {
               const dx = target.x - source.x;
               const dy = target.y - source.y;
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              
+
               // Edge target distance
               const targetDist = 100;
               const k = attraction * edge.weight;
@@ -247,7 +247,7 @@ export default function KnowledgeGraphView() {
           <h3 className="text-lg text-white font-bold">Bản đồ Kiến thức (Knowledge Graph)</h3>
           <p className="text-xs text-zinc-400 mt-1">Đồ thị liên kết khái niệm tự động trích xuất từ tài liệu của bạn</p>
         </div>
-        
+
         <div className="flex items-center gap-2 bg-zinc-900/60 border border-zinc-800 rounded-xl p-1">
           <button onClick={() => handleZoom(1.2)} title="Phóng to" className="p-2 text-zinc-400 hover:text-white rounded-lg transition-colors hover:bg-zinc-800">
             <ZoomIn size={16} />
@@ -355,7 +355,7 @@ export default function KnowledgeGraphView() {
                     style={{ filter: isHighlighted ? glow : 'none' }}
                     className="transition-all duration-200"
                   />
-                  
+
                   {/* Text Label */}
                   <text
                     y={size + 14}

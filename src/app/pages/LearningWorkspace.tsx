@@ -1746,45 +1746,45 @@ export default function LearningWorkspace() {
               </div>
             )}
 
-              {!loadError && lessonDetail && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1.5 sm:p-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  <button
-                    onClick={() => setLearningTab('theory')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'theory' ? 'bg-cyan-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                    style={{ fontWeight: 600 }}
-                  >
-                    <BookOpen size={15} />Lý thuyết
-                  </button>
-                  <button
-                    onClick={() => setLearningTab('quiz')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'quiz' ? 'bg-cyan-600 text-white' : lessonDetail.quizPassed ? 'text-emerald-300 hover:bg-emerald-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                    style={{ fontWeight: 600 }}
-                  >
-                    <ListChecks size={15} />Quiz
-                    {lessonDetail.quizPassed && <CheckCircle2 size={14} className="text-emerald-300" />}
-                  </button>
-                  <button
-                    onClick={() => setLearningTab('flashcard')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'flashcard' ? 'bg-cyan-600 text-white' : lessonDetail.flashcardCompleted ? 'text-cyan-300 hover:bg-cyan-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                    style={{ fontWeight: 600 }}
-                  >
-                    <CreditCard size={15} />Flashcard
-                    {lessonDetail.flashcardCompleted && <CheckCircle2 size={14} className="text-cyan-300" />}
-                  </button>
-                  <button
-                    onClick={() => setLearningTab('qa')}
-                    className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'qa' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                    style={{ fontWeight: 600 }}
-                  >
-                    <MessageSquare size={15} />Hỏi đáp
-                  </button>
-                </div>
-              )}
+            {!loadError && lessonDetail && (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1.5 sm:p-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <button
+                  onClick={() => setLearningTab('theory')}
+                  className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'theory' ? 'bg-cyan-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                  style={{ fontWeight: 600 }}
+                >
+                  <BookOpen size={15} />Lý thuyết
+                </button>
+                <button
+                  onClick={() => setLearningTab('quiz')}
+                  className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'quiz' ? 'bg-cyan-600 text-white' : lessonDetail.quizPassed ? 'text-emerald-300 hover:bg-emerald-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                  style={{ fontWeight: 600 }}
+                >
+                  <ListChecks size={15} />Quiz
+                  {lessonDetail.quizPassed && <CheckCircle2 size={14} className="text-emerald-300" />}
+                </button>
+                <button
+                  onClick={() => setLearningTab('flashcard')}
+                  className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'flashcard' ? 'bg-cyan-600 text-white' : lessonDetail.flashcardCompleted ? 'text-cyan-300 hover:bg-cyan-500/10' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                  style={{ fontWeight: 600 }}
+                >
+                  <CreditCard size={15} />Flashcard
+                  {lessonDetail.flashcardCompleted && <CheckCircle2 size={14} className="text-cyan-300" />}
+                </button>
+                <button
+                  onClick={() => setLearningTab('qa')}
+                  className={`rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2 transition-colors ${activeTab === 'qa' ? 'bg-emerald-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                  style={{ fontWeight: 600 }}
+                >
+                  <MessageSquare size={15} />Hỏi đáp
+                </button>
+              </div>
+            )}
 
-              {!loadError && activeTab === 'theory' && renderTheoryPanel()}
-              {!loadError && activeTab === 'quiz' && renderQuizPanel()}
-              {!loadError && activeTab === 'flashcard' && renderFlashcardPanel()}
-              {!loadError && activeTab === 'qa' && renderQAPanel()}
+            {!loadError && activeTab === 'theory' && renderTheoryPanel()}
+            {!loadError && activeTab === 'quiz' && renderQuizPanel()}
+            {!loadError && activeTab === 'flashcard' && renderFlashcardPanel()}
+            {!loadError && activeTab === 'qa' && renderQAPanel()}
           </div>
 
           {/* Complete */}
@@ -1798,11 +1798,10 @@ export default function LearningWorkspace() {
                 <button
                   onClick={handleComplete}
                   disabled={isCompleted || isCompleting}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${
-                    isCompleted
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm transition-all ${isCompleted
                       ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 cursor-default'
                       : 'bg-cyan-600 hover:bg-cyan-500 text-white'
-                  }`}
+                    }`}
                   style={{ fontWeight: 600 }}
                 >
                   {isCompleted ? (

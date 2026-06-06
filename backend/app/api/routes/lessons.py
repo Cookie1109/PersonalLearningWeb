@@ -9,13 +9,18 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.infra.redis_client import get_redis_client
-from app.models import User
+from app.models import Lesson, User
 from app.schemas import (
     ErrorResponseDTO,
     FlashcardCompleteResponseDTO,
     LessonCompleteResponseDTO,
+    LessonDeleteResponseDTO,
     LessonDetailDTO,
     LessonGenerateResponseDTO,
+    LessonRenameTitleRequestDTO,
+    LessonRenameTitleResponseDTO,
+    LessonReorderRequestDTO,
+    LessonReorderResponseDTO,
     QuizPublicResponseDTO,
 )
 from app.services.audit_service import queue_audit_log
@@ -32,6 +37,7 @@ from app.services.quiz_service import (
     generate_quiz_for_lesson_user,
     get_quiz_for_lesson_user,
 )
+from sqlalchemy import select
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 settings = get_settings()
@@ -215,3 +221,101 @@ def complete_lesson(
     )
 
     return result
+
+
+@router.patch(
+    "/{lesson_id}/title",
+    response_model=LessonRenameTitleResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def rename_lesson(
+    lesson_id: int,
+    payload: LessonRenameTitleRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonRenameTitleResponseDTO:
+    lesson = db.scalar(
+        select(Lesson).where(Lesson.id == lesson_id, Lesson.user_id == current_user.id)
+    )
+    if not lesson:
+        raise AppException(
+            status_code=404,
+            message="Lesson not found",
+            detail={"code": "LESSON_NOT_FOUND"},
+        )
+
+    lesson.title = payload.title
+    db.commit()
+    db.refresh(lesson)
+
+    return LessonRenameTitleResponseDTO(
+        lesson_id=lesson.id,
+        title=lesson.title,
+        message="Tên bước học đã được cập nhật.",
+    )
+
+
+@router.delete(
+    "/{lesson_id}",
+    response_model=LessonDeleteResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def delete_lesson(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonDeleteResponseDTO:
+    lesson = db.scalar(
+        select(Lesson).where(Lesson.id == lesson_id, Lesson.user_id == current_user.id)
+    )
+    if not lesson:
+        raise AppException(
+            status_code=404,
+            message="Lesson not found",
+            detail={"code": "LESSON_NOT_FOUND"},
+        )
+
+    db.delete(lesson)
+    db.commit()
+
+    return LessonDeleteResponseDTO(
+        lesson_id=lesson_id,
+        message="Bước học đã được xóa khỏi lộ trình.",
+    )
+
+
+@router.patch(
+    "/{lesson_id}/reorder",
+    response_model=LessonReorderResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def reorder_lesson(
+    lesson_id: int,
+    payload: LessonReorderRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonReorderResponseDTO:
+    lesson = db.scalar(
+        select(Lesson).where(Lesson.id == lesson_id, Lesson.user_id == current_user.id)
+    )
+    if not lesson:
+        raise AppException(
+            status_code=404,
+            message="Lesson not found",
+            detail={"code": "LESSON_NOT_FOUND"},
+        )
+
+    lesson.position = payload.position
+    lesson.week_number = payload.week_number
+    db.commit()
+    db.refresh(lesson)
+
+    return LessonReorderResponseDTO(
+        lesson_id=lesson.id,
+        position=lesson.position,
+        week_number=lesson.week_number,
+        message="Thứ tự bước học đã được cập nhật.",
+    )

@@ -7,7 +7,11 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import AuditLog, ChatMessage, ExpLedger, Flashcard, Lesson, Question, Quiz, QuizAttempt, Roadmap, User  # noqa: F401
+from app.models import (
+    AuditLog, ChatMessage, ExpLedger, Flashcard, Lesson, Question, 
+    Quiz, QuizAttempt, Roadmap, User, ConceptTag, ConceptEdge, 
+    ConceptWeakness, FSRSCard, FSRSReview, LessonTag, FlashcardTag
+)  # noqa: F401
 
 config = context.config
 settings = get_settings()

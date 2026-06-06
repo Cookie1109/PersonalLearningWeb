@@ -549,12 +549,11 @@ export default function FlashCardDeck({
           {deckCards.map((card, index) => (
             <div
               key={card.id}
-              className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                index === currentIndex ? 'bg-violet-500 dark:bg-violet-400' :
-                card.status === 'got_it' ? 'bg-emerald-500' :
-                card.status === 'missed_it' ? 'bg-red-500' :
-                'bg-slate-300 dark:bg-zinc-700'
-              }`}
+              className={`w-1.5 h-1.5 rounded-full transition-colors ${index === currentIndex ? 'bg-violet-500 dark:bg-violet-400' :
+                  card.status === 'got_it' ? 'bg-emerald-500' :
+                    card.status === 'missed_it' ? 'bg-red-500' :
+                      'bg-slate-300 dark:bg-zinc-700'
+                }`}
             />
           ))}
         </div>
