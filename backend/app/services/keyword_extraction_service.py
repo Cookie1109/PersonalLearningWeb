@@ -161,22 +161,38 @@ def tag_flashcards_with_concepts(db: Session, user_id: int, lesson_id: int):
     card_ids = [c.id for c in cards]
     db.execute(delete(FlashcardTag).where(FlashcardTag.flashcard_id.in_(card_ids)))
 
+    # Get set of already pending or existing tags in this session/db to avoid duplicates
+    existing_links = set()
+    for obj in db.new:
+        if isinstance(obj, FlashcardTag):
+            existing_links.add((obj.flashcard_id, obj.tag_id))
+
     for card in cards:
         matched_any = False
         card_content_lower = f"{card.front_text} {card.back_text}".lower()
+        added_tag_ids = set()
         for tag in tags:
+            if tag.id in added_tag_ids:
+                continue
             tag_name_lower = tag.name.lower()
             # Use word-boundary match to prevent false positives
             # e.g., tag "AI" should NOT match "training", "explain"
             pattern = re.compile(rf'\b{re.escape(tag_name_lower)}\b')
             if pattern.search(card_content_lower):
-                db.add(FlashcardTag(flashcard_id=card.id, tag_id=tag.id))
+                if (card.id, tag.id) not in existing_links:
+                    db.add(FlashcardTag(flashcard_id=card.id, tag_id=tag.id))
+                    existing_links.add((card.id, tag.id))
+                added_tag_ids.add(tag.id)
                 matched_any = True
         
         # If no tag matches, fall back to linking the card to the primary tag only
         # (avoids polluting unrelated concepts' weakness scores)
         if not matched_any and tags:
-            db.add(FlashcardTag(flashcard_id=card.id, tag_id=tags[0].id))
+            first_tag = tags[0]
+            if first_tag.id not in added_tag_ids:
+                if (card.id, first_tag.id) not in existing_links:
+                    db.add(FlashcardTag(flashcard_id=card.id, tag_id=first_tag.id))
+                    existing_links.add((card.id, first_tag.id))
 
 
 def save_concepts_and_edges(db: Session, user_id: int, lesson_id: int, data: dict):
@@ -217,6 +233,7 @@ def save_concepts_and_edges(db: Session, user_id: int, lesson_id: int, data: dic
             db.add(LessonTag(lesson_id=lesson_id, tag_id=tag.id))
 
     # 2. Save edges
+    added_edges = set()
     for edge in edges_list:
         source_name = edge.get("source", "").strip()
         target_name = edge.get("target", "").strip()
@@ -227,6 +244,9 @@ def save_concepts_and_edges(db: Session, user_id: int, lesson_id: int, data: dic
         target_tag = tag_name_to_model.get(target_name.lower())
 
         if source_tag and target_tag and source_tag.id != target_tag.id:
+            edge_key = (source_tag.id, target_tag.id)
+            if edge_key in added_edges:
+                continue
             # Check if edge already exists for this user
             stmt_edge = select(ConceptEdge).where(
                 and_(
@@ -245,6 +265,7 @@ def save_concepts_and_edges(db: Session, user_id: int, lesson_id: int, data: dic
                     relationship_type=rel_type
                 )
                 db.add(new_edge)
+                added_edges.add(edge_key)
 
     # 3. Create baseline ConceptWeakness records with default 0.5 score
     for tag in tag_name_to_model.values():
