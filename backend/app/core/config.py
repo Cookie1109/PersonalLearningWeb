@@ -114,6 +114,9 @@ class Settings(BaseSettings):
         if value is None:
             return []
 
+        def clean_origin(origin: str) -> str:
+            return origin.strip().strip("\"'").rstrip("/")
+
         if isinstance(value, str):
             raw_value = value.strip()
             if not raw_value:
@@ -125,12 +128,12 @@ class Settings(BaseSettings):
                 except json.JSONDecodeError:
                     parsed = None
                 if isinstance(parsed, list):
-                    return [str(item).strip() for item in parsed if str(item).strip()]
+                    return [clean_origin(str(item)) for item in parsed if str(item).strip()]
 
-            return [item.strip() for item in raw_value.split(",") if item.strip()]
+            return [clean_origin(item) for item in raw_value.split(",") if item.strip()]
 
         if isinstance(value, (list, tuple, set)):
-            return [str(item).strip() for item in value if str(item).strip()]
+            return [clean_origin(str(item)) for item in value if str(item).strip()]
 
         raise TypeError("CORS_ALLOW_ORIGINS must be a comma-separated string or list")
 
