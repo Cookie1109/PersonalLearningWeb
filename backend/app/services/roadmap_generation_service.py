@@ -17,6 +17,7 @@ from app.core.exceptions import AppException
 from app.models import Lesson, Roadmap
 from app.models.fsrs_graph_models import ConceptTag
 from app.schemas import LessonDTO, RoadmapGenerateResponseDTO, WeekModuleDTO
+from app.services.lesson_service import build_unique_lesson_title
 
 logger = logging.getLogger("app.roadmap")
 AI_UNAVAILABLE_DETAIL = "Hệ thống AI đang quá tải hoặc lỗi kết nối. Vui lòng thử lại sau."
@@ -348,12 +349,16 @@ def generate_and_store_roadmap(*, db: Session, user_id: int, goal: str) -> Roadm
         for week_plan in week_plans:
             week_title_map[week_plan.week] = week_plan.title
             for position, lesson_plan in enumerate(week_plan.lessons, start=1):
+                # De-duplicate title to avoid UniqueConstraint(user_id, title) violations
+                unique_title = build_unique_lesson_title(
+                    db=db, user_id=user_id, preferred_title=lesson_plan.title
+                )
                 lesson = Lesson(
                     roadmap_id=roadmap.id,
                     user_id=user_id,
                     week_number=week_plan.week,
                     position=position,
-                    title=lesson_plan.title,
+                    title=unique_title,
                     content_markdown=None,
                     version=1,
                     is_completed=False,

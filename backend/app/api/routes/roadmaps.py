@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.models import Lesson, Roadmap, User
+from app.services.lesson_service import build_unique_lesson_title
 from app.schemas import (
     ErrorResponseDTO,
     RoadmapAddLessonRequestDTO,
@@ -243,7 +244,7 @@ def add_lesson_to_roadmap(
             detail={"code": "ROADMAP_NOT_FOUND"},
         )
 
-    # Determine max existing position to append at end
+    # Determine max existing position and week to append at end
     existing_lessons = list(
         db.scalars(
             select(Lesson)
@@ -254,15 +255,20 @@ def add_lesson_to_roadmap(
     max_position = existing_lessons[0].position if existing_lessons else 0
     new_position = max_position + 1
 
-    # All new lessons go to week 1 (flat structure — user can reorder after)
-    week_number = existing_lessons[0].week_number if existing_lessons else 1
+    # Use max week_number (not the week of the last-positioned lesson)
+    max_week = max((l.week_number for l in existing_lessons), default=1) if existing_lessons else 1
+
+    # De-duplicate title to avoid UniqueConstraint(user_id, title) violations
+    unique_title = build_unique_lesson_title(
+        db=db, user_id=current_user.id, preferred_title=payload.title
+    )
 
     lesson = Lesson(
         roadmap_id=roadmap_id,
         user_id=current_user.id,
-        week_number=week_number,
+        week_number=max_week,
         position=new_position,
-        title=payload.title,
+        title=unique_title,
         content_markdown=None,
         version=1,
         is_completed=False,

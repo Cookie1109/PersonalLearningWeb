@@ -234,6 +234,7 @@ export interface RoadmapLessonItemDTO {
   is_completed: boolean;
   quiz_passed: boolean;
   flashcard_completed: boolean;
+  concept_tags: string[];
 }
 
 export interface RoadmapWeekItemDTO {

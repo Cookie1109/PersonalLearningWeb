@@ -48,7 +48,7 @@ import {
   MyRoadmapLesson,
   renameLessonTitle,
   renameRoadmap,
-  reorderLesson,
+  batchReorderLessons,
 } from '../../api/learning';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,6 +245,19 @@ function SortableLessonCard({
                     <Brain size={10} /> Thuộc Flashcards
                   </span>
                 ) : null}
+
+                {/* Concept Tags */}
+                {lesson.conceptTags && lesson.conceptTags.length > 0 && (
+                  lesson.conceptTags.slice(0, 3).map((tag, i) => (
+                    <span
+                      key={`${tag}-${i}`}
+                      className="bg-amber-500/8 text-amber-400/80 border border-amber-500/15 px-1.5 py-0.5 rounded-md text-[10px] font-medium truncate max-w-[120px]"
+                      title={tag}
+                    >
+                      #{tag}
+                    </span>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -422,9 +435,10 @@ export default function RoadmapPage() {
     try {
       const data = await getMyRoadmaps();
       setRoadmaps(data);
-      if (data.length > 0 && selectedId === null) {
-        setSelectedId(data[0].roadmapId);
-      }
+      setSelectedId(prev => {
+        if (prev !== null) return prev;
+        return data.length > 0 ? data[0].roadmapId : null;
+      });
       const orderMap: Record<number, MyRoadmapLesson[]> = {};
       for (const rm of data) {
         orderMap[rm.roadmapId] = rm.weeks.flatMap(w => w.lessons);
@@ -435,11 +449,11 @@ export default function RoadmapPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedId]);
+  }, []);
 
   useEffect(() => {
     void fetchRoadmaps();
-  }, []);
+  }, [fetchRoadmaps]);
 
   const selectedRoadmap = roadmaps.find(rm => rm.roadmapId === selectedId) ?? null;
   const selectedLessons = selectedId ? (lessonOrderMap[selectedId] ?? []) : [];
@@ -548,6 +562,7 @@ export default function RoadmapPage() {
 
   // Delete lesson
   const handleDeleteLesson = async (lessonId: number) => {
+    if (!window.confirm('Xóa bước học này? Thao tác không thể hoàn tác.')) return;
     await deleteLessonFromRoadmap(lessonId);
     setLessonOrderMap(prev => {
       if (!selectedId) return prev;
@@ -568,6 +583,7 @@ export default function RoadmapPage() {
       isCompleted: false,
       quizPassed: false,
       flashcardCompleted: false,
+      conceptTags: [],
     };
     setLessonOrderMap(prev => ({
       ...prev,
@@ -586,20 +602,33 @@ export default function RoadmapPage() {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reordered = arrayMove(lessons, oldIndex, newIndex);
+    // Optimistic update
     setLessonOrderMap(prev => ({ ...prev, [selectedId]: reordered }));
 
-    const updatesNeeded = reordered
-      .map((lesson, idx) => ({ lesson, position: idx + 1 }))
-      .filter(({ lesson, position }) => {
-        const orig = lessons.find(l => l.id === lesson.id);
-        return orig !== undefined && position !== lessons.indexOf(orig) + 1;
-      });
+    // Build batch payload — assign sequential positions, preserve each lesson's original week_number
+    const batchItems = reordered.map((lesson, idx) => {
+      // Find the original lesson to get its week_number
+      const original = lessons.find(l => l.id === lesson.id);
+      // Fallback: find from the full roadmap data
+      const roadmap = roadmaps.find(rm => rm.roadmapId === selectedId);
+      const weekLesson = roadmap?.weeks
+        .flatMap(w => w.lessons.map(l => ({ ...l, weekNumber: w.weekNumber })))
+        .find(l => l.id === lesson.id);
+      const weekNumber = weekLesson?.weekNumber ?? 1;
 
-    await Promise.allSettled(
-      updatesNeeded.map(({ lesson, position }) =>
-        reorderLesson(Number(lesson.id), position, 1)
-      )
-    );
+      return {
+        lessonId: Number(lesson.id),
+        position: idx + 1,
+        weekNumber,
+      };
+    });
+
+    try {
+      await batchReorderLessons(batchItems);
+    } catch {
+      // Revert on failure
+      setLessonOrderMap(prev => ({ ...prev, [selectedId]: lessons }));
+    }
   };
 
   return (

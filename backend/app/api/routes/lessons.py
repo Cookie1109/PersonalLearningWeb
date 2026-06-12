@@ -21,6 +21,7 @@ from app.schemas import (
     LessonRenameTitleResponseDTO,
     LessonReorderRequestDTO,
     LessonReorderResponseDTO,
+    LessonBatchReorderRequestDTO,
     QuizPublicResponseDTO,
 )
 from app.services.audit_service import queue_audit_log
@@ -319,3 +320,61 @@ def reorder_lesson(
         week_number=lesson.week_number,
         message="Thứ tự bước học đã được cập nhật.",
     )
+
+
+@router.patch(
+    "/batch-reorder",
+    response_model=LessonReorderResponseDTO,
+    status_code=status.HTTP_200_OK,
+    responses=ERROR_RESPONSES,
+)
+def batch_reorder_lessons(
+    payload: LessonBatchReorderRequestDTO,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonReorderResponseDTO:
+    """Atomic batch reorder: update all lesson positions in a single transaction."""
+    if not payload.items:
+        raise AppException(
+            status_code=400,
+            message="No items to reorder",
+            detail={"code": "REORDER_EMPTY"},
+        )
+
+    lesson_ids = [item.lesson_id for item in payload.items]
+
+    # Verify all lessons belong to this user
+    owned_lessons = list(
+        db.scalars(
+            select(Lesson).where(
+                Lesson.id.in_(lesson_ids),
+                Lesson.user_id == current_user.id,
+            )
+        )
+    )
+    owned_map = {lesson.id: lesson for lesson in owned_lessons}
+
+    if len(owned_map) != len(lesson_ids):
+        missing = set(lesson_ids) - set(owned_map.keys())
+        raise AppException(
+            status_code=404,
+            message=f"Lessons not found: {missing}",
+            detail={"code": "LESSON_NOT_FOUND"},
+        )
+
+    for item in payload.items:
+        lesson = owned_map[item.lesson_id]
+        lesson.position = item.position
+        lesson.week_number = item.week_number
+
+    db.commit()
+
+    # Return info about the first item as confirmation
+    first = payload.items[0]
+    return LessonReorderResponseDTO(
+        lesson_id=first.lesson_id,
+        position=first.position,
+        week_number=first.week_number,
+        message=f"Đã cập nhật thứ tự {len(payload.items)} bước học.",
+    )
+

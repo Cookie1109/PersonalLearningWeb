@@ -137,7 +137,7 @@ def _raise_theory_ai_failure(*, scope: str, exc: Exception) -> None:
     ) from exc
 
 
-def _build_unique_document_title(*, db: Session, user_id: int, preferred_title: str) -> str:
+def build_unique_lesson_title(*, db: Session, user_id: int, preferred_title: str) -> str:
     base_title = _collapse_whitespace(preferred_title.strip())[:255]
     if not base_title:
         base_title = f"Tài liệu moi - {datetime.now(UTC).strftime('%d/%m/%Y')}"
@@ -169,7 +169,7 @@ def create_document_for_user(
     title: str,
     source_content: str,
 ) -> Lesson:
-    normalized_title = _build_unique_document_title(db=db, user_id=user_id, preferred_title=title)
+    normalized_title = build_unique_lesson_title(db=db, user_id=user_id, preferred_title=title)
     normalized_source = source_content.strip()
     if not normalized_source:
         raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
@@ -226,7 +226,7 @@ def create_document_draft_for_user(
     title: str,
     source_content: str,
 ) -> Lesson:
-    normalized_title = _build_unique_document_title(db=db, user_id=user_id, preferred_title=title)
+    normalized_title = build_unique_lesson_title(db=db, user_id=user_id, preferred_title=title)
     normalized_source = source_content.strip()
     if not normalized_source:
         raise AppException(status_code=409, message="Document source is empty", detail={"code": "DOCUMENT_SOURCE_EMPTY"})
@@ -297,7 +297,7 @@ def _build_document_title_from_upload(
     if len(preferred_title) < 3:
         preferred_title = f"Tài liệu mới - {datetime.now(UTC).strftime('%d/%m/%Y')}"
 
-    return _build_unique_document_title(db=db, user_id=user_id, preferred_title=preferred_title)
+    return build_unique_lesson_title(db=db, user_id=user_id, preferred_title=preferred_title)
 
 
 def _best_effort_delete_lesson(*, db: Session, user_id: int, lesson_id: int) -> None:

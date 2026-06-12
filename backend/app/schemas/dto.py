@@ -489,6 +489,16 @@ class LessonReorderResponseDTO(BaseModel):
     message: str
 
 
+class LessonBatchReorderItemDTO(BaseModel):
+    lesson_id: int
+    position: int = Field(..., ge=1)
+    week_number: int = Field(..., ge=1)
+
+
+class LessonBatchReorderRequestDTO(BaseModel):
+    items: list[LessonBatchReorderItemDTO] = Field(..., min_length=1, max_length=100)
+
+
 class LessonExampleDTO(BaseModel):
     title: str
     description: str

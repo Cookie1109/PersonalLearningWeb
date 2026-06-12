@@ -32,6 +32,7 @@ export interface MyRoadmapLesson {
   isCompleted: boolean;
   quizPassed: boolean;
   flashcardCompleted: boolean;
+  conceptTags: string[];
 }
 
 export interface MyRoadmapWeek {
@@ -122,6 +123,7 @@ function mapRoadmapItem(dto: RoadmapItemDTO): MyRoadmap {
         isCompleted: lesson.is_completed,
         quizPassed: lesson.quiz_passed ?? false,
         flashcardCompleted: lesson.flashcard_completed ?? false,
+        conceptTags: lesson.concept_tags ?? [],
       })),
     })),
   };
@@ -1013,8 +1015,19 @@ export async function reorderLesson(
   );
 }
 
-
-
-
-
-
+export async function batchReorderLessons(
+  items: { lessonId: number; position: number; weekNumber: number }[]
+): Promise<void> {
+  if (!items.length) return;
+  await apiClient.patch(
+    '/lessons/batch-reorder',
+    {
+      items: items.map(item => ({
+        lesson_id: item.lessonId,
+        position: item.position,
+        week_number: item.weekNumber,
+      })),
+    },
+    { headers: createAuthHeaders() }
+  );
+}
